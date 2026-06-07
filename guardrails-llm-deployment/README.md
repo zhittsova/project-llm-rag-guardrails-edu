@@ -31,7 +31,18 @@ tests/
 
 ## Quick Start
 
-From this folder:
+The Python import package uses underscores: `guardrails_llm`.
+The installed console script uses hyphens: `guardrails-llm`.
+
+From the repository root:
+
+```bash
+uv --directory guardrails-llm-deployment run guardrails-llm query --mode guardrailed --retriever langchain --question "What is retrieval augmented generation?"
+uv --directory guardrails-llm-deployment run guardrails-llm evaluate --mode baseline --retriever langchain
+uv --directory guardrails-llm-deployment run guardrails-llm evaluate --mode guardrailed --retriever langchain --show-results
+```
+
+From this package folder:
 
 ```bash
 uv run python -m guardrails_llm.cli query --mode guardrailed --retriever langchain --question "What is retrieval augmented generation?"
@@ -52,6 +63,12 @@ uv run pytest
 ```
 
 The `--retriever lexical` backend is a dependency-light fallback. The `--retriever langchain` backend uses LangChain document objects and recursive text splitting while keeping deterministic local scoring for reproducible evaluation.
+
+## Workshop 2 Status
+
+Current status: the repository has a deterministic toy-corpus prototype, but it
+does not yet satisfy Phase 2's embedding/vector-index requirement and does not
+yet have the real/self-created course corpus.
 
 ## Next Implementation Steps
 

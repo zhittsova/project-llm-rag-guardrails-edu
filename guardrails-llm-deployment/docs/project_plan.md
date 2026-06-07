@@ -36,12 +36,18 @@ User query
 
 ## Workshop 2 Demo Target
 
+Workshop 2 is currently planned for June 19, 2026.
+
 Run the same 12-case evaluation set against:
 
 - `baseline + langchain retriever`
 - `guardrailed + langchain retriever`
 
 The expected story is that the baseline handles normal course questions but fails adversarial, privacy, and misuse cases, while the guardrailed pipeline blocks or safely redirects those cases with a small latency overhead.
+
+The main Phase 2 dependency is the real or self-created course corpus. Until
+that arrives, vector retrieval and the local demo should be built against the
+synthetic corpus and clearly labeled as such.
 
 ## Milestones
 
