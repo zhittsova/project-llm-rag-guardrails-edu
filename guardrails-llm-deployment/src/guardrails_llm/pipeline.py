@@ -115,9 +115,26 @@ def synthesize_answer(question: str, chunks: list[Chunk]) -> str:
 
 
 def citation_for(chunk: Chunk) -> str:
-    return f"{chunk.title} ({chunk.doc_id})"
+    details = [chunk.doc_id]
+    section = _metadata_text(chunk, "section")
+    slide = _metadata_text(chunk, "slide")
+    page = _metadata_text(chunk, "page")
+    if section:
+        details.append(section)
+    if slide:
+        details.append(f"slide {slide}")
+    if page:
+        details.append(f"page {page}")
+    return f"{chunk.title} ({', '.join(details)})"
 
 
 def sanitize_chunk(chunk: Chunk) -> Chunk:
     sanitized = sanitize_untrusted_context(chunk.text)
     return replace(chunk, text=sanitized)
+
+
+def _metadata_text(chunk: Chunk, key: str) -> str:
+    value = chunk.metadata.get(key)
+    if value is None or isinstance(value, list):
+        return ""
+    return str(value).strip()

@@ -18,6 +18,7 @@ def langchain_chunk_documents(documents: list[Document], *, chunk_size: int = 65
                 "title": document.title,
                 "visibility": document.visibility,
                 "source_type": document.source_type,
+                **document.metadata,
             },
         )
         for document in documents
@@ -39,6 +40,11 @@ def langchain_chunk_documents(documents: list[Document], *, chunk_size: int = 65
                 visibility=str(metadata["visibility"]),
                 source_type=str(metadata["source_type"]),
                 text=split_document.page_content,
+                metadata={
+                    key: value
+                    for key, value in metadata.items()
+                    if key not in {"doc_id", "course_id", "title", "visibility", "source_type"}
+                },
             )
         )
     return chunks
@@ -55,4 +61,3 @@ class LangChainLexicalRetriever(LexicalRetriever):
     @classmethod
     def from_documents(cls, documents: list[Document]) -> "LangChainLexicalRetriever":
         return cls(langchain_chunk_documents(documents))
-

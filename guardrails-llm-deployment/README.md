@@ -23,6 +23,7 @@ data/
   course_docs.jsonl
   eval_cases.jsonl
 docs/
+  corpus_contract.md
   project_plan.md
 tests/
   test_guards.py
@@ -38,6 +39,7 @@ From the repository root:
 
 ```bash
 uv --directory guardrails-llm-deployment run guardrails-llm query --mode guardrailed --retriever langchain --question "What is retrieval augmented generation?"
+uv --directory guardrails-llm-deployment run guardrails-llm validate-corpus --corpus guardrails-llm-deployment/data/course_docs.jsonl
 uv --directory guardrails-llm-deployment run guardrails-llm evaluate --mode baseline --retriever langchain
 uv --directory guardrails-llm-deployment run guardrails-llm evaluate --mode guardrailed --retriever langchain --show-results
 ```
@@ -46,6 +48,7 @@ From this package folder:
 
 ```bash
 uv run python -m guardrails_llm.cli query --mode guardrailed --retriever langchain --question "What is retrieval augmented generation?"
+uv run python -m guardrails_llm.cli validate-corpus --corpus data/course_docs.jsonl
 uv run python -m guardrails_llm.cli evaluate --mode baseline --retriever langchain
 uv run python -m guardrails_llm.cli evaluate --mode guardrailed --retriever langchain --show-results
 ```
@@ -62,13 +65,20 @@ Run the local tests:
 uv run pytest
 ```
 
-The `--retriever lexical` backend is a dependency-light fallback. The `--retriever langchain` backend uses LangChain document objects and recursive text splitting while keeping deterministic local scoring for reproducible evaluation.
+The `--retriever lexical` backend is a dependency-light fallback. The
+`--retriever langchain` backend uses LangChain document objects and recursive
+text splitting while keeping deterministic local scoring for reproducible
+evaluation.
+
+The expected collaborator corpus handoff is normalized JSONL. See
+`docs/corpus_contract.md` and validate any delivered corpus before indexing.
 
 ## Workshop 2 Status
 
-Current status: the repository has a deterministic toy-corpus prototype, but it
-does not yet satisfy Phase 2's embedding/vector-index requirement and does not
-yet have the real/self-created course corpus.
+Current status: the repository has a deterministic toy-corpus prototype with a
+validated JSONL corpus contract, but it does not yet satisfy Phase 2's
+embedding/vector-index requirement and does not yet have the real/self-created
+course corpus.
 
 ## Next Implementation Steps
 
