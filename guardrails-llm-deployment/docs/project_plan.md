@@ -7,7 +7,7 @@ How can layered guardrails reduce safety, privacy, and hallucination risks in an
 ## Prototype Scope
 
 - RAG-based text Q&A assistant for one course corpus.
-- LangChain-backed document loading/chunking path plus a dependency-light lexical fallback.
+- LangChain-backed document loading/chunking path plus lexical and Chroma vector retrieval.
 - Input validation for prompt injection, PII, off-topic, and academic-integrity misuse.
 - Retrieval constraints using course ID and visibility metadata.
 - Retrieved-context sanitization because retrieved documents are treated as untrusted data.
@@ -42,12 +42,14 @@ Run the same 12-case evaluation set against:
 
 - `baseline + langchain retriever`
 - `guardrailed + langchain retriever`
+- `baseline + vector retriever`
+- `guardrailed + vector retriever`
 
 The expected story is that the baseline handles normal course questions but fails adversarial, privacy, and misuse cases, while the guardrailed pipeline blocks or safely redirects those cases with a small latency overhead.
 
 The main Phase 2 dependency is the real or self-created course corpus. Until
-that arrives, vector retrieval and the local demo should be built against the
-synthetic corpus and clearly labeled as such.
+that arrives, vector retrieval and the local demo run against the synthetic
+corpus and must be clearly labeled as such.
 
 ## Milestones
 

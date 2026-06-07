@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from time import perf_counter
+from typing import Protocol
 
 from .corpus import Chunk, chunk_documents, load_documents
 from .guards import input_guard, make_integrity_safe, output_guard, sanitize_untrusted_context
@@ -17,10 +19,22 @@ class AssistantResponse:
     retrieved_chunks: list[str] = field(default_factory=list)
 
 
+class Retriever(Protocol):
+    def search(
+        self,
+        query: str,
+        *,
+        course_id: str | None = None,
+        allowed_visibility: set[str] | None = None,
+        top_k: int = 3,
+    ) -> list[tuple[Chunk, float]]:
+        ...
+
+
 class LearningAssistant:
     def __init__(
         self,
-        retriever: LexicalRetriever,
+        retriever: Retriever,
         *,
         mode: str = "guardrailed",
         course_id: str = "guardrails-101",
@@ -89,16 +103,27 @@ class LearningAssistant:
         )
 
 
-def build_assistant(corpus_path, *, mode: str = "guardrailed", retriever_backend: str = "lexical") -> LearningAssistant:
-    documents = load_documents(corpus_path)
+def build_assistant(
+    corpus_path,
+    *,
+    mode: str = "guardrailed",
+    retriever_backend: str = "lexical",
+    index_dir: Path | None = None,
+) -> LearningAssistant:
     if retriever_backend == "lexical":
+        documents = load_documents(corpus_path)
         retriever = LexicalRetriever(chunk_documents(documents))
     elif retriever_backend == "langchain":
         from .langchain_rag import LangChainLexicalRetriever
 
+        documents = load_documents(corpus_path)
         retriever = LangChainLexicalRetriever.from_documents(documents)
+    elif retriever_backend == "vector":
+        from .vector import VectorRetriever, default_index_path
+
+        retriever = VectorRetriever(index_dir or default_index_path())
     else:
-        raise ValueError("retriever_backend must be 'lexical' or 'langchain'")
+        raise ValueError("retriever_backend must be 'lexical', 'langchain', or 'vector'")
     return LearningAssistant(retriever, mode=mode, retriever_backend=retriever_backend)
 
 
