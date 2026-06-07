@@ -45,10 +45,10 @@ You can also use the installed console script:
 uv run guardrails-llm evaluate --mode guardrailed --retriever langchain
 ```
 
-Run the local tests without extra dependencies:
+Run the local tests:
 
 ```bash
-uv run python -m unittest discover -s tests
+uv run pytest
 ```
 
 The `--retriever lexical` backend is a dependency-light fallback. The `--retriever langchain` backend uses LangChain document objects and recursive text splitting while keeping deterministic local scoring for reproducible evaluation.

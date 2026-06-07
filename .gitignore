@@ -24,6 +24,8 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+!guardrails-llm-deployment/.vscode/
+!guardrails-llm-deployment/.vscode/settings.json
 
 # Local workshop source assets and generated media
 AMT_PJ_Guardrails_Workshop1_Presentation.pdf
