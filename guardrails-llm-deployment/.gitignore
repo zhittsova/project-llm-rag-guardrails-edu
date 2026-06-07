@@ -1,0 +1,33 @@
+# Python bytecode and test caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Local environment and secrets
+.env
+.env.*
+
+# Editor files for this package; use the root workspace file instead
+.vscode/
+
+# Local vector stores and generated indexes
+*.faiss
+*.index
+*.sqlite3
+*.db
+chroma/
+indexes/
+vector_store/

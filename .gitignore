@@ -1,45 +1,14 @@
-# Python bytecode and test caches
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-htmlcov/
-
-# Virtual environments
-.venv/
-venv/
-
-# Build artifacts
-build/
-dist/
-*.egg-info/
-
-# Local environment and secrets
-.env
-.env.*
-
-# Editor and OS files
+# Repository-local OS and editor files
 .DS_Store
 .idea/
-.vscode/
-!guardrails-llm-deployment/.vscode/
-!guardrails-llm-deployment/.vscode/settings.json
+/.vscode/
 
 # Local workshop source assets and generated media
 AMT_PJ_Guardrails_Workshop1_Presentation.pdf
 Onboardning_2025-04-29-_AMT_PJ_Guardrails.pdf
 Workshop1/
+Workshop2/
+Workshop3/
 Workshop1.zip
 *.mp4
 ~$*.docx
-
-# Local vector stores and generated indexes
-*.faiss
-*.index
-*.sqlite3
-*.db
-chroma/
-indexes/
-vector_store/

@@ -1,0 +1,49 @@
+{
+  "folders": [
+    {
+      "name": "Project",
+      "path": "."
+    },
+    {
+      "name": "Code",
+      "path": "guardrails-llm-deployment"
+    },
+    {
+      "name": "Workshop 1",
+      "path": "Workshop1"
+    },
+    {
+      "name": "Workshop 2",
+      "path": "Workshop2"
+    },
+    {
+      "name": "Workshop 3",
+      "path": "Workshop3"
+    }
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": "${workspaceFolder:Code}/.venv/bin/python",
+    "python.terminal.activateEnvironment": true,
+    "python.analysis.extraPaths": [
+      "${workspaceFolder:Code}/src"
+    ],
+    "python.testing.pytestEnabled": true,
+    "python.testing.unittestEnabled": false,
+    "python.testing.cwd": "${workspaceFolder:Code}",
+    "python.testing.pytestArgs": [
+      "tests"
+    ],
+    "python.envFile": "${workspaceFolder:Code}/.env",
+    "python-envs.alwaysUseUv": true,
+    "python-envs.pythonProjects": [
+      {
+        "path": "guardrails-llm-deployment"
+      }
+    ],
+    "terminal.integrated.cwd": "${workspaceFolder:Code}",
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/.pytest_cache": true
+    }
+  }
+}
