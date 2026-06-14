@@ -28,6 +28,9 @@ class VectorIndexStats:
 
 
 class HashingEmbedder:
+    # Локальная deterministic embedding-функция для demo: без API keys,
+    # downloads и случайности. Это не production semantic embedding model, но
+    # она создает числовой vector, с которым Chroma может строить index.
     def __init__(self, dimensions: int = 384) -> None:
         self.dimensions = dimensions
 
@@ -59,6 +62,11 @@ def build_vector_index(
     chunk_size: int = 650,
     chunk_overlap: int = 80,
 ) -> VectorIndexStats:
+    # build-index pipeline:
+    # 1. загрузить JSONL corpus;
+    # 2. разрезать documents на chunks через LangChain splitter;
+    # 3. превратить каждый chunk в embedding;
+    # 4. сохранить chunks + metadata в persistent Chroma collection.
     documents = load_documents(corpus_path)
     chunks = langchain_chunk_documents(documents, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     client = _persistent_client(index_dir)
@@ -107,6 +115,8 @@ class VectorRetriever:
         if count == 0:
             return []
 
+        # Query проходит через ту же embedding-функцию, что и chunks при
+        # build-index. Chroma возвращает ближайшие chunks по cosine distance.
         results = self._collection.query(
             query_embeddings=[self._embedder.embed(query)],
             n_results=count,
@@ -120,6 +130,8 @@ class VectorRetriever:
             if metadata is None:
                 continue
             chunk = _chunk_from_chroma(text or "", metadata)
+            # Фильтры оставлены на уровне retriever interface, чтобы lexical,
+            # LangChain и vector backends вели себя одинаково для pipeline.
             if course_id and chunk.course_id != course_id:
                 continue
             if allowed_visibility and chunk.visibility not in allowed_visibility:

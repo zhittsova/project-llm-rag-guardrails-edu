@@ -13,15 +13,20 @@ The first implementation is deliberately local and deterministic. It models the 
 
 ```text
 src/guardrails_llm/
+  baseline_pipeline.py  baseline RAG without guardrails
   cli.py          command line interface
   corpus.py       document loading and chunking
   retrieval.py    lexical retrieval baseline
+  course_corpus.py markdown course corpus normalization
+  vector.py       local Chroma vector retrieval
+  visualization.py static HTML RAG pipeline reports
   guards.py       input/output guardrails
-  pipeline.py     baseline and guardrailed assistants
+  pipeline.py     guardrailed assistant and assistant factory
   evaluation.py   JSONL test runner and metrics
 data/
   course_docs.jsonl
   eval_cases.jsonl
+  python_course_docs.jsonl
 docs/
   corpus_contract.md
   project_plan.md
@@ -43,6 +48,8 @@ uv --directory guardrails-llm-deployment run guardrails-llm query --mode guardra
 uv --directory guardrails-llm-deployment run guardrails-llm validate-corpus --corpus data/course_docs.jsonl
 uv --directory guardrails-llm-deployment run guardrails-llm build-index --corpus data/course_docs.jsonl --index-dir indexes/chroma
 uv --directory guardrails-llm-deployment run guardrails-llm query --mode guardrailed --retriever vector --index-dir indexes/chroma --question "What is retrieval augmented generation?"
+uv --directory guardrails-llm-deployment run guardrails-llm build-index --corpus data/python_course_docs.jsonl --index-dir indexes/python-course-chroma
+uv --directory guardrails-llm-deployment run guardrails-llm visualize --corpus data/python_course_docs.jsonl --course-id python-intro --retriever vector --index-dir indexes/python-course-chroma --mode guardrailed --question "What is declarative knowledge?" --output reports/python_course_rag_demo.html
 uv --directory guardrails-llm-deployment run guardrails-llm evaluate --mode baseline --retriever langchain
 uv --directory guardrails-llm-deployment run guardrails-llm evaluate --mode guardrailed --retriever langchain --show-results
 ```
@@ -54,6 +61,9 @@ uv run python -m guardrails_llm.cli query --mode guardrailed --retriever langcha
 uv run python -m guardrails_llm.cli validate-corpus --corpus data/course_docs.jsonl
 uv run python -m guardrails_llm.cli build-index --corpus data/course_docs.jsonl --index-dir indexes/chroma
 uv run python -m guardrails_llm.cli query --mode guardrailed --retriever vector --index-dir indexes/chroma --question "What is retrieval augmented generation?"
+uv run python -m guardrails_llm.cli normalize-course-corpus --source ../course_corpus/datainmd --output data/python_course_docs.jsonl --course-id python-intro
+uv run python -m guardrails_llm.cli build-index --corpus data/python_course_docs.jsonl --index-dir indexes/python-course-chroma
+uv run python -m guardrails_llm.cli visualize --corpus data/python_course_docs.jsonl --course-id python-intro --retriever vector --index-dir indexes/python-course-chroma --mode guardrailed --question "What is declarative knowledge?" --output reports/python_course_rag_demo.html
 uv run python -m guardrails_llm.cli evaluate --mode baseline --retriever langchain
 uv run python -m guardrails_llm.cli evaluate --mode guardrailed --retriever langchain --show-results
 ```
@@ -78,12 +88,14 @@ embeddings with a persisted Chroma index for the Workshop 2 baseline demo.
 
 The expected collaborator corpus handoff is normalized JSONL. See
 `docs/corpus_contract.md` and validate any delivered corpus before indexing.
+The markdown course corpus can be regenerated with `normalize-course-corpus`;
+raw PDF/source drops are kept out of git.
 
 ## Workshop 2 Status
 
-Current status: the repository has a deterministic toy-corpus prototype with a
-validated JSONL corpus contract and a local Chroma vector index path. It still
-does not yet have the real/self-created course corpus.
+Current status: the repository has a deterministic toy-corpus prototype, a
+normalized Python course corpus, a local Chroma vector index path, and static
+HTML visualization for the RAG pipeline.
 
 ## Next Implementation Steps
 

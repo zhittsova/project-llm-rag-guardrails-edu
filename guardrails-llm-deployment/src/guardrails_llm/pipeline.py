@@ -5,6 +5,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Protocol
 
+from .baseline_pipeline import BaselineRagAssistant, build_baseline_assistant
 from .corpus import Chunk, chunk_documents, load_documents
 from .guards import input_guard, make_integrity_safe, output_guard, sanitize_untrusted_context
 from .retrieval import LexicalRetriever
@@ -51,12 +52,18 @@ class LearningAssistant:
         started_at = perf_counter()
         triggers: list[str] = []
 
+        # Guardrailed mode сначала проверяет сам пользовательский вопрос.
+        # Baseline RAG намеренно пропускает этот блок, чтобы показать, как
+        # обычный RAG ведет себя без prompt-injection/PII/integrity защит.
         if self._mode == "guardrailed":
             input_result = input_guard(question)
             triggers.extend(input_result.triggers)
             if not input_result.allowed:
                 return self._response(input_result.message or "Request blocked.", [], triggers, started_at, [])
 
+        # Retrieval общий для baseline и guardrailed режимов, но фильтры разные:
+        # baseline ищет по всему индексу, guardrailed ограничивает поиск текущим
+        # курсом и только public-документами.
         visibility = {"public"} if self._mode == "guardrailed" else None
         retrieved = self._retriever.search(
             question,
@@ -64,9 +71,13 @@ class LearningAssistant:
             allowed_visibility=visibility,
         )
         if self._mode == "guardrailed":
+            # Retrieved context считается недоверенным: даже текст из corpus
+            # может содержать indirect prompt injection.
             retrieved = [(sanitize_chunk(chunk), score) for chunk, score in retrieved]
 
         if "academic_integrity" in triggers:
+            # Для cheating-запросов guardrailed режим не дает готовое решение,
+            # а достает policy chunk и отвечает в формате помощи/скэффолдинга.
             retrieved = self._retriever.search(
                 "academic integrity graded work complete submissions hints similar examples",
                 course_id=self._course_id,
@@ -75,9 +86,13 @@ class LearningAssistant:
             answer = make_integrity_safe(question)
             citations = [citation_for(chunk) for chunk, _score in retrieved[:1]]
         else:
+            # Это локальный baseline answer generator: он не вызывает LLM, а
+            # собирает короткий extractive answer из найденных chunks.
             answer = synthesize_answer(question, [chunk for chunk, _score in retrieved])
             citations = [citation_for(chunk) for chunk, _score in retrieved]
 
+        # Output guard проверяет уже готовый ответ. Baseline снова пропускает
+        # этот этап, поэтому может вернуть private data или ungrounded answer.
         if self._mode == "guardrailed":
             output_result = output_guard(answer, citations, triggers)
             triggers.extend(output_result.triggers)
@@ -109,7 +124,18 @@ def build_assistant(
     mode: str = "guardrailed",
     retriever_backend: str = "lexical",
     index_dir: Path | None = None,
-) -> LearningAssistant:
+    course_id: str = "guardrails-101",
+) -> BaselineRagAssistant | LearningAssistant:
+    if mode == "baseline":
+        return build_baseline_assistant(
+            corpus_path,
+            retriever_backend=retriever_backend,
+            index_dir=index_dir,
+            course_id=course_id,
+        )
+
+    # Ниже строится guardrailed assistant. Baseline уже ушел в отдельный
+    # baseline_pipeline.py, чтобы его можно было читать без guardrail веток.
     if retriever_backend == "lexical":
         documents = load_documents(corpus_path)
         retriever = LexicalRetriever(chunk_documents(documents))
@@ -124,13 +150,18 @@ def build_assistant(
         retriever = VectorRetriever(index_dir or default_index_path())
     else:
         raise ValueError("retriever_backend must be 'lexical', 'langchain', or 'vector'")
-    return LearningAssistant(retriever, mode=mode, retriever_backend=retriever_backend)
+    return LearningAssistant(retriever, mode=mode, course_id=course_id, retriever_backend=retriever_backend)
 
 
 def synthesize_answer(question: str, chunks: list[Chunk]) -> str:
+    # Если retrieval ничего не нашел, baseline abstains простой фразой. В
+    # guardrailed режиме output_guard превращает это в более строгий отказ.
     if not chunks:
         return "I do not know based on the available course material."
 
+    # Для reproducible demo берем первые найденные chunks и возвращаем первые
+    # предложения как evidence-based ответ. Это проще, чем LLM, но достаточно,
+    # чтобы тестировать retrieval, citations и guardrails.
     evidence = " ".join(chunk.text for chunk in chunks[:2])
     sentences = [sentence.strip() for sentence in evidence.split(".") if sentence.strip()]
     if not sentences:

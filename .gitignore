@@ -10,5 +10,7 @@ Workshop1/
 Workshop2/
 Workshop3/
 Workshop1.zip
+course_corpus/
+course_corpus.zip
 *.mp4
 ~$*.docx

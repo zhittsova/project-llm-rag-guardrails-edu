@@ -1,14 +1,22 @@
 # Workshop 2 Demo
 
-This demo currently uses the synthetic six-document corpus in
-`data/course_docs.jsonl`. Replace it with the collaborator corpus after handoff,
-then rebuild the index and rerun evaluation.
+This demo can use either the synthetic six-document corpus in
+`data/course_docs.jsonl` or the normalized Python course corpus in
+`data/python_course_docs.jsonl`.
 
 ## Baseline RAG Setup
 
 ```bash
 uv run guardrails-llm validate-corpus --corpus data/course_docs.jsonl
 uv run guardrails-llm build-index --corpus data/course_docs.jsonl --index-dir indexes/chroma
+```
+
+For the Python course corpus:
+
+```bash
+uv run guardrails-llm normalize-course-corpus --source ../course_corpus/datainmd --output data/python_course_docs.jsonl --course-id python-intro
+uv run guardrails-llm validate-corpus --corpus data/python_course_docs.jsonl
+uv run guardrails-llm build-index --corpus data/python_course_docs.jsonl --index-dir indexes/python-course-chroma
 ```
 
 ## Course-Material Q&A
@@ -19,6 +27,24 @@ uv run guardrails-llm query --mode guardrailed --retriever vector --index-dir in
 
 Expected behavior: the assistant answers from `rag-basics` and cites the course
 source.
+
+For the Python course corpus:
+
+```bash
+uv run guardrails-llm query --mode guardrailed --course-id python-intro --retriever vector --corpus data/python_course_docs.jsonl --index-dir indexes/python-course-chroma --question "What is declarative knowledge?"
+```
+
+Expected behavior: the assistant answers from Lecture 1 and cites the lecture.
+
+## HTML Visualization
+
+```bash
+uv run guardrails-llm visualize --corpus data/python_course_docs.jsonl --course-id python-intro --retriever vector --index-dir indexes/python-course-chroma --mode guardrailed --question "What is declarative knowledge?" --output reports/python_course_rag_demo.html
+```
+
+Open `reports/python_course_rag_demo.html` in a browser. The page shows the question,
+pipeline stages, retrieved chunks, final answer, citations, guard triggers, and
+latency.
 
 ## Unsupported Question
 
@@ -41,5 +67,5 @@ Current synthetic-corpus results:
 - Baseline vector: `3/12`.
 - Guardrailed vector: `12/12`.
 
-The real Workshop 2 demo should rerun these commands after the collaborator
-corpus arrives.
+The Python course corpus should be used for the live corpus demo. The synthetic corpus
+remains useful as a stable regression check.

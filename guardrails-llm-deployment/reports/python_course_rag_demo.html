@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>RAG Pipeline Demo</title>
+  <style>
+    body {
+      background: #f6f7f9;
+      color: #16181d;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+      margin: 0;
+    }
+    main {
+      margin: 0 auto;
+      max-width: 1080px;
+      padding: 32px;
+    }
+    h1, h2 {
+      margin: 0 0 12px;
+    }
+    section {
+      background: #ffffff;
+      border: 1px solid #d9dee7;
+      border-radius: 8px;
+      margin: 16px 0;
+      padding: 20px;
+    }
+    .meta {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+    .pill {
+      background: #eef2f7;
+      border-radius: 999px;
+      display: inline-block;
+      margin: 4px 6px 4px 0;
+      padding: 4px 10px;
+    }
+    ol {
+      padding-left: 22px;
+    }
+    pre {
+      background: #f2f4f8;
+      border-radius: 6px;
+      overflow-x: auto;
+      padding: 12px;
+      white-space: pre-wrap;
+    }
+    .chunk {
+      border-top: 1px solid #e3e7ee;
+      padding-top: 14px;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>RAG Pipeline Demo</h1>
+  <section class="meta">
+    <div><strong>Corpus</strong><br>data/python_course_docs.jsonl</div>
+    <div><strong>Mode</strong><br>guardrailed</div>
+    <div><strong>Retriever</strong><br>vector</div>
+    <div><strong>Course ID</strong><br>python-intro</div>
+    <div><strong>Latency</strong><br>234.76 ms</div>
+    <div><strong>Guard triggers</strong><br>none</div>
+  </section>
+
+  <section>
+    <h2>User Question</h2>
+    <pre>What is declarative knowledge?</pre>
+  </section>
+
+  <section>
+    <h2>Pipeline Stages</h2>
+    <ol>
+      <li>Run input guard</li><li>Retrieve public chunks for the selected course</li><li>Sanitize retrieved context as untrusted text</li><li>Build an extractive answer or safe refusal</li><li>Run output guard</li><li>Return answer with triggers: none</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Retrieved Chunks</h2>
+    <div class="chunk">
+  <strong>lec01:lc:3</strong>
+  <div>6.100L Lecture 1: Welcome! (lec01)</div>
+  <pre>--- ## Types of Knowledge * **Declarative knowledge** is statements of fact. * **Imperative knowledge** is a recipe or &quot;how-to&quot;. * Programming is about writing recipes to generate facts. --- ## Numerical Example: Square Root Algorithm * The square root of a number $x$ is $y$ such that $y \cdot y = x$. * **The Algorithm:** 1. Start with a guess, $g$. If $g \cdot g$ is close enough to $x$, stop and say $g$ is the answer. 2. Otherwise make a new guess by averaging $g$ and $\frac{x}{g}$. 3. Using the new guess, repeat the process until close enough. * **Let&#x27;s try it for $x=16$ and an initial guess of 3:**</pre>
+</div>
+<div class="chunk">
+  <strong>lec16:lc:4</strong>
+  <div>SUM of LIST ELEMENTS (lec16)</div>
+  <pre>##  **Recalculating** the same values many times! - Could keep **track** of already calculated values 6 6.100L Lecture 16 ## FIBONACCI WITH MEMO IZATION Python Tutor LINK ``` deffib_efficient(n, d): ifn ind: returnd[n] ``` **==&gt; picture [184 x 70] intentionally omitted &lt;==** ``` else: ``` ``` ans = fib_efficient(n-1, d) + fib_efficient(n-2, d) d[n] = ans returnans d = {1:1, 2:1} print(fib_efficient(6, d)) ``` - Do a **lookup first** in case already calculated the value - **Modify dictionary** as progress through function calls 7 6.100L Lecture 16 ## EFFICIENT FIBONACCI CHECKS the DICT FIRST</pre>
+</div>
+<div class="chunk">
+  <strong>lec20:lc:15</strong>
+  <div>6.100L Lecture 20 (lec20)</div>
+  <pre>- **Parent class** (superclass) - **Child class** (subclass) - **Inherits** all data and - behaviors of parent class - **Add** more **info** - **Add** more **behavior** - **Override** behavior Workout Outdoor Indoor Workout Workout Running Swimming Treadmill Weights 18 6.100L Lecture 20 ## Fitness Tracker © Apple. All rights reserved. This content is excluded from our Creative Commons license. For more information, see https://ocw.mit.edu/help/faq-fair-use/ ## Different kinds of workouts **==&gt; picture [169 x 357] intentionally omitted &lt;==**</pre>
+</div>
+  </section>
+
+  <section>
+    <h2>Final Answer</h2>
+    <pre>---
+
+## Types of Knowledge
+* **Declarative knowledge** is statements of fact. * **Imperative knowledge** is a recipe or &quot;how-to&quot;. * Programming is about writing recipes to generate facts.</pre>
+  </section>
+
+  <section>
+    <h2>Citations</h2>
+    <span class="pill">6.100L Lecture 1: Welcome! (lec01)</span><span class="pill">SUM of LIST ELEMENTS (lec16)</span><span class="pill">6.100L Lecture 20 (lec20)</span>
+  </section>
+</main>
+</body>
+</html>
