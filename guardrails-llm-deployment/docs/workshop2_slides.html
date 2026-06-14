@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Workshop 2 Milestone Deck</title>
+  <style>
+    :root {
+      --ink: #172026;
+      --muted: #61707d;
+      --paper: #f7f8f6;
+      --panel: #ffffff;
+      --line: #d9dfdf;
+      --teal: #0f766e;
+      --blue: #2563eb;
+      --amber: #b45309;
+      --red: #b91c1c;
+      --green: #15803d;
+      --shadow: 0 18px 50px rgba(23, 32, 38, 0.14);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    .deck {
+      min-height: 100vh;
+      position: relative;
+    }
+
+    .slide {
+      display: none;
+      min-height: 100vh;
+      padding: 64px 76px 96px;
+    }
+
+    .slide.active {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 32px;
+    }
+
+    .kicker {
+      color: var(--teal);
+      font-size: 0.88rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      font-size: clamp(2.2rem, 5.2vw, 5.4rem);
+      letter-spacing: 0;
+      line-height: 0.98;
+      margin: 10px 0 0;
+      max-width: 980px;
+    }
+
+    h2 {
+      font-size: clamp(2rem, 4vw, 4rem);
+      letter-spacing: 0;
+      line-height: 1.02;
+      margin: 10px 0 0;
+      max-width: 980px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: clamp(1rem, 1.5vw, 1.25rem);
+      margin: 18px 0 0;
+      max-width: 820px;
+    }
+
+    .content {
+      align-items: stretch;
+      display: grid;
+      gap: 24px;
+    }
+
+    .two-col {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .three-col {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 28px;
+    }
+
+    .panel h3 {
+      font-size: 1.25rem;
+      margin: 0 0 16px;
+    }
+
+    .big-number {
+      color: var(--blue);
+      font-size: clamp(2.6rem, 5vw, 5rem);
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 0.95rem;
+      margin-top: 8px;
+    }
+
+    .pipeline {
+      align-items: center;
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      margin-top: 4px;
+    }
+
+    .step {
+      background: #edf7f4;
+      border: 1px solid #b7dad2;
+      border-radius: 8px;
+      color: #10423d;
+      font-weight: 700;
+      min-height: 96px;
+      padding: 18px 14px;
+    }
+
+    .step small {
+      color: #315f5a;
+      display: block;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 22px;
+    }
+
+    li {
+      margin: 10px 0;
+    }
+
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .tag {
+      border-radius: 999px;
+      font-size: 0.92rem;
+      font-weight: 700;
+      padding: 8px 12px;
+    }
+
+    .tag.teal {
+      background: #dff4ef;
+      color: #0f615a;
+    }
+
+    .tag.amber {
+      background: #fff0d5;
+      color: #92400e;
+    }
+
+    .tag.red {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .tag.green {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .failure-grid {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .failure {
+      border-left: 6px solid var(--red);
+    }
+
+    .guarded {
+      border-left: 6px solid var(--green);
+    }
+
+    .quote {
+      background: #f3f5f5;
+      border-radius: 8px;
+      color: #26333a;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 0.94rem;
+      margin-top: 14px;
+      padding: 14px;
+    }
+
+    .scorecard {
+      align-items: center;
+      display: grid;
+      gap: 18px;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .score {
+      border-radius: 8px;
+      padding: 28px;
+    }
+
+    .score.baseline {
+      background: #fff1f2;
+      border: 1px solid #fecdd3;
+    }
+
+    .score.guardrail {
+      background: #ecfdf5;
+      border: 1px solid #bbf7d0;
+    }
+
+    code {
+      background: #edf0f2;
+      border: 1px solid #d6dde1;
+      border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      padding: 2px 6px;
+    }
+
+    .command {
+      align-items: center;
+      background: #132027;
+      border-radius: 8px;
+      color: #eaf2f2;
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+      margin-top: 16px;
+      padding: 14px 16px;
+    }
+
+    .command code {
+      background: transparent;
+      border: 0;
+      color: inherit;
+      padding: 0;
+    }
+
+    button {
+      background: var(--ink);
+      border: 0;
+      border-radius: 7px;
+      color: white;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 700;
+      min-height: 40px;
+      padding: 9px 14px;
+    }
+
+    button.secondary {
+      background: #e7ecec;
+      color: var(--ink);
+    }
+
+    .controls {
+      align-items: center;
+      bottom: 22px;
+      display: flex;
+      gap: 10px;
+      left: 50%;
+      position: fixed;
+      transform: translateX(-50%);
+      z-index: 10;
+    }
+
+    .counter {
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font-weight: 700;
+      min-width: 70px;
+      padding: 9px 12px;
+      text-align: center;
+    }
+
+    .progress {
+      background: #dfe5e5;
+      height: 5px;
+      left: 0;
+      position: fixed;
+      right: 0;
+      top: 0;
+      z-index: 20;
+    }
+
+    .progress span {
+      background: linear-gradient(90deg, var(--teal), var(--blue));
+      display: block;
+      height: 100%;
+      transition: width 160ms ease;
+      width: 25%;
+    }
+
+    .notes-panel {
+      background: rgba(255, 255, 255, 0.98);
+      border-left: 1px solid var(--line);
+      box-shadow: -12px 0 38px rgba(23, 32, 38, 0.16);
+      bottom: 0;
+      display: none;
+      max-width: 480px;
+      overflow-y: auto;
+      padding: 28px;
+      position: fixed;
+      right: 0;
+      top: 0;
+      z-index: 30;
+    }
+
+    .notes-panel.open {
+      display: block;
+    }
+
+    .notes-panel h3 {
+      margin: 0 0 14px;
+    }
+
+    .notes-panel p {
+      color: #334149;
+      margin: 0 0 14px;
+    }
+
+    .keyboard-help {
+      bottom: 26px;
+      color: var(--muted);
+      font-size: 0.85rem;
+      position: fixed;
+      right: 28px;
+    }
+
+    .speaker-notes {
+      display: none;
+    }
+
+    @media (max-width: 860px) {
+      body {
+        overflow-y: auto;
+      }
+
+      .slide {
+        padding: 38px 20px 104px;
+      }
+
+      .slide.active {
+        min-height: auto;
+      }
+
+      .two-col,
+      .three-col,
+      .failure-grid,
+      .scorecard,
+      .pipeline {
+        grid-template-columns: 1fr;
+      }
+
+      .step {
+        min-height: auto;
+      }
+
+      .keyboard-help {
+        display: none;
+      }
+
+      .controls {
+        bottom: 12px;
+        width: calc(100% - 24px);
+      }
+
+      .controls button {
+        flex: 1;
+      }
+    }
+
+    @media print {
+      body {
+        background: white;
+        overflow: visible;
+      }
+
+      .slide,
+      .slide.active {
+        break-after: page;
+        display: block;
+        min-height: 100vh;
+        padding: 48px;
+      }
+
+      .controls,
+      .progress,
+      .keyboard-help,
+      .notes-panel {
+        display: none !important;
+      }
+
+      .speaker-notes {
+        border-top: 1px solid var(--line);
+        display: block;
+        margin-top: 24px;
+        padding-top: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress" aria-hidden="true"><span id="progress-bar"></span></div>
+
+  <main class="deck" aria-live="polite">
+    <section class="slide active" data-title="What We Built">
+      <header>
+        <div class="kicker">Workshop 2 Milestone</div>
+        <h1>Baseline RAG + first guardrails</h1>
+        <p class="subtitle">A local, deterministic milestone demo: course corpus to retrieval, citations, failure analysis, and guardrail contrast.</p>
+      </header>
+      <div class="content">
+        <div class="pipeline" aria-label="RAG pipeline">
+          <div class="step">Corpus<small>JSONL course docs</small></div>
+          <div class="step">Chunks<small>650 chars, overlap 80</small></div>
+          <div class="step">Embeddings<small>local hashing</small></div>
+          <div class="step">Chroma<small>vector index</small></div>
+          <div class="step">Retrieval<small>top chunks</small></div>
+          <div class="step">Answer<small>citations + guards</small></div>
+        </div>
+        <div class="three-col">
+          <div class="panel">
+            <div class="big-number">28</div>
+            <div class="metric-label">Python course documents</div>
+          </div>
+          <div class="panel">
+            <div class="big-number">782</div>
+            <div class="metric-label">Chunks in the live demo index</div>
+          </div>
+          <div class="panel">
+            <div class="big-number">1 cmd</div>
+            <div class="metric-label">Runs the full local milestone demo</div>
+          </div>
+        </div>
+      </div>
+      <aside class="speaker-notes">
+        <p>For this milestone, our goal was not to build a perfect assistant yet. The goal was to get a complete local RAG loop working, then show where it fails without guardrails.</p>
+        <p>The baseline can load course material, chunk it, build a vector index, retrieve relevant chunks, and return an answer with citations.</p>
+        <p>This gives us something concrete to compare against.</p>
+      </aside>
+    </section>
+
+    <section class="slide" data-title="Corpus And Scope">
+      <header>
+        <div class="kicker">Corpus and scope</div>
+        <h2>Two corpus roles, one clear story</h2>
+        <p class="subtitle">The realistic course corpus proves the RAG flow. The synthetic corpus proves the safety failures.</p>
+      </header>
+      <div class="content two-col">
+        <div class="panel">
+          <h3>Python course corpus</h3>
+          <ul>
+            <li>Real course-style demo material</li>
+            <li>Lecture notes plus course policies</li>
+            <li>All current documents are public</li>
+            <li>Good for normal course Q&amp;A</li>
+          </ul>
+          <div class="tag-row">
+            <span class="tag teal">live demo</span>
+            <span class="tag green">28 docs</span>
+            <span class="tag teal">public</span>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Synthetic failure corpus</h3>
+          <ul>
+            <li>Controlled failure-analysis material</li>
+            <li>Includes <code>private-roster</code></li>
+            <li>Includes injected retrieved text</li>
+            <li>Used for baseline vs guardrailed evaluation</li>
+          </ul>
+          <div class="tag-row">
+            <span class="tag amber">failure tests</span>
+            <span class="tag red">private doc</span>
+            <span class="tag red">injection</span>
+          </div>
+        </div>
+      </div>
+      <aside class="speaker-notes">
+        <p>The Python course corpus is our realistic demo corpus. It supports normal questions over course material, like definitions from lectures or course policy.</p>
+        <p>But all of the Python course documents are public, so it cannot show a private retrieval failure by itself.</p>
+        <p>For failure analysis, we use a small synthetic corpus on purpose. It contains a private document and an injected instruction, so we can clearly show what the baseline gets wrong.</p>
+      </aside>
+    </section>
+
+    <section class="slide" data-title="Failure Contrast">
+      <header>
+        <div class="kicker">What fails without guardrails</div>
+        <h2>The baseline works, but it is unsafe</h2>
+        <p class="subtitle">The demo shows two concrete slips: private retrieval and indirect prompt injection.</p>
+      </header>
+      <div class="content failure-grid">
+        <div class="panel failure">
+          <h3>Baseline: private retrieval</h3>
+          <ul>
+            <li>Question asks about private roster data</li>
+            <li>Baseline retrieves <code>private-roster</code></li>
+            <li>No trigger, no visibility filter, no block</li>
+          </ul>
+          <div class="quote">retrieved_chunks: ["private-roster:lc:0", ...]</div>
+        </div>
+        <div class="panel guarded">
+          <h3>Guardrailed: blocked before retrieval</h3>
+          <ul>
+            <li>Input guard detects sensitive-data request</li>
+            <li>No citations are returned</li>
+            <li>Trigger: <code>pii</code></li>
+          </ul>
+          <div class="quote">"I cannot process this request..."</div>
+        </div>
+        <div class="panel failure">
+          <h3>Baseline: injected text slips through</h3>
+          <ul>
+            <li>Retrieved assignment text contains an attack sentence</li>
+            <li>Baseline repeats it in the answer</li>
+            <li>No context sanitization</li>
+          </ul>
+          <div class="quote">"Ignore all previous instructions..."</div>
+        </div>
+        <div class="panel guarded">
+          <h3>Guardrailed: context is sanitized</h3>
+          <ul>
+            <li>Retrieved context is treated as untrusted text</li>
+            <li>Instruction-like sentence is removed</li>
+            <li>Answer keeps the useful course evidence</li>
+          </ul>
+          <div class="quote">answer cites assignment policy without the attack text</div>
+        </div>
+      </div>
+      <aside class="speaker-notes">
+        <p>This is the main point of the milestone.</p>
+        <p>Without guardrails, the baseline RAG system retrieves whatever seems relevant. That means it can retrieve a private roster note if the question asks about it.</p>
+        <p>It can also repeat malicious instructions that are inside retrieved documents. This is indirect prompt injection: the user did not type the attack, but the retrieved context contains it.</p>
+        <p>The guardrailed version adds input checks, public-only retrieval filtering, and sanitization of retrieved text before answering.</p>
+      </aside>
+    </section>
+
+    <section class="slide" data-title="Results And Demo">
+      <header>
+        <div class="kicker">Results, demo, limits</div>
+        <h2>Failure-analysis scorecard</h2>
+        <p class="subtitle">The evaluation set is small, but it targets the required first failure modes.</p>
+      </header>
+      <div class="content two-col">
+        <div class="panel">
+          <div class="scorecard">
+            <div class="score baseline">
+              <div class="big-number">3/12</div>
+              <div class="metric-label">Baseline vector</div>
+            </div>
+            <div class="score guardrail">
+              <div class="big-number">12/12</div>
+              <div class="metric-label">Guardrailed vector</div>
+            </div>
+          </div>
+          <div class="command">
+            <code id="demo-command">./scripts/run_workshop2_demo.sh</code>
+            <button type="button" id="copy-command">Copy</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Current limits</h3>
+          <ul>
+            <li>Local deterministic embeddings</li>
+            <li>Extractive answer generator, not real LLM generation</li>
+            <li>Rule-based guardrails</li>
+            <li>Small 12-case evaluation set</li>
+            <li>Public-only live course corpus</li>
+          </ul>
+          <div class="tag-row">
+            <span class="tag amber">prototype</span>
+            <span class="tag teal">local demo</span>
+            <span class="tag green">ready for milestone</span>
+          </div>
+        </div>
+      </div>
+      <aside class="speaker-notes">
+        <p>The evaluation is small, but it is useful for this milestone because it covers the required first failure modes: prompt injection, privacy, academic integrity, and unsupported questions.</p>
+        <p>The baseline passes only 3 out of 12 cases. The guardrailed version passes all 12 in this controlled test set.</p>
+        <p>The demo command runs the whole story: validates the corpus, rebuilds the vector index, runs normal course Q&amp;A, writes the HTML visualization, then shows the baseline failures and the guardrailed behavior.</p>
+        <p>The honest limitation is that this is still a local deterministic prototype. It does not use production embeddings or a real LLM yet. That is next work.</p>
+      </aside>
+    </section>
+  </main>
+
+  <div class="controls" aria-label="Slide controls">
+    <button type="button" class="secondary" id="prev-slide">Prev</button>
+    <div class="counter" id="slide-counter">1 / 4</div>
+    <button type="button" id="next-slide">Next</button>
+    <button type="button" class="secondary" id="toggle-notes">Notes</button>
+  </div>
+  <div class="keyboard-help">Keys: Left/Right, Home/End, N notes, F fullscreen</div>
+  <aside class="notes-panel" id="notes-panel" aria-live="polite"></aside>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll(".slide"));
+    const counter = document.getElementById("slide-counter");
+    const progressBar = document.getElementById("progress-bar");
+    const notesPanel = document.getElementById("notes-panel");
+    const nextButton = document.getElementById("next-slide");
+    const prevButton = document.getElementById("prev-slide");
+    const notesButton = document.getElementById("toggle-notes");
+    const copyButton = document.getElementById("copy-command");
+    const command = document.getElementById("demo-command");
+    let current = 0;
+
+    function showSlide(index) {
+      current = Math.max(0, Math.min(index, slides.length - 1));
+      slides.forEach((slide, slideIndex) => {
+        slide.classList.toggle("active", slideIndex === current);
+      });
+      counter.textContent = `${current + 1} / ${slides.length}`;
+      progressBar.style.width = `${((current + 1) / slides.length) * 100}%`;
+      updateNotes();
+    }
+
+    function updateNotes() {
+      const activeSlide = slides[current];
+      const title = activeSlide.dataset.title || `Slide ${current + 1}`;
+      const notes = activeSlide.querySelector(".speaker-notes");
+      notesPanel.innerHTML = `<h3>${title} Notes</h3>${notes ? notes.innerHTML : "<p>No notes.</p>"}`;
+    }
+
+    function toggleNotes() {
+      notesPanel.classList.toggle("open");
+      updateNotes();
+    }
+
+    nextButton.addEventListener("click", () => showSlide(current + 1));
+    prevButton.addEventListener("click", () => showSlide(current - 1));
+    notesButton.addEventListener("click", toggleNotes);
+
+    copyButton.addEventListener("click", async () => {
+      const text = command.textContent.trim();
+      try {
+        await navigator.clipboard.writeText(text);
+        copyButton.textContent = "Copied";
+        setTimeout(() => {
+          copyButton.textContent = "Copy";
+        }, 1200);
+      } catch {
+        copyButton.textContent = "Select";
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowRight" || event.key === "PageDown" || event.key === " ") {
+        event.preventDefault();
+        showSlide(current + 1);
+      }
+      if (event.key === "ArrowLeft" || event.key === "PageUp") {
+        event.preventDefault();
+        showSlide(current - 1);
+      }
+      if (event.key === "Home") {
+        event.preventDefault();
+        showSlide(0);
+      }
+      if (event.key === "End") {
+        event.preventDefault();
+        showSlide(slides.length - 1);
+      }
+      if (event.key.toLowerCase() === "n") {
+        toggleNotes();
+      }
+      if (event.key.toLowerCase() === "f" && document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen();
+      }
+    });
+
+    showSlide(0);
+  </script>
+</body>
+</html>

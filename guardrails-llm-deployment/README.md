@@ -32,6 +32,7 @@ docs/
   project_plan.md
   workshop2_demo.md
   workshop2_requirements.md
+  workshop2_slides.html
 tests/
   test_guards.py
   test_pipeline.py
