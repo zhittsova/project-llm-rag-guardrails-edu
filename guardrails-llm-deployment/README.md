@@ -44,7 +44,7 @@ The installed console script uses hyphens: `guardrails-llm`.
 From the repository root:
 
 ```bash
-guardrails-llm-deployment/scripts/run_workshop2_demo.sh
+./scripts/run_workshop2_demo.sh
 uv --directory guardrails-llm-deployment run guardrails-llm query --mode guardrailed --retriever langchain --question "What is retrieval augmented generation?"
 uv --directory guardrails-llm-deployment run guardrails-llm validate-corpus --corpus data/course_docs.jsonl
 uv --directory guardrails-llm-deployment run guardrails-llm build-index --corpus data/course_docs.jsonl --index-dir indexes/chroma

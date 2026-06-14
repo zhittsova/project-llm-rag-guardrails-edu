@@ -104,7 +104,7 @@ class VectorRetriever:
             self._collection = _persistent_client(index_dir).get_collection(COLLECTION_NAME)
         except chromadb.errors.NotFoundError as exc:
             raise VectorIndexNotFoundError(
-                f"Vector index at {index_dir} does not contain collection "
+                f"Vector index at {index_dir} ({index_dir.resolve()}) does not contain collection "
                 f"{COLLECTION_NAME!r}. Run build-index first, or use "
                 "`./scripts/run_workshop2_demo.sh` for the full demo flow."
             ) from exc

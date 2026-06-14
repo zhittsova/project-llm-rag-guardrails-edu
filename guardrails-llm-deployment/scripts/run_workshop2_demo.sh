@@ -10,6 +10,21 @@ INDEX_DIR="${INDEX_DIR:-indexes/python-course-chroma}"
 REPORT="${REPORT:-reports/python_course_rag_demo.html}"
 QUESTION="${QUESTION:-What is declarative knowledge?}"
 
+if command -v uv >/dev/null 2>&1; then
+  UV_BIN="uv"
+elif [ -x /opt/homebrew/bin/uv ]; then
+  UV_BIN="/opt/homebrew/bin/uv"
+elif [ -x /usr/local/bin/uv ]; then
+  UV_BIN="/usr/local/bin/uv"
+elif [ -x "${HOME}/.cargo/bin/uv" ]; then
+  UV_BIN="${HOME}/.cargo/bin/uv"
+elif [ -x "${HOME}/.local/bin/uv" ]; then
+  UV_BIN="${HOME}/.local/bin/uv"
+else
+  echo "uv is required but was not found in PATH or common install locations." >&2
+  exit 127
+fi
+
 case "${INDEX_DIR}" in
   indexes/*) ;;
   *)
@@ -25,18 +40,18 @@ echo "Question: ${QUESTION}"
 echo
 
 echo "== 1. Validate corpus =="
-uv run guardrails-llm validate-corpus --corpus "${CORPUS}"
+"${UV_BIN}" run guardrails-llm validate-corpus --corpus "${CORPUS}"
 echo
 
 echo "== 2. Rebuild vector index =="
 rm -rf "${INDEX_DIR}"
-uv run guardrails-llm build-index \
+"${UV_BIN}" run guardrails-llm build-index \
   --corpus "${CORPUS}" \
   --index-dir "${INDEX_DIR}"
 echo
 
 echo "== 3. Run guardrailed vector query =="
-uv run guardrails-llm query \
+"${UV_BIN}" run guardrails-llm query \
   --mode guardrailed \
   --course-id "${COURSE_ID}" \
   --retriever vector \
@@ -46,7 +61,7 @@ uv run guardrails-llm query \
 echo
 
 echo "== 4. Write HTML visualization =="
-uv run guardrails-llm visualize \
+"${UV_BIN}" run guardrails-llm visualize \
   --corpus "${CORPUS}" \
   --course-id "${COURSE_ID}" \
   --retriever vector \

@@ -6,6 +6,12 @@ This demo can use either the synthetic six-document corpus in
 
 ## One-Command Demo
 
+From the `AMT/` repository root:
+
+```bash
+./scripts/run_workshop2_demo.sh
+```
+
 From this package folder:
 
 ```bash
