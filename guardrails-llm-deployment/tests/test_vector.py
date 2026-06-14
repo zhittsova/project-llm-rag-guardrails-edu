@@ -1,7 +1,9 @@
 from pathlib import Path
 
+import pytest
+
 from guardrails_llm.pipeline import build_assistant
-from guardrails_llm.vector import VectorRetriever, build_vector_index
+from guardrails_llm.vector import VectorIndexNotFoundError, VectorRetriever, build_vector_index
 
 
 DATA = Path(__file__).resolve().parents[1] / "data" / "course_docs.jsonl"
@@ -33,3 +35,8 @@ def test_vector_retriever_filters_private_chunks(tmp_path: Path) -> None:
 
     assert all(chunk.visibility == "public" for chunk, _score in results)
     assert all(chunk.doc_id != "private-roster" for chunk, _score in results)
+
+
+def test_vector_retriever_explains_missing_index(tmp_path: Path) -> None:
+    with pytest.raises(VectorIndexNotFoundError, match="build-index"):
+        VectorRetriever(tmp_path / "missing-chroma")

@@ -44,6 +44,7 @@ The installed console script uses hyphens: `guardrails-llm`.
 From the repository root:
 
 ```bash
+guardrails-llm-deployment/scripts/run_workshop2_demo.sh
 uv --directory guardrails-llm-deployment run guardrails-llm query --mode guardrailed --retriever langchain --question "What is retrieval augmented generation?"
 uv --directory guardrails-llm-deployment run guardrails-llm validate-corpus --corpus data/course_docs.jsonl
 uv --directory guardrails-llm-deployment run guardrails-llm build-index --corpus data/course_docs.jsonl --index-dir indexes/chroma
@@ -57,6 +58,7 @@ uv --directory guardrails-llm-deployment run guardrails-llm evaluate --mode guar
 From this package folder:
 
 ```bash
+./scripts/run_workshop2_demo.sh
 uv run python -m guardrails_llm.cli query --mode guardrailed --retriever langchain --question "What is retrieval augmented generation?"
 uv run python -m guardrails_llm.cli validate-corpus --corpus data/course_docs.jsonl
 uv run python -m guardrails_llm.cli build-index --corpus data/course_docs.jsonl --index-dir indexes/chroma

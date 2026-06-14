@@ -8,7 +8,7 @@ from .corpus import default_data_path, validate_corpus
 from .course_corpus import default_course_output_path, default_course_source_path, normalize_course_corpus
 from .evaluation import load_eval_cases, results_to_json, run_evaluation, summarize, write_results_csv
 from .pipeline import build_assistant
-from .vector import build_vector_index, default_index_path
+from .vector import VectorIndexNotFoundError, build_vector_index, default_index_path
 from .visualization import write_rag_visualization
 
 
@@ -92,15 +92,18 @@ def main() -> None:
         return
 
     if args.command == "visualize":
-        stats = write_rag_visualization(
-            corpus_path=corpus_path,
-            output_path=args.output,
-            question=args.question,
-            mode=args.mode,
-            retriever_backend=args.retriever,
-            index_dir=args.index_dir,
-            course_id=args.course_id,
-        )
+        try:
+            stats = write_rag_visualization(
+                corpus_path=corpus_path,
+                output_path=args.output,
+                question=args.question,
+                mode=args.mode,
+                retriever_backend=args.retriever,
+                index_dir=args.index_dir,
+                course_id=args.course_id,
+            )
+        except VectorIndexNotFoundError as exc:
+            parser.error(str(exc))
         print(
             json.dumps(
                 {
@@ -112,13 +115,16 @@ def main() -> None:
         )
         return
 
-    assistant = build_assistant(
-        corpus_path,
-        mode=args.mode,
-        retriever_backend=args.retriever,
-        index_dir=args.index_dir,
-        course_id=args.course_id,
-    )
+    try:
+        assistant = build_assistant(
+            corpus_path,
+            mode=args.mode,
+            retriever_backend=args.retriever,
+            index_dir=args.index_dir,
+            course_id=args.course_id,
+        )
+    except VectorIndexNotFoundError as exc:
+        parser.error(str(exc))
     if args.command == "query":
         response = assistant.answer(args.question)
         print(json.dumps(response.__dict__, indent=2))

@@ -4,6 +4,24 @@ This demo can use either the synthetic six-document corpus in
 `data/course_docs.jsonl` or the normalized Python course corpus in
 `data/python_course_docs.jsonl`.
 
+## One-Command Demo
+
+From this package folder:
+
+```bash
+./scripts/run_workshop2_demo.sh
+```
+
+The script validates `data/python_course_docs.jsonl`, rebuilds
+`indexes/python-course-chroma`, runs one guardrailed vector query, and writes
+`reports/python_course_rag_demo.html`.
+
+To try another question:
+
+```bash
+QUESTION="What is procedural knowledge?" ./scripts/run_workshop2_demo.sh
+```
+
 ## Baseline RAG Setup
 
 ```bash

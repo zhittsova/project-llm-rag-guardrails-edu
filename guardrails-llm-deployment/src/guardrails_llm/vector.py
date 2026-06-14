@@ -27,6 +27,10 @@ class VectorIndexStats:
     chunks: int
 
 
+class VectorIndexNotFoundError(RuntimeError):
+    pass
+
+
 class HashingEmbedder:
     # Локальная deterministic embedding-функция для demo: без API keys,
     # downloads и случайности. Это не production semantic embedding model, но
@@ -96,7 +100,14 @@ def build_vector_index(
 
 class VectorRetriever:
     def __init__(self, index_dir: Path, *, min_score: float = 0.05) -> None:
-        self._collection = _persistent_client(index_dir).get_collection(COLLECTION_NAME)
+        try:
+            self._collection = _persistent_client(index_dir).get_collection(COLLECTION_NAME)
+        except chromadb.errors.NotFoundError as exc:
+            raise VectorIndexNotFoundError(
+                f"Vector index at {index_dir} does not contain collection "
+                f"{COLLECTION_NAME!r}. Run build-index first, or use "
+                "`./scripts/run_workshop2_demo.sh` for the full demo flow."
+            ) from exc
         self._embedder = HashingEmbedder()
         self._min_score = min_score
 
