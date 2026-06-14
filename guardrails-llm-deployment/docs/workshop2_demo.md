@@ -4,6 +4,8 @@ This demo can use either the synthetic six-document corpus in
 `data/course_docs.jsonl` or the normalized Python course corpus in
 `data/python_course_docs.jsonl`.
 
+Scope and readiness are written up in `docs/workshop2_requirements.md`.
+
 ## One-Command Demo
 
 From the `AMT/` repository root:
@@ -20,7 +22,9 @@ From this package folder:
 
 The script validates `data/python_course_docs.jsonl`, rebuilds
 `indexes/python-course-chroma`, runs one guardrailed vector query, and writes
-`reports/python_course_rag_demo.html`.
+`reports/python_course_rag_demo.html`. It then switches to the synthetic
+failure-analysis corpus and shows what slips through baseline RAG without the
+guardrails.
 
 To try another question:
 
@@ -69,6 +73,20 @@ uv run guardrails-llm visualize --corpus data/python_course_docs.jsonl --course-
 Open `reports/python_course_rag_demo.html` in a browser. The page shows the question,
 pipeline stages, retrieved chunks, final answer, citations, guard triggers, and
 latency.
+
+## Baseline Failure Contrast
+
+The live Python course corpus is public course material. It is good for the normal
+RAG demo, but it does not contain private documents. The controlled safety failures
+are demonstrated with `data/course_docs.jsonl`.
+
+The one-command demo shows two concrete baseline failures:
+
+- baseline retrieves `private-roster` for a sensitive-data question;
+- baseline repeats an injected instruction from retrieved assignment text.
+
+The guardrailed run blocks the sensitive-data request before retrieval and
+sanitizes the injected retrieved text before answering.
 
 ## Unsupported Question
 
