@@ -31,6 +31,7 @@ docs/
   corpus_contract.md
   project_plan.md
   workshop2_demo.md
+  workshop2_rag_slides.html
   workshop2_requirements.md
   workshop2_slides.html
 tests/

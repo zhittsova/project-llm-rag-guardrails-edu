@@ -6,6 +6,7 @@ This demo can use either the synthetic six-document corpus in
 
 Scope and readiness are written up in `docs/workshop2_requirements.md`.
 The 4-slide presentation deck is `docs/workshop2_slides.html`.
+The RAG-focused 10-slide deck is `docs/workshop2_rag_slides.html`.
 
 ## One-Command Demo
 

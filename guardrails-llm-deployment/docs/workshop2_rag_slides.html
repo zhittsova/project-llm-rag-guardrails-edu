@@ -1,0 +1,973 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Workshop 2 RAG Deep Dive Deck</title>
+  <style>
+    :root {
+      --ink: #182026;
+      --muted: #5f6d78;
+      --paper: #f6f7f4;
+      --panel: #ffffff;
+      --line: #d8dedc;
+      --teal: #0f766e;
+      --blue: #2457d6;
+      --amber: #a15c07;
+      --red: #b42318;
+      --green: #16743f;
+      --violet: #6d28d9;
+      --code: #132027;
+      --shadow: 0 18px 48px rgba(24, 32, 38, 0.13);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.42;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    .deck {
+      min-height: 100vh;
+      position: relative;
+    }
+
+    .slide {
+      display: none;
+      min-height: 100vh;
+      padding: 54px 70px 96px;
+    }
+
+    .slide.active {
+      display: grid;
+      gap: 28px;
+      grid-template-rows: auto 1fr;
+    }
+
+    .eyebrow {
+      color: var(--teal);
+      font-size: 0.84rem;
+      font-weight: 800;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2 {
+      letter-spacing: 0;
+      line-height: 1.02;
+      margin: 10px 0 0;
+      max-width: 1080px;
+    }
+
+    h1 {
+      font-size: clamp(2.3rem, 5.4vw, 5.8rem);
+    }
+
+    h2 {
+      font-size: clamp(2rem, 4.2vw, 4.4rem);
+    }
+
+    h3 {
+      font-size: 1.12rem;
+      margin: 0 0 12px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: clamp(1rem, 1.55vw, 1.28rem);
+      margin: 16px 0 0;
+      max-width: 880px;
+    }
+
+    .content {
+      align-items: stretch;
+      display: grid;
+      gap: 22px;
+    }
+
+    .two {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .four {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 24px;
+    }
+
+    .panel.tight {
+      padding: 18px;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 21px;
+    }
+
+    li {
+      margin: 9px 0;
+    }
+
+    code,
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    code {
+      background: #edf1f2;
+      border: 1px solid #d2dbdc;
+      border-radius: 6px;
+      padding: 2px 6px;
+    }
+
+    .code-block {
+      background: var(--code);
+      border-radius: 8px;
+      color: #eaf2f2;
+      font-size: 0.92rem;
+      overflow-x: auto;
+      padding: 16px;
+      white-space: pre-wrap;
+    }
+
+    .diagram {
+      align-items: stretch;
+      display: grid;
+      gap: 12px;
+    }
+
+    .diagram.six {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .diagram.five {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .box {
+      background: #edf7f4;
+      border: 1px solid #b9dcd5;
+      border-radius: 8px;
+      color: #10423d;
+      font-weight: 800;
+      min-height: 96px;
+      padding: 16px 14px;
+    }
+
+    .box small {
+      color: #345f5b;
+      display: block;
+      font-weight: 650;
+      margin-top: 8px;
+    }
+
+    .box.blue {
+      background: #eef4ff;
+      border-color: #c7d8ff;
+      color: #173a8a;
+    }
+
+    .box.amber {
+      background: #fff3dc;
+      border-color: #f8d495;
+      color: #754100;
+    }
+
+    .box.red {
+      background: #fff0f0;
+      border-color: #fecaca;
+      color: #8e1a12;
+    }
+
+    .box.green {
+      background: #ecfdf3;
+      border-color: #b8ecc8;
+      color: #155b33;
+    }
+
+    .box.violet {
+      background: #f3edff;
+      border-color: #d9c8ff;
+      color: #4c1d95;
+    }
+
+    .metric {
+      color: var(--blue);
+      font-size: clamp(2.4rem, 5vw, 4.8rem);
+      font-weight: 850;
+      line-height: 1;
+    }
+
+    .metric.green {
+      color: var(--green);
+    }
+
+    .metric.red {
+      color: var(--red);
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: 0.92rem;
+      margin-top: 8px;
+    }
+
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 16px;
+    }
+
+    .tag {
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 800;
+      padding: 7px 11px;
+    }
+
+    .tag.teal {
+      background: #dff4ef;
+      color: #0d5f58;
+    }
+
+    .tag.blue {
+      background: #e7efff;
+      color: #1d4ed8;
+    }
+
+    .tag.amber {
+      background: #fff0d1;
+      color: #8b4d04;
+    }
+
+    .tag.red {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .tag.green {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .compare {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .baseline {
+      border-left: 6px solid var(--red);
+    }
+
+    .guardrail {
+      border-left: 6px solid var(--green);
+    }
+
+    .caption {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 12px;
+    }
+
+    .chunk-strip {
+      background: #edf1f2;
+      border: 1px solid #d7dfe1;
+      border-radius: 8px;
+      margin-top: 14px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .chunk-row {
+      display: flex;
+      min-height: 82px;
+    }
+
+    .chunk {
+      align-items: center;
+      border-right: 1px solid #cbd5d7;
+      display: flex;
+      flex: 1;
+      font-weight: 800;
+      justify-content: center;
+      min-width: 0;
+      padding: 10px;
+      text-align: center;
+    }
+
+    .chunk.overlap {
+      background: #fff2c7;
+      color: #7a4300;
+      flex: 0.25;
+    }
+
+    .note {
+      background: #f9fafb;
+      border: 1px dashed #cbd5d7;
+      border-radius: 8px;
+      color: #32414a;
+      margin-top: 12px;
+      padding: 12px 14px;
+    }
+
+    .command {
+      align-items: center;
+      background: var(--code);
+      border-radius: 8px;
+      color: #eaf2f2;
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+      padding: 14px 16px;
+    }
+
+    .command code {
+      background: transparent;
+      border: 0;
+      color: inherit;
+      padding: 0;
+    }
+
+    button {
+      background: var(--ink);
+      border: 0;
+      border-radius: 7px;
+      color: white;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 800;
+      min-height: 40px;
+      padding: 9px 14px;
+    }
+
+    button.secondary {
+      background: #e6ecec;
+      color: var(--ink);
+    }
+
+    .controls {
+      align-items: center;
+      bottom: 20px;
+      display: flex;
+      gap: 10px;
+      left: 50%;
+      position: fixed;
+      transform: translateX(-50%);
+      z-index: 10;
+    }
+
+    .counter {
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font-weight: 800;
+      min-width: 82px;
+      padding: 9px 12px;
+      text-align: center;
+    }
+
+    .progress {
+      background: #dfe5e4;
+      height: 5px;
+      left: 0;
+      position: fixed;
+      right: 0;
+      top: 0;
+      z-index: 20;
+    }
+
+    .progress span {
+      background: linear-gradient(90deg, var(--teal), var(--blue));
+      display: block;
+      height: 100%;
+      transition: width 160ms ease;
+      width: 10%;
+    }
+
+    .notes-panel {
+      background: rgba(255, 255, 255, 0.98);
+      border-left: 1px solid var(--line);
+      box-shadow: -12px 0 40px rgba(24, 32, 38, 0.16);
+      bottom: 0;
+      display: none;
+      max-width: 500px;
+      overflow-y: auto;
+      padding: 28px;
+      position: fixed;
+      right: 0;
+      top: 0;
+      z-index: 30;
+    }
+
+    .notes-panel.open {
+      display: block;
+    }
+
+    .notes-panel h3 {
+      margin: 0 0 14px;
+    }
+
+    .notes-panel p {
+      color: #334149;
+      margin: 0 0 14px;
+    }
+
+    .speaker-notes {
+      display: none;
+    }
+
+    .keyboard-help {
+      bottom: 26px;
+      color: var(--muted);
+      font-size: 0.84rem;
+      position: fixed;
+      right: 28px;
+    }
+
+    @media (max-width: 920px) {
+      body {
+        overflow-y: auto;
+      }
+
+      .slide {
+        padding: 34px 18px 104px;
+      }
+
+      .slide.active {
+        min-height: auto;
+      }
+
+      .two,
+      .three,
+      .four,
+      .compare,
+      .diagram.six,
+      .diagram.five {
+        grid-template-columns: 1fr;
+      }
+
+      .box {
+        min-height: auto;
+      }
+
+      .keyboard-help {
+        display: none;
+      }
+
+      .controls {
+        bottom: 12px;
+        width: calc(100% - 24px);
+      }
+
+      .controls button {
+        flex: 1;
+      }
+    }
+
+    @media print {
+      body {
+        background: white;
+        overflow: visible;
+      }
+
+      .slide,
+      .slide.active {
+        break-after: page;
+        display: block;
+        min-height: 100vh;
+        padding: 44px;
+      }
+
+      .controls,
+      .progress,
+      .keyboard-help,
+      .notes-panel {
+        display: none !important;
+      }
+
+      .speaker-notes {
+        border-top: 1px solid var(--line);
+        display: block;
+        margin-top: 24px;
+        padding-top: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress" aria-hidden="true"><span id="progress-bar"></span></div>
+
+  <main class="deck" aria-live="polite">
+    <section class="slide active" data-title="RAG Milestone">
+      <header>
+        <div class="eyebrow">Workshop 2</div>
+        <h1>Baseline RAG, first guardrails, failure analysis</h1>
+        <p class="subtitle">A local prototype that makes the RAG path visible: corpus -> chunks -> vectors -> retrieval -> answer -> citations.</p>
+      </header>
+      <div class="content three">
+        <div class="panel">
+          <div class="metric">28</div>
+          <div class="label">Python course documents</div>
+        </div>
+        <div class="panel">
+          <div class="metric">782</div>
+          <div class="label">Chunks in the live vector index</div>
+        </div>
+        <div class="panel">
+          <div class="metric">12</div>
+          <div class="label">Failure-analysis evaluation cases</div>
+        </div>
+      </div>
+      <aside class="speaker-notes">
+        <p>This deck is the RAG-focused version of the milestone presentation.</p>
+        <p>The point is not that the assistant is production ready. The point is that we have a complete local RAG loop, we can inspect it, and we can compare it with and without guardrails.</p>
+        <p>The technical story is corpus preparation, chunking, embeddings, vector index, retrieval, answer generation, citations, and then the guardrails around the RAG flow.</p>
+      </aside>
+    </section>
+
+    <section class="slide" data-title="End To End RAG">
+      <header>
+        <div class="eyebrow">RAG architecture</div>
+        <h2>End-to-end flow</h2>
+        <p class="subtitle">The pipeline is deliberately local and inspectable, so every artifact can be shown in the repo.</p>
+      </header>
+      <div class="content">
+        <div class="diagram six">
+          <div class="box">Corpus<small>JSONL course material</small></div>
+          <div class="box">Chunking<small>split documents into retrievable units</small></div>
+          <div class="box">Embedding<small>turn chunk text into vectors</small></div>
+          <div class="box">Chroma<small>persist vectors and metadata</small></div>
+          <div class="box">Retrieval<small>find closest chunks for question</small></div>
+          <div class="box">Answer<small>extractive response plus citations</small></div>
+        </div>
+        <div class="panel">
+          <h3>Current implementation</h3>
+          <div class="code-block">data/python_course_docs.jsonl
+  -> langchain_chunk_documents(chunk_size=650, chunk_overlap=80)
+  -> HashingEmbedder(dimensions=384)
+  -> Chroma collection: course_chunks
+  -> VectorRetriever.search(top_k=3)
+  -> answer + citations + retrieved_chunk_ids</div>
+        </div>
+      </div>
+      <aside class="speaker-notes">
+        <p>This is the main technical slide. The user question does not go straight to an LLM. It goes through retrieval first.</p>
+        <p>Our corpus is normalized JSONL. Documents are split into chunks. Each chunk gets an embedding. Chroma stores the embedding, the chunk text, and metadata like doc id, course id, title, visibility, and source type.</p>
+        <p>At query time, we embed the question, search the vector store, and build an answer from the retrieved chunks.</p>
+      </aside>
+    </section>
+
+    <section class="slide" data-title="Corpus Contract">
+      <header>
+        <div class="eyebrow">Corpus preparation</div>
+        <h2>The corpus contract is the handoff</h2>
+        <p class="subtitle">Workshop 2 depends on a normalized corpus, not raw PDFs or loose folders.</p>
+      </header>
+      <div class="content two">
+        <div class="panel">
+          <h3>Required document fields</h3>
+          <div class="code-block">{
+  "doc_id": "lec01",
+  "course_id": "python-intro",
+  "title": "6.100L Lecture 1",
+  "visibility": "public",
+  "source_type": "lecture_note",
+  "text": "..."
+}</div>
+        </div>
+        <div class="panel">
+          <h3>Why this matters</h3>
+          <ul>
+            <li><code>course_id</code> lets us select the correct course.</li>
+            <li><code>visibility</code> lets guardrails block private retrieval.</li>
+            <li><code>title</code> and <code>doc_id</code> become citations.</li>
+            <li><code>source_type</code> separates lectures, policies, assignments, and admin notes.</li>
+          </ul>
+          <div class="tag-row">
+            <span class="tag teal">validated JSONL</span>
+            <span class="tag blue">metadata preserved</span>
+            <span class="tag green">citation ready</span>
+          </div>
+        </div>
+      </div>
+      <aside class="speaker-notes">
+        <p>This slide explains why the corpus work is not just file cleanup. The metadata becomes part of the RAG behavior.</p>
+        <p>Visibility is especially important for guardrails. If a document is marked private, the guardrailed retriever should not use it for student-facing answers.</p>
+        <p>The live Python corpus is used for normal course Q and A. The synthetic corpus is used to test private retrieval and injected content.</p>
+      </aside>
+    </section>
+
+    <section class="slide" data-title="Chunking Strategy">
+      <header>
+        <div class="eyebrow">Chunking strategy</div>
+        <h2>We retrieve chunks, not whole lectures</h2>
+        <p class="subtitle">Chunking makes long course documents searchable and keeps answers tied to smaller evidence units.</p>
+      </header>
+      <div class="content two">
+        <div class="panel">
+          <h3>Main vector chunking</h3>
+          <ul>
+            <li>LangChain recursive splitter</li>
+            <li><code>chunk_size=650</code> characters</li>
+            <li><code>chunk_overlap=80</code> characters</li>
+            <li>chunk id format: <code>lec01:lc:3</code></li>
+          </ul>
+          <div class="chunk-strip" aria-hidden="true">
+            <div class="chunk-row">
+              <div class="chunk">chunk 1</div>
+              <div class="chunk overlap">80 overlap</div>
+              <div class="chunk">chunk 2</div>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Why this is good enough now</h3>
+          <ul>
+            <li>Definitions are less likely to be cut off.</li>
+            <li>Chunks keep citations closer to the actual evidence.</li>
+            <li>It is deterministic and easy to explain.</li>
+            <li>It works for the local vector demo.</li>
+          </ul>
+          <div class="note">Known limitation: chunking is not yet Markdown-section-aware or slide/page-aware.</div>
+        </div>
+      </div>
+      <aside class="speaker-notes">
+        <p>This is the chunking slide. The important phrase is: we retrieve chunks, not full documents.</p>
+        <p>For vector retrieval, we use LangChain's recursive text splitter with 650 characters and 80 characters of overlap.</p>
+        <p>The overlap is there because important definitions often sit near boundaries. Without overlap, retrieval can lose context.</p>
+        <p>The limitation is that it does not yet preserve every Markdown section or page number as first-class citation metadata.</p>
+      </aside>
+    </section>
+
+    <section class="slide" data-title="Embeddings And Vector Store">
+      <header>
+        <div class="eyebrow">Embeddings and vector store</div>
+        <h2>Chroma stores searchable chunk vectors</h2>
+        <p class="subtitle">For this milestone, embeddings are local and deterministic so the demo runs without API keys.</p>
+      </header>
+      <div class="content two">
+        <div class="panel">
+          <h3>Build index</h3>
+          <div class="diagram five">
+            <div class="box blue">chunk text</div>
+            <div class="box blue">tokens</div>
+            <div class="box blue">hashing embedder</div>
+            <div class="box blue">384-d vector</div>
+            <div class="box blue">Chroma</div>
+          </div>
+          <div class="code-block">uv run guardrails-llm build-index \
+  --corpus data/python_course_docs.jsonl \
+  --index-dir indexes/python-course-chroma</div>
+        </div>
+        <div class="panel">
+          <h3>Stored per chunk</h3>
+          <ul>
+            <li>embedding vector</li>
+            <li>chunk text</li>
+            <li><code>chunk_id</code></li>
+            <li><code>doc_id</code>, <code>course_id</code>, <code>title</code></li>
+            <li><code>visibility</code> and <code>source_type</code></li>
+          </ul>
+          <div class="note">Limitation: hashing embeddings are reproducible, but not as semantically strong as production embeddings.</div>
+        </div>
+      </div>
+      <aside class="speaker-notes">
+        <p>This slide explains the vector store. We use Chroma as a persistent local vector store.</p>
+        <p>The embedding function is intentionally simple: local hashing embeddings. That means no API key, no downloads, no network dependency, and stable results.</p>
+        <p>The tradeoff is retrieval quality. This is not a production semantic embedding model, but it is enough to show the architecture and failure analysis.</p>
+      </aside>
+    </section>
+
+    <section class="slide" data-title="Baseline Retrieval">
+      <header>
+        <div class="eyebrow">Baseline RAG</div>
+        <h2>The baseline is useful because it is unsafe</h2>
+        <p class="subtitle">It gives us a comparison point: same retrieval path, no first guardrails.</p>
+      </header>
+      <div class="content two">
+        <div class="panel baseline">
+          <h3>Baseline path</h3>
+          <div class="diagram five">
+            <div class="box red">question</div>
+            <div class="box red">retrieve all</div>
+            <div class="box red">top chunks</div>
+            <div class="box red">extract answer</div>
+            <div class="box red">citations</div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>No safety checks</h3>
+          <ul>
+            <li>no prompt-injection detection</li>
+            <li>no PII or sensitive-data blocking</li>
+            <li>no <code>visibility=public</code> filter</li>
+            <li>no context sanitization</li>
+            <li>no output guard</li>
+          </ul>
+          <div class="tag-row">
+            <span class="tag red">private retrieval risk</span>
+            <span class="tag red">injection risk</span>
+          </div>
+        </div>
+      </div>
+      <aside class="speaker-notes">
+        <p>The baseline is not the model we want to deploy. It is the model we compare against.</p>
+        <p>Baseline RAG retrieves from the index and builds an extractive answer. It does not filter private documents, it does not detect prompt injection, and it does not sanitize retrieved context.</p>
+        <p>That is exactly why it is useful for failure analysis.</p>
+      </aside>
+    </section>
+
+    <section class="slide" data-title="Guardrailed Retrieval">
+      <header>
+        <div class="eyebrow">Guardrailed RAG</div>
+        <h2>First guardrails wrap the RAG path</h2>
+        <p class="subtitle">The guardrails are simple, but they target the first milestone risks.</p>
+      </header>
+      <div class="content">
+        <div class="diagram six">
+          <div class="box green">input guard<small>injection, PII, unsafe</small></div>
+          <div class="box green">course filter<small>selected course only</small></div>
+          <div class="box green">visibility filter<small>public docs only</small></div>
+          <div class="box green">sanitize context<small>retrieved text is untrusted</small></div>
+          <div class="box green">answer<small>extractive + cited</small></div>
+          <div class="box green">output guard<small>grounding, leakage, integrity</small></div>
+        </div>
+        <div class="panel">
+          <h3>Core retrieval rule</h3>
+          <div class="code-block">guardrailed mode:
+  course_id = selected course
+  allowed_visibility = {"public"}
+  retrieved context = sanitized before answer generation</div>
+        </div>
+      </div>
+      <aside class="speaker-notes">
+        <p>The guardrailed version wraps the RAG path with checks before retrieval, during retrieval, after retrieval, and after answer generation.</p>
+        <p>The key retrieval rule is public-only retrieval for the selected course.</p>
+        <p>Also, retrieved text is treated as untrusted. This matters for indirect prompt injection: an instruction inside a retrieved document should not become an instruction to the assistant.</p>
+      </aside>
+    </section>
+
+    <section class="slide" data-title="Failure Analysis">
+      <header>
+        <div class="eyebrow">Failure analysis</div>
+        <h2>What slips through without guardrails</h2>
+        <p class="subtitle">The synthetic corpus gives us controlled failure cases that the live public corpus cannot show alone.</p>
+      </header>
+      <div class="content compare">
+        <div class="panel baseline">
+          <h3>Baseline failures</h3>
+          <ul>
+            <li>retrieves <code>private-roster</code> for sensitive-data question</li>
+            <li>repeats injected retrieved text</li>
+            <li>does not enforce academic-integrity behavior</li>
+            <li>does not abstain reliably on unsupported questions</li>
+          </ul>
+          <div class="code-block">Baseline vector: 3 / 12</div>
+        </div>
+        <div class="panel guardrail">
+          <h3>Guardrailed behavior</h3>
+          <ul>
+            <li>blocks sensitive-data request before retrieval</li>
+            <li>filters retrieval to public chunks</li>
+            <li>sanitizes injected context</li>
+            <li>uses citation/abstention rule</li>
+          </ul>
+          <div class="code-block">Guardrailed vector: 12 / 12</div>
+        </div>
+      </div>
+      <aside class="speaker-notes">
+        <p>This slide is where the milestone gets persuasive.</p>
+        <p>The baseline can answer normal questions, but the same mechanism retrieves unsafe or inappropriate context when asked adversarial questions.</p>
+        <p>The guardrailed version is not magic. It is simple rules and filters. But those rules directly address the first failure modes.</p>
+      </aside>
+    </section>
+
+    <section class="slide" data-title="Demo Script">
+      <header>
+        <div class="eyebrow">Demo</div>
+        <h2>One command shows the whole story</h2>
+        <p class="subtitle">The script runs normal RAG first, then the baseline-vs-guardrailed failure contrast.</p>
+      </header>
+      <div class="content two">
+        <div class="panel">
+          <h3>Run from the AMT repo root</h3>
+          <div class="command">
+            <code id="demo-command">./scripts/run_workshop2_demo.sh</code>
+            <button type="button" id="copy-command">Copy</button>
+          </div>
+          <div class="tag-row">
+            <span class="tag teal">validates corpus</span>
+            <span class="tag blue">rebuilds index</span>
+            <span class="tag green">writes HTML report</span>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Demo output order</h3>
+          <ul>
+            <li>validate Python course corpus</li>
+            <li>build Python course vector index</li>
+            <li>run guardrailed course question</li>
+            <li>write HTML visualization</li>
+            <li>show private retrieval baseline failure</li>
+            <li>show injected-context baseline failure</li>
+            <li>print baseline and guardrailed scorecards</li>
+          </ul>
+        </div>
+      </div>
+      <aside class="speaker-notes">
+        <p>The demo command is important because it prevents us from presenting only claims.</p>
+        <p>It rebuilds the vector index, runs a normal course question, writes the HTML visualization, then switches to the synthetic failure corpus to show what fails without guardrails.</p>
+        <p>If time is short, I would show the command and the scorecard output.</p>
+      </aside>
+    </section>
+
+    <section class="slide" data-title="Limits And Next Work">
+      <header>
+        <div class="eyebrow">Limits and next work</div>
+        <h2>Ready for the milestone, not production</h2>
+        <p class="subtitle">The honest story: the architecture works, the failure contrast is visible, and the next improvements are clear.</p>
+      </header>
+      <div class="content two">
+        <div class="panel">
+          <h3>Current limitations</h3>
+          <ul>
+            <li>local hashing embeddings, not production semantic embeddings</li>
+            <li>extractive answer generator, not a real LLM adapter</li>
+            <li>rule-based guardrails</li>
+            <li>small evaluation set</li>
+            <li>public-only live Python corpus</li>
+            <li>chunking is not yet section/page-aware</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Next work</h3>
+          <ul>
+            <li>stronger embedding model</li>
+            <li>optional LLM answer generator</li>
+            <li>Markdown-section-aware chunking</li>
+            <li>richer citation metadata</li>
+            <li>larger adversarial eval set</li>
+            <li>better demo UI for side-by-side comparison</li>
+          </ul>
+        </div>
+      </div>
+      <aside class="speaker-notes">
+        <p>This is the closing slide. I would be explicit that this is ready for the milestone, not for deployment.</p>
+        <p>The strongest claim is not production quality. The strongest claim is that the RAG architecture is working end to end and the first guardrails visibly change the failure behavior.</p>
+        <p>The next work is straightforward: better embeddings, real LLM adapter, smarter chunking, better citations, and a larger red-team style evaluation set.</p>
+      </aside>
+    </section>
+  </main>
+
+  <div class="controls" aria-label="Slide controls">
+    <button type="button" class="secondary" id="prev-slide">Prev</button>
+    <div class="counter" id="slide-counter">1 / 10</div>
+    <button type="button" id="next-slide">Next</button>
+    <button type="button" class="secondary" id="toggle-notes">Notes</button>
+  </div>
+  <div class="keyboard-help">Keys: Left/Right, Home/End, N notes, F fullscreen</div>
+  <aside class="notes-panel" id="notes-panel" aria-live="polite"></aside>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll(".slide"));
+    const counter = document.getElementById("slide-counter");
+    const progressBar = document.getElementById("progress-bar");
+    const notesPanel = document.getElementById("notes-panel");
+    const nextButton = document.getElementById("next-slide");
+    const prevButton = document.getElementById("prev-slide");
+    const notesButton = document.getElementById("toggle-notes");
+    const copyButton = document.getElementById("copy-command");
+    const command = document.getElementById("demo-command");
+    let current = 0;
+
+    function showSlide(index) {
+      current = Math.max(0, Math.min(index, slides.length - 1));
+      slides.forEach((slide, slideIndex) => {
+        slide.classList.toggle("active", slideIndex === current);
+      });
+      counter.textContent = `${current + 1} / ${slides.length}`;
+      progressBar.style.width = `${((current + 1) / slides.length) * 100}%`;
+      updateNotes();
+    }
+
+    function updateNotes() {
+      const activeSlide = slides[current];
+      const title = activeSlide.dataset.title || `Slide ${current + 1}`;
+      const notes = activeSlide.querySelector(".speaker-notes");
+      notesPanel.innerHTML = `<h3>${title} Notes</h3>${notes ? notes.innerHTML : "<p>No notes.</p>"}`;
+    }
+
+    function toggleNotes() {
+      notesPanel.classList.toggle("open");
+      updateNotes();
+    }
+
+    nextButton.addEventListener("click", () => showSlide(current + 1));
+    prevButton.addEventListener("click", () => showSlide(current - 1));
+    notesButton.addEventListener("click", toggleNotes);
+
+    if (copyButton && command) {
+      copyButton.addEventListener("click", async () => {
+        const text = command.textContent.trim();
+        try {
+          await navigator.clipboard.writeText(text);
+          copyButton.textContent = "Copied";
+          setTimeout(() => {
+            copyButton.textContent = "Copy";
+          }, 1200);
+        } catch {
+          copyButton.textContent = "Select";
+        }
+      });
+    }
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowRight" || event.key === "PageDown" || event.key === " ") {
+        event.preventDefault();
+        showSlide(current + 1);
+      }
+      if (event.key === "ArrowLeft" || event.key === "PageUp") {
+        event.preventDefault();
+        showSlide(current - 1);
+      }
+      if (event.key === "Home") {
+        event.preventDefault();
+        showSlide(0);
+      }
+      if (event.key === "End") {
+        event.preventDefault();
+        showSlide(slides.length - 1);
+      }
+      if (event.key.toLowerCase() === "n") {
+        toggleNotes();
+      }
+      if (event.key.toLowerCase() === "f" && document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen();
+      }
+    });
+
+    showSlide(0);
+  </script>
+</body>
+</html>
