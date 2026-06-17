@@ -1,0 +1,87 @@
+name: Dependabot Automerge
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge-from-ci:
+    name: merge after CI
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'dependabot/')
+    steps:
+      - name: Merge matching Dependabot pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          pr_number="$(
+            gh pr list \
+              --repo "${REPOSITORY}" \
+              --state open \
+              --json number,author,baseRefName,headRefName \
+              --jq ".[] | select(.author.login == \"app/dependabot\" and .baseRefName == \"main\" and .headRefName == \"${HEAD_BRANCH}\") | .number"
+          )"
+
+          if [ -z "${pr_number}" ]; then
+            echo "No open Dependabot PR found for ${HEAD_BRANCH}."
+            exit 0
+          fi
+
+          gh pr merge "${pr_number}" \
+            --repo "${REPOSITORY}" \
+            --squash \
+            --delete-branch
+
+  merge-ready-open-prs:
+    name: merge ready open PRs
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Merge open Dependabot pull requests with passing checks
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          gh pr list \
+            --repo "${REPOSITORY}" \
+            --state open \
+            --json number,author,baseRefName,headRefName,statusCheckRollup \
+            --jq '
+              .[]
+              | select(.author.login == "app/dependabot")
+              | select(.baseRefName == "main")
+              | select(.headRefName | startswith("dependabot/"))
+              | select((.statusCheckRollup | length) > 0)
+              | select(
+                  all(.statusCheckRollup[];
+                    .status == "COMPLETED" and
+                    (.conclusion == "SUCCESS" or .conclusion == "SKIPPED" or .conclusion == "NEUTRAL")
+                  )
+                )
+              | .number
+            ' \
+            | while read -r pr_number; do
+                if [ -n "${pr_number}" ]; then
+                  gh pr merge "${pr_number}" \
+                    --repo "${REPOSITORY}" \
+                    --squash \
+                    --delete-branch
+                fi
+              done
