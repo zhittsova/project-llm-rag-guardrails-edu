@@ -42,6 +42,11 @@ jobs:
             exit 0
           fi
 
+          gh pr review "${pr_number}" \
+            --repo "${REPOSITORY}" \
+            --approve \
+            --body ""
+
           gh pr merge "${pr_number}" \
             --repo "${REPOSITORY}" \
             --squash \
@@ -79,6 +84,11 @@ jobs:
             ' \
             | while read -r pr_number; do
                 if [ -n "${pr_number}" ]; then
+                  gh pr review "${pr_number}" \
+                    --repo "${REPOSITORY}" \
+                    --approve \
+                    --body ""
+
                   gh pr merge "${pr_number}" \
                     --repo "${REPOSITORY}" \
                     --squash \
