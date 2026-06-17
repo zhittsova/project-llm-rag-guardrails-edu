@@ -1,5 +1,7 @@
 # Guardrails in LLM Deployment
 
+[![CI](https://github.com/zhittsova/project-llm-rag-guardrails-edu/actions/workflows/ci.yml/badge.svg)](https://github.com/zhittsova/project-llm-rag-guardrails-edu/actions/workflows/ci.yml)
+
 Prototype project for evaluating guardrails in a retrieval-augmented learning
 assistant. The implementation is local and deterministic, so the full demo can
 run without an LLM API key.
