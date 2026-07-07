@@ -7,6 +7,7 @@ from typing import Protocol
 
 from .baseline_pipeline import BaselineRagAssistant, build_baseline_assistant
 from .corpus import Chunk, chunk_documents, load_documents
+from .guardrail_policy import GuardrailPolicy
 from .guards import input_guard, make_integrity_safe, output_guard, sanitize_untrusted_context
 from .retrieval import LexicalRetriever
 
@@ -40,6 +41,7 @@ class LearningAssistant:
         mode: str = "guardrailed",
         course_id: str = "guardrails-101",
         retriever_backend: str = "lexical",
+        guardrail_policy: GuardrailPolicy | None = None,
     ) -> None:
         if mode not in {"baseline", "guardrailed"}:
             raise ValueError("mode must be 'baseline' or 'guardrailed'")
@@ -47,6 +49,7 @@ class LearningAssistant:
         self._mode = mode
         self._course_id = course_id
         self._retriever_backend = retriever_backend
+        self._guardrail_policy = guardrail_policy or GuardrailPolicy.default()
 
     def answer(self, question: str) -> AssistantResponse:
         started_at = perf_counter()
@@ -56,7 +59,7 @@ class LearningAssistant:
         # Baseline RAG намеренно пропускает этот блок, чтобы показать, как
         # обычный RAG ведет себя без prompt-injection/PII/integrity защит.
         if self._mode == "guardrailed":
-            input_result = input_guard(question)
+            input_result = input_guard(question, self._guardrail_policy)
             triggers.extend(input_result.triggers)
             if not input_result.allowed:
                 return self._response(input_result.message or "Request blocked.", [], triggers, started_at, [])
@@ -64,7 +67,7 @@ class LearningAssistant:
         # Retrieval общий для baseline и guardrailed режимов, но фильтры разные:
         # baseline ищет по всему индексу, guardrailed ограничивает поиск текущим
         # курсом и только public-документами.
-        visibility = {"public"} if self._mode == "guardrailed" else None
+        visibility = set(self._guardrail_policy.allowed_visibility) if self._mode == "guardrailed" else None
         retrieved = self._retriever.search(
             question,
             course_id=self._course_id if self._mode == "guardrailed" else None,
@@ -73,7 +76,7 @@ class LearningAssistant:
         if self._mode == "guardrailed":
             # Retrieved context считается недоверенным: даже текст из corpus
             # может содержать indirect prompt injection.
-            retrieved = [(sanitize_chunk(chunk), score) for chunk, score in retrieved]
+            retrieved = [(sanitize_chunk(chunk, self._guardrail_policy), score) for chunk, score in retrieved]
 
         if "academic_integrity" in triggers:
             # Для cheating-запросов guardrailed режим не дает готовое решение,
@@ -83,7 +86,7 @@ class LearningAssistant:
                 course_id=self._course_id,
                 allowed_visibility=visibility,
             )
-            answer = make_integrity_safe(question)
+            answer = make_integrity_safe(question, self._guardrail_policy)
             citations = [citation_for(chunk) for chunk, _score in retrieved[:1]]
         else:
             # Это локальный baseline answer generator: он не вызывает LLM, а
@@ -94,7 +97,7 @@ class LearningAssistant:
         # Output guard проверяет уже готовый ответ. Baseline снова пропускает
         # этот этап, поэтому может вернуть private data или ungrounded answer.
         if self._mode == "guardrailed":
-            output_result = output_guard(answer, citations, triggers)
+            output_result = output_guard(answer, citations, triggers, self._guardrail_policy)
             triggers.extend(output_result.triggers)
             if not output_result.allowed:
                 return self._response(output_result.message or "Answer blocked.", [], triggers, started_at, [])
@@ -125,6 +128,7 @@ def build_assistant(
     retriever_backend: str = "lexical",
     index_dir: Path | None = None,
     course_id: str = "guardrails-101",
+    guardrail_policy: GuardrailPolicy | None = None,
 ) -> BaselineRagAssistant | LearningAssistant:
     if mode == "baseline":
         return build_baseline_assistant(
@@ -150,7 +154,13 @@ def build_assistant(
         retriever = VectorRetriever(index_dir or default_index_path())
     else:
         raise ValueError("retriever_backend must be 'lexical', 'langchain', or 'vector'")
-    return LearningAssistant(retriever, mode=mode, course_id=course_id, retriever_backend=retriever_backend)
+    return LearningAssistant(
+        retriever,
+        mode=mode,
+        course_id=course_id,
+        retriever_backend=retriever_backend,
+        guardrail_policy=guardrail_policy,
+    )
 
 
 def synthesize_answer(question: str, chunks: list[Chunk]) -> str:
@@ -184,8 +194,8 @@ def citation_for(chunk: Chunk) -> str:
     return f"{chunk.title} ({', '.join(details)})"
 
 
-def sanitize_chunk(chunk: Chunk) -> Chunk:
-    sanitized = sanitize_untrusted_context(chunk.text)
+def sanitize_chunk(chunk: Chunk, policy: GuardrailPolicy) -> Chunk:
+    sanitized = sanitize_untrusted_context(chunk.text, policy)
     return replace(chunk, text=sanitized)
 
 

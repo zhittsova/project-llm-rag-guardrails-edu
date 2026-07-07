@@ -5,6 +5,7 @@ from html import escape
 from pathlib import Path
 
 from .corpus import Chunk, chunk_documents, load_documents
+from .guardrail_policy import GuardrailPolicy
 from .langchain_rag import langchain_chunk_documents
 from .pipeline import build_assistant
 
@@ -24,6 +25,7 @@ def write_rag_visualization(
     retriever_backend: str,
     index_dir: Path | None,
     course_id: str,
+    guardrail_policy: GuardrailPolicy | None = None,
 ) -> VisualizationStats:
     assistant = build_assistant(
         corpus_path,
@@ -31,6 +33,7 @@ def write_rag_visualization(
         retriever_backend=retriever_backend,
         index_dir=index_dir,
         course_id=course_id,
+        guardrail_policy=guardrail_policy,
     )
     response = assistant.answer(question)
     chunk_lookup = _chunk_lookup(corpus_path, retriever_backend)

@@ -7,6 +7,7 @@ from pathlib import Path
 from .corpus import default_data_path, validate_corpus
 from .course_corpus import default_course_output_path, default_course_source_path, normalize_course_corpus
 from .evaluation import load_eval_cases, results_to_json, run_evaluation, summarize, write_results_csv
+from .guardrail_policy import default_policy_path, load_guardrail_policy
 from .pipeline import build_assistant
 from .vector import VectorIndexNotFoundError, build_vector_index, default_index_path
 from .visualization import write_rag_visualization
@@ -24,6 +25,7 @@ def main() -> None:
     query_parser.add_argument("--course-id", default="guardrails-101")
     query_parser.add_argument("--mode", choices=["baseline", "guardrailed"], default="guardrailed")
     query_parser.add_argument("--retriever", choices=["lexical", "langchain", "vector"], default="lexical")
+    query_parser.add_argument("--policy", type=Path)
     query_parser.add_argument("--question", required=True)
 
     eval_parser = subparsers.add_parser("evaluate", help="Run JSONL evaluation")
@@ -33,8 +35,17 @@ def main() -> None:
     eval_parser.add_argument("--mode", choices=["baseline", "guardrailed"], default="guardrailed")
     eval_parser.add_argument("--retriever", choices=["lexical", "langchain", "vector"], default="lexical")
     eval_parser.add_argument("--cases", type=Path, default=Path(__file__).resolve().parents[2] / "data" / "eval_cases.jsonl")
+    eval_parser.add_argument("--policy", type=Path)
     eval_parser.add_argument("--output-csv", type=Path)
     eval_parser.add_argument("--show-results", action="store_true")
+
+    compare_parser = subparsers.add_parser("compare-guardrails", help="Compare guardrail techniques on one evaluation set")
+    compare_parser.add_argument("--corpus", dest="command_corpus", type=Path)
+    compare_parser.add_argument("--index-dir", type=Path, default=default_index_path())
+    compare_parser.add_argument("--course-id", default="guardrails-101")
+    compare_parser.add_argument("--retriever", choices=["lexical", "langchain", "vector"], default="lexical")
+    compare_parser.add_argument("--cases", type=Path, default=Path(__file__).resolve().parents[2] / "data" / "eval_cases.jsonl")
+    compare_parser.add_argument("--policy", type=Path, default=default_policy_path())
 
     index_parser = subparsers.add_parser("build-index", help="Build a local Chroma vector index")
     index_parser.add_argument("--corpus", dest="command_corpus", type=Path)
@@ -44,6 +55,9 @@ def main() -> None:
 
     validate_parser = subparsers.add_parser("validate-corpus", help="Validate a corpus JSONL file")
     validate_parser.add_argument("--corpus", dest="command_corpus", type=Path)
+
+    policy_parser = subparsers.add_parser("validate-policy", help="Validate a guardrail policy TOML file")
+    policy_parser.add_argument("--policy", type=Path, default=default_policy_path())
 
     course_parser = subparsers.add_parser("normalize-course-corpus", help="Normalize markdown course corpus to JSONL")
     course_parser.add_argument("--source", type=Path, default=default_course_source_path())
@@ -56,6 +70,7 @@ def main() -> None:
     visualize_parser.add_argument("--course-id", default="guardrails-101")
     visualize_parser.add_argument("--mode", choices=["baseline", "guardrailed"], default="guardrailed")
     visualize_parser.add_argument("--retriever", choices=["lexical", "langchain", "vector"], default="lexical")
+    visualize_parser.add_argument("--policy", type=Path)
     visualize_parser.add_argument("--question", required=True)
     visualize_parser.add_argument("--output", type=Path, required=True)
 
@@ -65,6 +80,25 @@ def main() -> None:
     if args.command == "validate-corpus":
         documents = validate_corpus(corpus_path)
         print(json.dumps({"corpus": str(corpus_path), "documents": len(documents)}, indent=2))
+        return
+
+    if args.command == "validate-policy":
+        policy = load_guardrail_policy(args.policy)
+        print(
+            json.dumps(
+                {
+                    "policy": str(args.policy),
+                    "input_rules": len(policy.input_rules),
+                    "input_similarity_rules": len(policy.input_similarity_rules),
+                    "output_rules": len(policy.output_rules),
+                    "context_rules": len(policy.context_rules),
+                    "blocking_triggers": sorted(policy.blocking_triggers),
+                    "allowed_visibility": sorted(policy.allowed_visibility),
+                    "require_citations": policy.require_citations,
+                },
+                indent=2,
+            )
+        )
         return
 
     if args.command == "normalize-course-corpus":
@@ -92,6 +126,7 @@ def main() -> None:
         return
 
     if args.command == "visualize":
+        guardrail_policy = load_guardrail_policy(args.policy) if args.policy else None
         try:
             stats = write_rag_visualization(
                 corpus_path=corpus_path,
@@ -101,6 +136,7 @@ def main() -> None:
                 retriever_backend=args.retriever,
                 index_dir=args.index_dir,
                 course_id=args.course_id,
+                guardrail_policy=guardrail_policy,
             )
         except VectorIndexNotFoundError as exc:
             parser.error(str(exc))
@@ -115,13 +151,39 @@ def main() -> None:
         )
         return
 
+    if args.command == "compare-guardrails":
+        cases = load_eval_cases(args.cases)
+        try:
+            comparisons = {}
+            for label, mode, policy in [
+                ("baseline", "baseline", None),
+                ("default_guardrails", "guardrailed", None),
+                ("hybrid_policy_guardrails", "guardrailed", load_guardrail_policy(args.policy)),
+            ]:
+                comparison_assistant = build_assistant(
+                    corpus_path,
+                    mode=mode,
+                    retriever_backend=args.retriever,
+                    index_dir=args.index_dir,
+                    course_id=args.course_id,
+                    guardrail_policy=policy,
+                )
+                comparison_results = run_evaluation(comparison_assistant, cases)
+                comparisons[label] = summarize(comparison_results)
+        except VectorIndexNotFoundError as exc:
+            parser.error(str(exc))
+        print(json.dumps(comparisons, indent=2))
+        return
+
     try:
+        guardrail_policy = load_guardrail_policy(args.policy) if getattr(args, "policy", None) else None
         assistant = build_assistant(
             corpus_path,
             mode=args.mode,
             retriever_backend=args.retriever,
             index_dir=args.index_dir,
             course_id=args.course_id,
+            guardrail_policy=guardrail_policy,
         )
     except VectorIndexNotFoundError as exc:
         parser.error(str(exc))
