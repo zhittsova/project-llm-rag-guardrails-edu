@@ -143,6 +143,7 @@ def load_guardrail_policy(path: Path) -> GuardrailPolicy:
             messages_section.get("integrity_safe", base.integrity_safe_message),
             "messages.integrity_safe",
         ),
+        similarity_embedder=base.similarity_embedder,
     )
 
 
