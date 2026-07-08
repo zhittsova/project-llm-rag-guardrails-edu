@@ -8,6 +8,7 @@ from .corpus import default_data_path, validate_corpus
 from .course_corpus import default_course_output_path, default_course_source_path, normalize_course_corpus
 from .evaluation import load_eval_cases, results_to_json, run_evaluation, summarize, write_results_csv
 from .guardrail_policy import default_policy_path, load_guardrail_policy
+from .judging import judge_results, judgments_to_json, summarize_judgments
 from .pipeline import build_assistant
 from .vector import VectorIndexNotFoundError, build_vector_index, default_index_path
 from .visualization import write_rag_visualization
@@ -36,8 +37,10 @@ def main() -> None:
     eval_parser.add_argument("--retriever", choices=["lexical", "langchain", "vector"], default="lexical")
     eval_parser.add_argument("--cases", type=Path, default=Path(__file__).resolve().parents[2] / "data" / "eval_cases.jsonl")
     eval_parser.add_argument("--policy", type=Path)
+    eval_parser.add_argument("--judge", choices=["none", "heuristic"], default="none")
     eval_parser.add_argument("--output-csv", type=Path)
     eval_parser.add_argument("--show-results", action="store_true")
+    eval_parser.add_argument("--show-judgments", action="store_true")
 
     compare_parser = subparsers.add_parser("compare-guardrails", help="Compare guardrail techniques on one evaluation set")
     compare_parser.add_argument("--corpus", dest="command_corpus", type=Path)
@@ -46,6 +49,7 @@ def main() -> None:
     compare_parser.add_argument("--retriever", choices=["lexical", "langchain", "vector"], default="lexical")
     compare_parser.add_argument("--cases", type=Path, default=Path(__file__).resolve().parents[2] / "data" / "eval_cases.jsonl")
     compare_parser.add_argument("--policy", type=Path, default=default_policy_path())
+    compare_parser.add_argument("--judge", choices=["none", "heuristic"], default="none")
 
     index_parser = subparsers.add_parser("build-index", help="Build a local Chroma vector index")
     index_parser.add_argument("--corpus", dest="command_corpus", type=Path)
@@ -203,7 +207,10 @@ def main() -> None:
                     guardrail_policy=policy,
                 )
                 comparison_results = run_evaluation(comparison_assistant, cases)
-                comparisons[label] = profile | summarize(comparison_results)
+                comparison_summary = profile | summarize(comparison_results)
+                if args.judge == "heuristic":
+                    comparison_summary["judge"] = summarize_judgments(judge_results(cases, comparison_results))
+                comparisons[label] = comparison_summary
         except VectorIndexNotFoundError as exc:
             parser.error(str(exc))
         print(json.dumps(comparisons, indent=2))
@@ -228,11 +235,17 @@ def main() -> None:
 
     cases = load_eval_cases(args.cases)
     results = run_evaluation(assistant, cases)
-    print(json.dumps(summarize(results), indent=2))
+    summary = summarize(results)
+    if args.judge == "heuristic":
+        judgments = judge_results(cases, results)
+        summary["judge"] = summarize_judgments(judgments)
+    print(json.dumps(summary, indent=2))
     if args.output_csv:
         write_results_csv(results, args.output_csv)
     if args.show_results:
         print(results_to_json(results))
+    if args.show_judgments and args.judge == "heuristic":
+        print(judgments_to_json(judgments))
 
 
 if __name__ == "__main__":
