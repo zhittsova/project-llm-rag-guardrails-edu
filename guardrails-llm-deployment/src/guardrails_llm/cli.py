@@ -11,7 +11,7 @@ from .guardrail_policy import default_policy_path, load_guardrail_policy
 from .judging import judge_results, judgments_to_json, summarize_judgments
 from .model_config import openai_config_summary
 from .pipeline import build_assistant
-from .vector import VectorIndexNotFoundError, build_vector_index, default_index_path
+from .vector import VectorIndexError, build_vector_index, default_index_path
 from .visualization import write_rag_visualization
 
 
@@ -27,6 +27,7 @@ def main() -> None:
     query_parser.add_argument("--course-id", default="guardrails-101")
     query_parser.add_argument("--mode", choices=["baseline", "guardrailed"], default="guardrailed")
     query_parser.add_argument("--retriever", choices=["lexical", "langchain", "vector"], default="lexical")
+    _add_embedding_args(query_parser)
     query_parser.add_argument("--policy", type=Path)
     query_parser.add_argument("--question", required=True)
 
@@ -36,6 +37,7 @@ def main() -> None:
     eval_parser.add_argument("--course-id", default="guardrails-101")
     eval_parser.add_argument("--mode", choices=["baseline", "guardrailed"], default="guardrailed")
     eval_parser.add_argument("--retriever", choices=["lexical", "langchain", "vector"], default="lexical")
+    _add_embedding_args(eval_parser)
     eval_parser.add_argument("--cases", type=Path, default=Path(__file__).resolve().parents[2] / "data" / "eval_cases.jsonl")
     eval_parser.add_argument("--policy", type=Path)
     eval_parser.add_argument("--judge", choices=["none", "heuristic"], default="none")
@@ -48,6 +50,7 @@ def main() -> None:
     compare_parser.add_argument("--index-dir", type=Path, default=default_index_path())
     compare_parser.add_argument("--course-id", default="guardrails-101")
     compare_parser.add_argument("--retriever", choices=["lexical", "langchain", "vector"], default="lexical")
+    _add_embedding_args(compare_parser)
     compare_parser.add_argument("--cases", type=Path, default=Path(__file__).resolve().parents[2] / "data" / "eval_cases.jsonl")
     compare_parser.add_argument("--policy", type=Path, default=default_policy_path())
     compare_parser.add_argument("--judge", choices=["none", "heuristic"], default="none")
@@ -57,6 +60,7 @@ def main() -> None:
     index_parser.add_argument("--index-dir", type=Path, default=default_index_path())
     index_parser.add_argument("--chunk-size", type=int, default=650)
     index_parser.add_argument("--chunk-overlap", type=int, default=80)
+    _add_embedding_args(index_parser)
 
     validate_parser = subparsers.add_parser("validate-corpus", help="Validate a corpus JSONL file")
     validate_parser.add_argument("--corpus", dest="command_corpus", type=Path)
@@ -79,6 +83,7 @@ def main() -> None:
     visualize_parser.add_argument("--course-id", default="guardrails-101")
     visualize_parser.add_argument("--mode", choices=["baseline", "guardrailed"], default="guardrailed")
     visualize_parser.add_argument("--retriever", choices=["lexical", "langchain", "vector"], default="lexical")
+    _add_embedding_args(visualize_parser)
     visualize_parser.add_argument("--policy", type=Path)
     visualize_parser.add_argument("--question", required=True)
     visualize_parser.add_argument("--output", type=Path, required=True)
@@ -134,6 +139,10 @@ def main() -> None:
             args.index_dir,
             chunk_size=args.chunk_size,
             chunk_overlap=args.chunk_overlap,
+            embedding_provider=args.embedding_provider,
+            embedding_model=args.embedding_model,
+            allow_remote_models=args.allow_remote_models,
+            env_file=args.env_file,
         )
         print(json.dumps(stats.__dict__ | {"corpus": str(stats.corpus), "index_dir": str(stats.index_dir)}, indent=2))
         return
@@ -150,8 +159,12 @@ def main() -> None:
                 index_dir=args.index_dir,
                 course_id=args.course_id,
                 guardrail_policy=guardrail_policy,
+                embedding_provider=args.embedding_provider,
+                embedding_model=args.embedding_model,
+                allow_remote_models=args.allow_remote_models,
+                env_file=args.env_file,
             )
-        except VectorIndexNotFoundError as exc:
+        except VectorIndexError as exc:
             parser.error(str(exc))
         print(
             json.dumps(
@@ -214,13 +227,17 @@ def main() -> None:
                     index_dir=args.index_dir,
                     course_id=args.course_id,
                     guardrail_policy=policy,
+                    embedding_provider=args.embedding_provider,
+                    embedding_model=args.embedding_model,
+                    allow_remote_models=args.allow_remote_models,
+                    env_file=args.env_file,
                 )
                 comparison_results = run_evaluation(comparison_assistant, cases)
                 comparison_summary = profile | summarize(comparison_results)
                 if args.judge == "heuristic":
                     comparison_summary["judge"] = summarize_judgments(judge_results(cases, comparison_results))
                 comparisons[label] = comparison_summary
-        except VectorIndexNotFoundError as exc:
+        except VectorIndexError as exc:
             parser.error(str(exc))
         print(json.dumps(comparisons, indent=2))
         return
@@ -234,8 +251,12 @@ def main() -> None:
             index_dir=args.index_dir,
             course_id=args.course_id,
             guardrail_policy=guardrail_policy,
+            embedding_provider=getattr(args, "embedding_provider", "hashing"),
+            embedding_model=getattr(args, "embedding_model", None),
+            allow_remote_models=getattr(args, "allow_remote_models", False),
+            env_file=getattr(args, "env_file", None),
         )
-    except VectorIndexNotFoundError as exc:
+    except VectorIndexError as exc:
         parser.error(str(exc))
     if args.command == "query":
         response = assistant.answer(args.question)
@@ -255,6 +276,13 @@ def main() -> None:
         print(results_to_json(results))
     if args.show_judgments and args.judge == "heuristic":
         print(judgments_to_json(judgments))
+
+
+def _add_embedding_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--embedding-provider", choices=["hashing", "openai"], default="hashing")
+    parser.add_argument("--embedding-model")
+    parser.add_argument("--allow-remote-models", action="store_true")
+    parser.add_argument("--env-file", type=Path)
 
 
 if __name__ == "__main__":

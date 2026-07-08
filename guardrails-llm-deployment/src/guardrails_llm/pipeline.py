@@ -129,6 +129,10 @@ def build_assistant(
     index_dir: Path | None = None,
     course_id: str = "guardrails-101",
     guardrail_policy: GuardrailPolicy | None = None,
+    embedding_provider: str = "hashing",
+    embedding_model: str | None = None,
+    allow_remote_models: bool = False,
+    env_file: Path | None = None,
 ) -> BaselineRagAssistant | LearningAssistant:
     if mode == "baseline":
         return build_baseline_assistant(
@@ -136,6 +140,10 @@ def build_assistant(
             retriever_backend=retriever_backend,
             index_dir=index_dir,
             course_id=course_id,
+            embedding_provider=embedding_provider,
+            embedding_model=embedding_model,
+            allow_remote_models=allow_remote_models,
+            env_file=env_file,
         )
 
     # Ниже строится guardrailed assistant. Baseline уже ушел в отдельный
@@ -151,7 +159,13 @@ def build_assistant(
     elif retriever_backend == "vector":
         from .vector import VectorRetriever, default_index_path
 
-        retriever = VectorRetriever(index_dir or default_index_path())
+        retriever = VectorRetriever(
+            index_dir or default_index_path(),
+            embedding_provider=embedding_provider,
+            embedding_model=embedding_model,
+            allow_remote_models=allow_remote_models,
+            env_file=env_file,
+        )
     else:
         raise ValueError("retriever_backend must be 'lexical', 'langchain', or 'vector'")
     return LearningAssistant(

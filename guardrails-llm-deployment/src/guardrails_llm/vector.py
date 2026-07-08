@@ -8,12 +8,13 @@ from typing import Any
 import chromadb
 
 from .corpus import Chunk, JsonMetadata, load_documents
-from .embeddings import HashingEmbedder
+from .embeddings import HASHING_EMBEDDING_MODEL, TextEmbedder, create_embedder, resolve_embedding_model
 from .langchain_rag import langchain_chunk_documents
 from .retrieval import tokenize
 
 
 COLLECTION_NAME = "course_chunks"
+MANIFEST_NAME = "course_chunks_manifest.json"
 REQUIRED_METADATA = {"chunk_id", "doc_id", "course_id", "title", "visibility", "source_type"}
 
 
@@ -24,9 +25,19 @@ class VectorIndexStats:
     collection: str
     documents: int
     chunks: int
+    embedding_provider: str
+    embedding_model: str
 
 
-class VectorIndexNotFoundError(RuntimeError):
+class VectorIndexError(RuntimeError):
+    pass
+
+
+class VectorIndexNotFoundError(VectorIndexError):
+    pass
+
+
+class VectorIndexConfigurationError(VectorIndexError):
     pass
 
 
@@ -40,12 +51,24 @@ def build_vector_index(
     *,
     chunk_size: int = 650,
     chunk_overlap: int = 80,
+    embedding_provider: str = "hashing",
+    embedding_model: str | None = None,
+    allow_remote_models: bool = False,
+    env_file: Path | None = None,
+    embedder: TextEmbedder | None = None,
 ) -> VectorIndexStats:
     # build-index pipeline:
     # 1. загрузить JSONL corpus;
     # 2. разрезать documents на chunks через LangChain splitter;
     # 3. превратить каждый chunk в embedding;
     # 4. сохранить chunks + metadata в persistent Chroma collection.
+    resolved_model = resolve_embedding_model(embedding_provider, embedding_model)
+    embedder = embedder or create_embedder(
+        embedding_provider,
+        model=resolved_model,
+        allow_remote_models=allow_remote_models,
+        env_file=env_file,
+    )
     documents = load_documents(corpus_path)
     chunks = langchain_chunk_documents(documents, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     client = _persistent_client(index_dir)
@@ -56,13 +79,22 @@ def build_vector_index(
     )
 
     if chunks:
-        embedder = HashingEmbedder()
         collection.add(
             ids=[chunk.chunk_id for chunk in chunks],
             documents=[chunk.text for chunk in chunks],
             embeddings=embedder.embed_many([chunk.text for chunk in chunks]),
             metadatas=[_metadata_for_chroma(chunk) for chunk in chunks],
         )
+    _write_manifest(
+        index_dir,
+        {
+            "collection": COLLECTION_NAME,
+            "embedding_provider": embedding_provider,
+            "embedding_model": resolved_model,
+            "chunk_size": chunk_size,
+            "chunk_overlap": chunk_overlap,
+        },
+    )
 
     return VectorIndexStats(
         corpus=corpus_path,
@@ -70,11 +102,25 @@ def build_vector_index(
         collection=COLLECTION_NAME,
         documents=len(documents),
         chunks=len(chunks),
+        embedding_provider=embedding_provider,
+        embedding_model=resolved_model,
     )
 
 
 class VectorRetriever:
-    def __init__(self, index_dir: Path, *, min_score: float = 0.05) -> None:
+    def __init__(
+        self,
+        index_dir: Path,
+        *,
+        min_score: float = 0.05,
+        embedding_provider: str = "hashing",
+        embedding_model: str | None = None,
+        allow_remote_models: bool = False,
+        env_file: Path | None = None,
+        embedder: TextEmbedder | None = None,
+    ) -> None:
+        resolved_model = resolve_embedding_model(embedding_provider, embedding_model)
+        _assert_manifest_matches(index_dir, embedding_provider, resolved_model)
         try:
             self._collection = _persistent_client(index_dir).get_collection(COLLECTION_NAME)
         except chromadb.errors.NotFoundError as exc:
@@ -83,7 +129,12 @@ class VectorRetriever:
                 f"{COLLECTION_NAME!r}. Run build-index first, or use "
                 "`./scripts/run_workshop2_demo.sh` for the full demo flow."
             ) from exc
-        self._embedder = HashingEmbedder()
+        self._embedder = embedder or create_embedder(
+            embedding_provider,
+            model=resolved_model,
+            allow_remote_models=allow_remote_models,
+            env_file=env_file,
+        )
         self._min_score = min_score
 
     def search(
@@ -133,6 +184,44 @@ class VectorRetriever:
 def _persistent_client(index_dir: Path) -> chromadb.PersistentClient:
     index_dir.mkdir(parents=True, exist_ok=True)
     return chromadb.PersistentClient(path=str(index_dir))
+
+
+def _manifest_path(index_dir: Path) -> Path:
+    return index_dir / MANIFEST_NAME
+
+
+def _write_manifest(index_dir: Path, manifest: dict[str, object]) -> None:
+    index_dir.mkdir(parents=True, exist_ok=True)
+    _manifest_path(index_dir).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+
+def _read_manifest(index_dir: Path) -> dict[str, object] | None:
+    path = _manifest_path(index_dir)
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise VectorIndexConfigurationError(f"Vector index manifest at {path} must be a JSON object.")
+    return data
+
+
+def _assert_manifest_matches(index_dir: Path, provider: str, model: str) -> None:
+    manifest = _read_manifest(index_dir)
+    if manifest is None:
+        if provider == "hashing" and model == HASHING_EMBEDDING_MODEL:
+            return
+        raise VectorIndexConfigurationError(
+            f"Vector index at {index_dir} has no embedding manifest. Rebuild it with "
+            f"--embedding-provider {provider} before querying with {model}."
+        )
+    indexed_provider = manifest.get("embedding_provider")
+    indexed_model = manifest.get("embedding_model")
+    if indexed_provider != provider or indexed_model != model:
+        raise VectorIndexConfigurationError(
+            f"Vector index at {index_dir} was built with {indexed_provider}/{indexed_model}, "
+            f"but the query requested {provider}/{model}. Rebuild the index or pass matching "
+            "embedding options."
+        )
 
 
 def _delete_collection_if_present(client: chromadb.PersistentClient, name: str) -> None:
