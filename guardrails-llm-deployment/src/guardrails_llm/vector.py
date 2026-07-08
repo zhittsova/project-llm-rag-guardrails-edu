@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import json
-import math
 from dataclasses import dataclass
-from hashlib import blake2b
 from pathlib import Path
 from typing import Any
 
 import chromadb
 
 from .corpus import Chunk, JsonMetadata, load_documents
+from .embeddings import HashingEmbedder
 from .langchain_rag import langchain_chunk_documents
 from .retrieval import tokenize
 
@@ -29,30 +28,6 @@ class VectorIndexStats:
 
 class VectorIndexNotFoundError(RuntimeError):
     pass
-
-
-class HashingEmbedder:
-    # Локальная deterministic embedding-функция для demo: без API keys,
-    # downloads и случайности. Это не production semantic embedding model, но
-    # она создает числовой vector, с которым Chroma может строить index.
-    def __init__(self, dimensions: int = 384) -> None:
-        self.dimensions = dimensions
-
-    def embed(self, text: str) -> list[float]:
-        vector = [0.0] * self.dimensions
-        for token in tokenize(text):
-            digest = blake2b(token.encode("utf-8"), digest_size=8).digest()
-            index = int.from_bytes(digest[:4], "big") % self.dimensions
-            sign = 1.0 if digest[4] % 2 else -1.0
-            vector[index] += sign
-
-        norm = math.sqrt(sum(value * value for value in vector))
-        if norm == 0:
-            return vector
-        return [value / norm for value in vector]
-
-    def embed_many(self, texts: list[str]) -> list[list[float]]:
-        return [self.embed(text) for text in texts]
 
 
 def default_index_path() -> Path:
