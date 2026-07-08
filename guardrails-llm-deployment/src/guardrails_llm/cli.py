@@ -9,6 +9,7 @@ from .course_corpus import default_course_output_path, default_course_source_pat
 from .evaluation import load_eval_cases, results_to_json, run_evaluation, summarize, write_results_csv
 from .guardrail_policy import default_policy_path, load_guardrail_policy
 from .judging import judge_results, judgments_to_json, summarize_judgments
+from .model_config import openai_config_summary
 from .pipeline import build_assistant
 from .vector import VectorIndexNotFoundError, build_vector_index, default_index_path
 from .visualization import write_rag_visualization
@@ -63,6 +64,10 @@ def main() -> None:
     policy_parser = subparsers.add_parser("validate-policy", help="Validate a guardrail policy TOML file")
     policy_parser.add_argument("--policy", type=Path, default=default_policy_path())
 
+    model_config_parser = subparsers.add_parser("model-config", help="Show safe remote-model configuration")
+    model_config_parser.add_argument("--provider", choices=["openai"], default="openai")
+    model_config_parser.add_argument("--env-file", type=Path)
+
     course_parser = subparsers.add_parser("normalize-course-corpus", help="Normalize markdown course corpus to JSONL")
     course_parser.add_argument("--source", type=Path, default=default_course_source_path())
     course_parser.add_argument("--output", type=Path, default=default_course_output_path())
@@ -103,6 +108,10 @@ def main() -> None:
                 indent=2,
             )
         )
+        return
+
+    if args.command == "model-config":
+        print(json.dumps(openai_config_summary(args.env_file), indent=2))
         return
 
     if args.command == "normalize-course-corpus":
