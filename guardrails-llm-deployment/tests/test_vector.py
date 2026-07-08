@@ -24,6 +24,14 @@ class FakeEmbedder:
         return [self.embed(text) for text in texts]
 
 
+class FailingEmbedder:
+    def embed(self, text: str) -> list[float]:
+        raise RuntimeError("embedding provider unavailable")
+
+    def embed_many(self, texts: list[str]) -> list[list[float]]:
+        raise RuntimeError("embedding provider unavailable")
+
+
 def test_build_vector_index_and_query_with_assistant(tmp_path: Path) -> None:
     index_dir = tmp_path / "chroma"
 
@@ -87,4 +95,17 @@ def test_vector_index_can_record_openai_embedding_provider_with_fake_embedder(tm
 
     assert stats.embedding_provider == "openai"
     assert stats.embedding_model == "text-embedding-3-small"
+    assert results
+
+
+def test_failed_vector_rebuild_preserves_existing_collection(tmp_path: Path) -> None:
+    index_dir = tmp_path / "chroma"
+    build_vector_index(DATA, index_dir)
+
+    with pytest.raises(RuntimeError, match="embedding provider unavailable"):
+        build_vector_index(DATA, index_dir, embedder=FailingEmbedder())
+
+    retriever = VectorRetriever(index_dir)
+    results = retriever.search("retrieval augmented generation")
+
     assert results

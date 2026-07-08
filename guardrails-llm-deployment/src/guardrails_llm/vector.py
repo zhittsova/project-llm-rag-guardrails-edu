@@ -71,6 +71,9 @@ def build_vector_index(
     )
     documents = load_documents(corpus_path)
     chunks = langchain_chunk_documents(documents, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    chunk_texts = [chunk.text for chunk in chunks]
+    embeddings = embedder.embed_many(chunk_texts) if chunk_texts else []
+
     client = _persistent_client(index_dir)
     _delete_collection_if_present(client, COLLECTION_NAME)
     collection = client.get_or_create_collection(
@@ -81,8 +84,8 @@ def build_vector_index(
     if chunks:
         collection.add(
             ids=[chunk.chunk_id for chunk in chunks],
-            documents=[chunk.text for chunk in chunks],
-            embeddings=embedder.embed_many([chunk.text for chunk in chunks]),
+            documents=chunk_texts,
+            embeddings=embeddings,
             metadatas=[_metadata_for_chroma(chunk) for chunk in chunks],
         )
     _write_manifest(
