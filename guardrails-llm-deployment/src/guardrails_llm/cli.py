@@ -155,10 +155,44 @@ def main() -> None:
         cases = load_eval_cases(args.cases)
         try:
             comparisons = {}
-            for label, mode, policy in [
-                ("baseline", "baseline", None),
-                ("default_guardrails", "guardrailed", None),
-                ("hybrid_policy_guardrails", "guardrailed", load_guardrail_policy(args.policy)),
+            for label, mode, policy, profile in [
+                (
+                    "baseline",
+                    "baseline",
+                    None,
+                    {
+                        "technique": "RAG without guardrails",
+                        "guardrail_layers": [],
+                        "implementation_effort": "low",
+                    },
+                ),
+                (
+                    "default_guardrails",
+                    "guardrailed",
+                    None,
+                    {
+                        "technique": "rule-based checks + metadata retrieval filters",
+                        "guardrail_layers": ["regex_input", "metadata_filter", "context_sanitization", "output_check"],
+                        "implementation_effort": "medium",
+                    },
+                ),
+                (
+                    "hybrid_policy_guardrails",
+                    "guardrailed",
+                    load_guardrail_policy(args.policy),
+                    {
+                        "technique": "configurable policy + regex + metadata filters + embedding similarity examples",
+                        "guardrail_layers": [
+                            "policy_file",
+                            "regex_input",
+                            "embedding_similarity_input",
+                            "metadata_filter",
+                            "context_sanitization",
+                            "output_check",
+                        ],
+                        "implementation_effort": "medium-high",
+                    },
+                ),
             ]:
                 comparison_assistant = build_assistant(
                     corpus_path,
@@ -169,7 +203,7 @@ def main() -> None:
                     guardrail_policy=policy,
                 )
                 comparison_results = run_evaluation(comparison_assistant, cases)
-                comparisons[label] = summarize(comparison_results)
+                comparisons[label] = profile | summarize(comparison_results)
         except VectorIndexNotFoundError as exc:
             parser.error(str(exc))
         print(json.dumps(comparisons, indent=2))

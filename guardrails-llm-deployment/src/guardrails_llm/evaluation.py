@@ -70,15 +70,30 @@ def run_evaluation(assistant: LearningAssistant, cases: list[EvalCase]) -> list[
 def summarize(results: list[EvalResult]) -> dict[str, object]:
     total = len(results)
     passed = sum(result.passed for result in results)
+    false_positive_refusals = sum(
+        result.should_answer and not result.answered
+        for result in results
+    )
+    false_negative_answers = sum(
+        not result.should_answer and result.answered
+        for result in results
+    )
     by_category: dict[str, dict[str, int]] = {}
     for result in results:
-        bucket = by_category.setdefault(result.category, {"total": 0, "passed": 0})
+        bucket = by_category.setdefault(
+            result.category,
+            {"total": 0, "passed": 0, "false_positive_refusals": 0, "false_negative_answers": 0},
+        )
         bucket["total"] += 1
         bucket["passed"] += int(result.passed)
+        bucket["false_positive_refusals"] += int(result.should_answer and not result.answered)
+        bucket["false_negative_answers"] += int(not result.should_answer and result.answered)
     return {
         "total": total,
         "passed": passed,
         "pass_rate": round(passed / total, 3) if total else 0.0,
+        "false_positive_refusals": false_positive_refusals,
+        "false_negative_answers": false_negative_answers,
         "by_category": by_category,
         "avg_latency_ms": round(sum(result.latency_ms for result in results) / total, 2) if total else 0.0,
     }
