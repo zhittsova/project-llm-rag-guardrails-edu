@@ -44,8 +44,11 @@ def main() -> None:
     _add_guard_classifier_args(eval_parser)
     eval_parser.add_argument("--cases", type=Path, default=Path(__file__).resolve().parents[2] / "data" / "eval_cases.jsonl")
     eval_parser.add_argument("--policy", type=Path)
-    eval_parser.add_argument("--judge", choices=["none", "heuristic"], default="none")
+    eval_parser.add_argument("--judge", choices=["none", "heuristic", "openai"], default="none")
+    eval_parser.add_argument("--judge-model")
+    eval_parser.add_argument("--limit-cases", type=int)
     eval_parser.add_argument("--output-csv", type=Path)
+    eval_parser.add_argument("--output-judgments", type=Path)
     eval_parser.add_argument("--show-results", action="store_true")
     eval_parser.add_argument("--show-judgments", action="store_true")
 
@@ -59,7 +62,9 @@ def main() -> None:
     _add_guard_classifier_args(compare_parser)
     compare_parser.add_argument("--cases", type=Path, default=Path(__file__).resolve().parents[2] / "data" / "eval_cases.jsonl")
     compare_parser.add_argument("--policy", type=Path, default=default_policy_path())
-    compare_parser.add_argument("--judge", choices=["none", "heuristic"], default="none")
+    compare_parser.add_argument("--judge", choices=["none", "heuristic", "openai"], default="none")
+    compare_parser.add_argument("--judge-model")
+    compare_parser.add_argument("--limit-cases", type=int)
 
     index_parser = subparsers.add_parser("build-index", help="Build a local Chroma vector index")
     index_parser.add_argument("--corpus", dest="command_corpus", type=Path)
@@ -194,8 +199,10 @@ def main() -> None:
 
     if args.command == "compare-guardrails":
         cases = load_eval_cases(args.cases)
+        cases = _limit_cases(cases, args.limit_cases)
         try:
             comparisons = {}
+            judge = _build_judge(args)
             for label, mode, policy, profile in [
                 (
                     "baseline",
@@ -253,8 +260,8 @@ def main() -> None:
                 )
                 comparison_results = run_evaluation(comparison_assistant, cases)
                 comparison_summary = profile | summarize(comparison_results)
-                if args.judge == "heuristic":
-                    comparison_summary["judge"] = summarize_judgments(judge_results(cases, comparison_results))
+                if judge:
+                    comparison_summary["judge"] = summarize_judgments(judge_results(cases, comparison_results, judge))
                 comparisons[label] = comparison_summary
         except (VectorIndexError, RemoteModelsNotAllowedError, MissingModelCredentialError) as exc:
             parser.error(str(exc))
@@ -287,17 +294,26 @@ def main() -> None:
         return
 
     cases = load_eval_cases(args.cases)
+    cases = _limit_cases(cases, getattr(args, "limit_cases", None))
     results = run_evaluation(assistant, cases)
     summary = summarize(results)
-    if args.judge == "heuristic":
-        judgments = judge_results(cases, results)
+    try:
+        judge = _build_judge(args)
+    except (RemoteModelsNotAllowedError, MissingModelCredentialError) as exc:
+        parser.error(str(exc))
+    judgments = []
+    if judge:
+        judgments = judge_results(cases, results, judge)
         summary["judge"] = summarize_judgments(judgments)
     print(json.dumps(summary, indent=2))
     if args.output_csv:
         write_results_csv(results, args.output_csv)
     if args.show_results:
         print(results_to_json(results))
-    if args.show_judgments and args.judge == "heuristic":
+    if args.output_judgments and judgments:
+        args.output_judgments.parent.mkdir(parents=True, exist_ok=True)
+        args.output_judgments.write_text(judgments_to_json(judgments), encoding="utf-8")
+    if args.show_judgments and judgments:
         print(judgments_to_json(judgments))
 
 
@@ -316,6 +332,33 @@ def _add_generation_args(parser: argparse.ArgumentParser) -> None:
 def _add_guard_classifier_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--guard-classifier", choices=["none", "openai"], default="none")
     parser.add_argument("--classifier-model")
+
+
+def _limit_cases(cases, limit: int | None):
+    if limit is None:
+        return cases
+    return cases[: max(limit, 0)]
+
+
+def _build_judge(args):
+    if getattr(args, "judge", "none") == "none":
+        return None
+    if args.judge == "heuristic":
+        from .judging import HeuristicJudge
+
+        return HeuristicJudge()
+    if args.judge == "openai":
+        from .model_config import DEFAULT_OPENAI_JUDGE_MODEL, OpenAIModelConfig
+        from .openai_models import OpenAIJudge
+
+        return OpenAIJudge(
+            OpenAIModelConfig(
+                judge_model=args.judge_model or DEFAULT_OPENAI_JUDGE_MODEL,
+                allow_remote_models=args.allow_remote_models,
+                env_file=args.env_file,
+            )
+        )
+    raise ValueError("judge must be 'none', 'heuristic', or 'openai'")
 
 
 if __name__ == "__main__":
