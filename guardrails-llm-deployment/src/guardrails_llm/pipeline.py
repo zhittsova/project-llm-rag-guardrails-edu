@@ -5,6 +5,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Protocol
 
+from .answering import AnswerGenerator
 from .baseline_pipeline import BaselineRagAssistant, build_baseline_assistant
 from .corpus import Chunk, chunk_documents, load_documents
 from .guardrail_policy import GuardrailPolicy
@@ -42,6 +43,7 @@ class LearningAssistant:
         course_id: str = "guardrails-101",
         retriever_backend: str = "lexical",
         guardrail_policy: GuardrailPolicy | None = None,
+        answer_generator: AnswerGenerator | None = None,
     ) -> None:
         if mode not in {"baseline", "guardrailed"}:
             raise ValueError("mode must be 'baseline' or 'guardrailed'")
@@ -50,6 +52,7 @@ class LearningAssistant:
         self._course_id = course_id
         self._retriever_backend = retriever_backend
         self._guardrail_policy = guardrail_policy or GuardrailPolicy.default()
+        self._answer_generator = answer_generator
 
     def answer(self, question: str) -> AssistantResponse:
         started_at = perf_counter()
@@ -89,9 +92,13 @@ class LearningAssistant:
             answer = make_integrity_safe(question, self._guardrail_policy)
             citations = [citation_for(chunk) for chunk, _score in retrieved[:1]]
         else:
-            # Это локальный baseline answer generator: он не вызывает LLM, а
-            # собирает короткий extractive answer из найденных chunks.
-            answer = synthesize_answer(question, [chunk for chunk, _score in retrieved])
+            # Default answer generation is local/extractive. Optional remote
+            # generation is gated by --allow-remote-models in the CLI.
+            retrieved_chunks = [chunk for chunk, _score in retrieved]
+            if self._answer_generator:
+                answer = self._answer_generator.generate(question, retrieved_chunks)
+            else:
+                answer = synthesize_answer(question, retrieved_chunks)
             citations = [citation_for(chunk) for chunk, _score in retrieved]
 
         # Output guard проверяет уже готовый ответ. Baseline снова пропускает
@@ -133,7 +140,15 @@ def build_assistant(
     embedding_model: str | None = None,
     allow_remote_models: bool = False,
     env_file: Path | None = None,
+    generator: str = "extractive",
+    answer_model: str | None = None,
 ) -> BaselineRagAssistant | LearningAssistant:
+    answer_generator = _build_answer_generator(
+        generator,
+        answer_model=answer_model,
+        allow_remote_models=allow_remote_models,
+        env_file=env_file,
+    )
     if mode == "baseline":
         return build_baseline_assistant(
             corpus_path,
@@ -144,6 +159,7 @@ def build_assistant(
             embedding_model=embedding_model,
             allow_remote_models=allow_remote_models,
             env_file=env_file,
+            answer_generator=answer_generator,
         )
 
     # Ниже строится guardrailed assistant. Baseline уже ушел в отдельный
@@ -174,7 +190,31 @@ def build_assistant(
         course_id=course_id,
         retriever_backend=retriever_backend,
         guardrail_policy=guardrail_policy,
+        answer_generator=answer_generator,
     )
+
+
+def _build_answer_generator(
+    generator: str,
+    *,
+    answer_model: str | None = None,
+    allow_remote_models: bool = False,
+    env_file: Path | None = None,
+) -> AnswerGenerator | None:
+    if generator == "extractive":
+        return None
+    if generator == "openai":
+        from .model_config import DEFAULT_OPENAI_ANSWER_MODEL, OpenAIModelConfig
+        from .openai_models import OpenAIAnswerGenerator
+
+        return OpenAIAnswerGenerator(
+            OpenAIModelConfig(
+                answer_model=answer_model or DEFAULT_OPENAI_ANSWER_MODEL,
+                allow_remote_models=allow_remote_models,
+                env_file=env_file,
+            )
+        )
+    raise ValueError("generator must be 'extractive' or 'openai'")
 
 
 def synthesize_answer(question: str, chunks: list[Chunk]) -> str:

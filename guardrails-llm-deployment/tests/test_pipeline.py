@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from guardrails_llm.baseline_pipeline import BaselineRagAssistant, build_baseline_assistant
+from guardrails_llm.model_config import RemoteModelsNotAllowedError
 from guardrails_llm.pipeline import LearningAssistant, build_assistant
 from guardrails_llm.visualization import write_rag_visualization
 
@@ -42,6 +43,11 @@ def test_build_assistant_uses_separate_baseline_pipeline() -> None:
     assistant = build_assistant(DATA, mode="baseline", retriever_backend="langchain")
 
     assert isinstance(assistant, BaselineRagAssistant)
+
+
+def test_openai_generator_requires_explicit_remote_model_allowance() -> None:
+    with pytest.raises(RemoteModelsNotAllowedError, match="--allow-remote-models"):
+        build_assistant(DATA, mode="guardrailed", generator="openai")
 
 
 def test_baseline_pipeline_does_not_apply_guardrails() -> None:

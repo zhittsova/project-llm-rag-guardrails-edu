@@ -26,6 +26,12 @@ def write_rag_visualization(
     index_dir: Path | None,
     course_id: str,
     guardrail_policy: GuardrailPolicy | None = None,
+    embedding_provider: str = "hashing",
+    embedding_model: str | None = None,
+    allow_remote_models: bool = False,
+    env_file: Path | None = None,
+    generator: str = "extractive",
+    answer_model: str | None = None,
 ) -> VisualizationStats:
     assistant = build_assistant(
         corpus_path,
@@ -34,6 +40,12 @@ def write_rag_visualization(
         index_dir=index_dir,
         course_id=course_id,
         guardrail_policy=guardrail_policy,
+        embedding_provider=embedding_provider,
+        embedding_model=embedding_model,
+        allow_remote_models=allow_remote_models,
+        env_file=env_file,
+        generator=generator,
+        answer_model=answer_model,
     )
     response = assistant.answer(question)
     chunk_lookup = _chunk_lookup(corpus_path, retriever_backend)
