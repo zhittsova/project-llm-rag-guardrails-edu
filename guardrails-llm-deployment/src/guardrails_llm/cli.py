@@ -203,45 +203,7 @@ def main() -> None:
         try:
             comparisons = {}
             judge = _build_judge(args)
-            for label, mode, policy, profile in [
-                (
-                    "baseline",
-                    "baseline",
-                    None,
-                    {
-                        "technique": "RAG without guardrails",
-                        "guardrail_layers": [],
-                        "implementation_effort": "low",
-                    },
-                ),
-                (
-                    "default_guardrails",
-                    "guardrailed",
-                    None,
-                    {
-                        "technique": "rule-based checks + metadata retrieval filters",
-                        "guardrail_layers": ["regex_input", "metadata_filter", "context_sanitization", "output_check"],
-                        "implementation_effort": "medium",
-                    },
-                ),
-                (
-                    "hybrid_policy_guardrails",
-                    "guardrailed",
-                    load_guardrail_policy(args.policy),
-                    {
-                        "technique": "configurable policy + regex + metadata filters + embedding similarity examples",
-                        "guardrail_layers": [
-                            "policy_file",
-                            "regex_input",
-                            "embedding_similarity_input",
-                            "metadata_filter",
-                            "context_sanitization",
-                            "output_check",
-                        ],
-                        "implementation_effort": "medium-high",
-                    },
-                ),
-            ]:
+            for label, mode, policy, classifier, profile in _comparison_scenarios(args):
                 comparison_assistant = build_assistant(
                     corpus_path,
                     mode=mode,
@@ -255,7 +217,7 @@ def main() -> None:
                     env_file=args.env_file,
                     generator=args.generator,
                     answer_model=args.answer_model,
-                    guard_classifier=args.guard_classifier,
+                    guard_classifier=classifier,
                     classifier_model=args.classifier_model,
                 )
                 comparison_results = run_evaluation(comparison_assistant, cases)
@@ -359,6 +321,83 @@ def _build_judge(args):
             )
         )
     raise ValueError("judge must be 'none', 'heuristic', or 'openai'")
+
+
+def _comparison_scenarios(args):
+    policy = load_guardrail_policy(args.policy)
+    scenarios = [
+        (
+            "baseline",
+            "baseline",
+            None,
+            "none",
+            {
+                "technique": "RAG without guardrails",
+                "guardrail_layers": [],
+                "latency_expected": "lowest",
+                "robustness_expected": "lowest",
+                "implementation_effort": "low",
+            },
+        ),
+        (
+            "default_guardrails",
+            "guardrailed",
+            None,
+            "none",
+            {
+                "technique": "rule-based checks + metadata retrieval filters",
+                "guardrail_layers": ["regex_input", "metadata_filter", "context_sanitization", "output_check"],
+                "latency_expected": "low",
+                "robustness_expected": "medium",
+                "implementation_effort": "medium",
+            },
+        ),
+        (
+            "hybrid_policy_guardrails",
+            "guardrailed",
+            policy,
+            "none",
+            {
+                "technique": "configurable policy + regex + metadata filters + embedding similarity examples",
+                "guardrail_layers": [
+                    "policy_file",
+                    "regex_input",
+                    "embedding_similarity_input",
+                    "metadata_filter",
+                    "context_sanitization",
+                    "output_check",
+                ],
+                "latency_expected": "low-medium",
+                "robustness_expected": "medium-high",
+                "implementation_effort": "medium-high",
+            },
+        ),
+    ]
+    if args.guard_classifier != "none":
+        scenarios.append(
+            (
+                "model_classifier_guardrails",
+                "guardrailed",
+                policy,
+                args.guard_classifier,
+                {
+                    "technique": "hybrid policy + model classifier for ambiguous prompts",
+                    "guardrail_layers": [
+                        "policy_file",
+                        "regex_input",
+                        "embedding_similarity_input",
+                        "model_classifier",
+                        "metadata_filter",
+                        "context_sanitization",
+                        "output_check",
+                    ],
+                    "latency_expected": "highest",
+                    "robustness_expected": "highest_on_paraphrases",
+                    "implementation_effort": "high",
+                },
+            )
+        )
+    return scenarios
 
 
 if __name__ == "__main__":
