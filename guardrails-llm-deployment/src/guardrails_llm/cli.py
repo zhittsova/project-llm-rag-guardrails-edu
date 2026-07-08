@@ -65,6 +65,7 @@ def main() -> None:
     compare_parser.add_argument("--judge", choices=["none", "heuristic", "openai"], default="none")
     compare_parser.add_argument("--judge-model")
     compare_parser.add_argument("--limit-cases", type=int)
+    compare_parser.add_argument("--output-json", type=Path)
 
     index_parser = subparsers.add_parser("build-index", help="Build a local Chroma vector index")
     index_parser.add_argument("--corpus", dest="command_corpus", type=Path)
@@ -227,6 +228,9 @@ def main() -> None:
                 comparisons[label] = comparison_summary
         except (VectorIndexError, RemoteModelsNotAllowedError, MissingModelCredentialError) as exc:
             parser.error(str(exc))
+        if args.output_json:
+            args.output_json.parent.mkdir(parents=True, exist_ok=True)
+            args.output_json.write_text(json.dumps(comparisons, indent=2), encoding="utf-8")
         print(json.dumps(comparisons, indent=2))
         return
 
