@@ -4,14 +4,16 @@
 /.vscode/
 
 # Local workshop source assets and generated media
-AMT_PJ_Guardrails_Workshop1_Presentation.pdf
-Onboardning_2025-04-29-_AMT_PJ_Guardrails.pdf
 Workshop1/
 Workshop2/
 Workshop3/
-Workshop1.zip
 course_corpus/
-course_corpus.zip
 /indexes/
 *.mp4
 ~$*.docx
+*.zip
+/*.pdf
+/*.docx
+
+.env
+.env.*

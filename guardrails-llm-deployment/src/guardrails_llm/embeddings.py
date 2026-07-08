@@ -2,8 +2,24 @@ from __future__ import annotations
 
 import math
 from hashlib import blake2b
+from pathlib import Path
+from typing import Protocol
 
+from .model_config import DEFAULT_OPENAI_EMBEDDING_MODEL, OpenAIModelConfig
 from .retrieval import tokenize
+
+
+HASHING_EMBEDDING_MODEL = "hashing-blake2b-384"
+
+
+class TextEmbedder(Protocol):
+    model_name: str
+
+    def embed(self, text: str) -> list[float]:
+        ...
+
+    def embed_many(self, texts: list[str]) -> list[list[float]]:
+        ...
 
 
 class HashingEmbedder:
@@ -12,6 +28,7 @@ class HashingEmbedder:
     # creates numeric vectors that can power vector search and similarity guards.
     def __init__(self, dimensions: int = 384) -> None:
         self.dimensions = dimensions
+        self.model_name = HASHING_EMBEDDING_MODEL
 
     def embed(self, text: str) -> list[float]:
         vector = [0.0] * self.dimensions
@@ -34,3 +51,34 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
     if len(left) != len(right):
         raise ValueError("vectors must have the same dimensions")
     return sum(left_value * right_value for left_value, right_value in zip(left, right, strict=True))
+
+
+def resolve_embedding_model(provider: str, model: str | None = None) -> str:
+    if provider == "hashing":
+        return model or HASHING_EMBEDDING_MODEL
+    if provider == "openai":
+        return model or DEFAULT_OPENAI_EMBEDDING_MODEL
+    raise ValueError("embedding_provider must be 'hashing' or 'openai'")
+
+
+def create_embedder(
+    provider: str,
+    *,
+    model: str | None = None,
+    allow_remote_models: bool = False,
+    env_file: Path | None = None,
+) -> TextEmbedder:
+    resolved_model = resolve_embedding_model(provider, model)
+    if provider == "hashing":
+        return HashingEmbedder()
+    if provider == "openai":
+        from .openai_models import OpenAIEmbeddingModel
+
+        return OpenAIEmbeddingModel(
+            OpenAIModelConfig(
+                embedding_model=resolved_model,
+                allow_remote_models=allow_remote_models,
+                env_file=env_file,
+            )
+        )
+    raise ValueError("embedding_provider must be 'hashing' or 'openai'")

@@ -9,8 +9,9 @@ from .course_corpus import default_course_output_path, default_course_source_pat
 from .evaluation import load_eval_cases, results_to_json, run_evaluation, summarize, write_results_csv
 from .guardrail_policy import default_policy_path, load_guardrail_policy
 from .judging import judge_results, judgments_to_json, summarize_judgments
+from .model_config import MissingModelCredentialError, RemoteModelsNotAllowedError, openai_config_summary
 from .pipeline import build_assistant
-from .vector import VectorIndexNotFoundError, build_vector_index, default_index_path
+from .vector import VectorIndexError, build_vector_index, default_index_path
 from .visualization import write_rag_visualization
 
 
@@ -26,6 +27,9 @@ def main() -> None:
     query_parser.add_argument("--course-id", default="guardrails-101")
     query_parser.add_argument("--mode", choices=["baseline", "guardrailed"], default="guardrailed")
     query_parser.add_argument("--retriever", choices=["lexical", "langchain", "vector"], default="lexical")
+    _add_embedding_args(query_parser)
+    _add_generation_args(query_parser)
+    _add_guard_classifier_args(query_parser)
     query_parser.add_argument("--policy", type=Path)
     query_parser.add_argument("--question", required=True)
 
@@ -35,10 +39,16 @@ def main() -> None:
     eval_parser.add_argument("--course-id", default="guardrails-101")
     eval_parser.add_argument("--mode", choices=["baseline", "guardrailed"], default="guardrailed")
     eval_parser.add_argument("--retriever", choices=["lexical", "langchain", "vector"], default="lexical")
+    _add_embedding_args(eval_parser)
+    _add_generation_args(eval_parser)
+    _add_guard_classifier_args(eval_parser)
     eval_parser.add_argument("--cases", type=Path, default=Path(__file__).resolve().parents[2] / "data" / "eval_cases.jsonl")
     eval_parser.add_argument("--policy", type=Path)
-    eval_parser.add_argument("--judge", choices=["none", "heuristic"], default="none")
+    eval_parser.add_argument("--judge", choices=["none", "heuristic", "openai"], default="none")
+    eval_parser.add_argument("--judge-model")
+    eval_parser.add_argument("--limit-cases", type=int)
     eval_parser.add_argument("--output-csv", type=Path)
+    eval_parser.add_argument("--output-judgments", type=Path)
     eval_parser.add_argument("--show-results", action="store_true")
     eval_parser.add_argument("--show-judgments", action="store_true")
 
@@ -47,21 +57,32 @@ def main() -> None:
     compare_parser.add_argument("--index-dir", type=Path, default=default_index_path())
     compare_parser.add_argument("--course-id", default="guardrails-101")
     compare_parser.add_argument("--retriever", choices=["lexical", "langchain", "vector"], default="lexical")
+    _add_embedding_args(compare_parser)
+    _add_generation_args(compare_parser)
+    _add_guard_classifier_args(compare_parser)
     compare_parser.add_argument("--cases", type=Path, default=Path(__file__).resolve().parents[2] / "data" / "eval_cases.jsonl")
     compare_parser.add_argument("--policy", type=Path, default=default_policy_path())
-    compare_parser.add_argument("--judge", choices=["none", "heuristic"], default="none")
+    compare_parser.add_argument("--judge", choices=["none", "heuristic", "openai"], default="none")
+    compare_parser.add_argument("--judge-model")
+    compare_parser.add_argument("--limit-cases", type=int)
+    compare_parser.add_argument("--output-json", type=Path)
 
     index_parser = subparsers.add_parser("build-index", help="Build a local Chroma vector index")
     index_parser.add_argument("--corpus", dest="command_corpus", type=Path)
     index_parser.add_argument("--index-dir", type=Path, default=default_index_path())
     index_parser.add_argument("--chunk-size", type=int, default=650)
     index_parser.add_argument("--chunk-overlap", type=int, default=80)
+    _add_embedding_args(index_parser)
 
     validate_parser = subparsers.add_parser("validate-corpus", help="Validate a corpus JSONL file")
     validate_parser.add_argument("--corpus", dest="command_corpus", type=Path)
 
     policy_parser = subparsers.add_parser("validate-policy", help="Validate a guardrail policy TOML file")
     policy_parser.add_argument("--policy", type=Path, default=default_policy_path())
+
+    model_config_parser = subparsers.add_parser("model-config", help="Show safe remote-model configuration")
+    model_config_parser.add_argument("--provider", choices=["openai"], default="openai")
+    model_config_parser.add_argument("--env-file", type=Path)
 
     course_parser = subparsers.add_parser("normalize-course-corpus", help="Normalize markdown course corpus to JSONL")
     course_parser.add_argument("--source", type=Path, default=default_course_source_path())
@@ -74,6 +95,9 @@ def main() -> None:
     visualize_parser.add_argument("--course-id", default="guardrails-101")
     visualize_parser.add_argument("--mode", choices=["baseline", "guardrailed"], default="guardrailed")
     visualize_parser.add_argument("--retriever", choices=["lexical", "langchain", "vector"], default="lexical")
+    _add_embedding_args(visualize_parser)
+    _add_generation_args(visualize_parser)
+    _add_guard_classifier_args(visualize_parser)
     visualize_parser.add_argument("--policy", type=Path)
     visualize_parser.add_argument("--question", required=True)
     visualize_parser.add_argument("--output", type=Path, required=True)
@@ -105,6 +129,10 @@ def main() -> None:
         )
         return
 
+    if args.command == "model-config":
+        print(json.dumps(openai_config_summary(args.env_file), indent=2))
+        return
+
     if args.command == "normalize-course-corpus":
         stats = normalize_course_corpus(args.source, args.output, course_id=args.course_id)
         print(
@@ -120,12 +148,19 @@ def main() -> None:
         return
 
     if args.command == "build-index":
-        stats = build_vector_index(
-            corpus_path,
-            args.index_dir,
-            chunk_size=args.chunk_size,
-            chunk_overlap=args.chunk_overlap,
-        )
+        try:
+            stats = build_vector_index(
+                corpus_path,
+                args.index_dir,
+                chunk_size=args.chunk_size,
+                chunk_overlap=args.chunk_overlap,
+                embedding_provider=args.embedding_provider,
+                embedding_model=args.embedding_model,
+                allow_remote_models=args.allow_remote_models,
+                env_file=args.env_file,
+            )
+        except (VectorIndexError, RemoteModelsNotAllowedError, MissingModelCredentialError) as exc:
+            parser.error(str(exc))
         print(json.dumps(stats.__dict__ | {"corpus": str(stats.corpus), "index_dir": str(stats.index_dir)}, indent=2))
         return
 
@@ -141,8 +176,16 @@ def main() -> None:
                 index_dir=args.index_dir,
                 course_id=args.course_id,
                 guardrail_policy=guardrail_policy,
+                embedding_provider=args.embedding_provider,
+                embedding_model=args.embedding_model,
+                allow_remote_models=args.allow_remote_models,
+                env_file=args.env_file,
+                generator=args.generator,
+                answer_model=args.answer_model,
+                guard_classifier=args.guard_classifier,
+                classifier_model=args.classifier_model,
             )
-        except VectorIndexNotFoundError as exc:
+        except (VectorIndexError, RemoteModelsNotAllowedError, MissingModelCredentialError) as exc:
             parser.error(str(exc))
         print(
             json.dumps(
@@ -157,47 +200,11 @@ def main() -> None:
 
     if args.command == "compare-guardrails":
         cases = load_eval_cases(args.cases)
+        cases = _limit_cases(cases, args.limit_cases)
         try:
             comparisons = {}
-            for label, mode, policy, profile in [
-                (
-                    "baseline",
-                    "baseline",
-                    None,
-                    {
-                        "technique": "RAG without guardrails",
-                        "guardrail_layers": [],
-                        "implementation_effort": "low",
-                    },
-                ),
-                (
-                    "default_guardrails",
-                    "guardrailed",
-                    None,
-                    {
-                        "technique": "rule-based checks + metadata retrieval filters",
-                        "guardrail_layers": ["regex_input", "metadata_filter", "context_sanitization", "output_check"],
-                        "implementation_effort": "medium",
-                    },
-                ),
-                (
-                    "hybrid_policy_guardrails",
-                    "guardrailed",
-                    load_guardrail_policy(args.policy),
-                    {
-                        "technique": "configurable policy + regex + metadata filters + embedding similarity examples",
-                        "guardrail_layers": [
-                            "policy_file",
-                            "regex_input",
-                            "embedding_similarity_input",
-                            "metadata_filter",
-                            "context_sanitization",
-                            "output_check",
-                        ],
-                        "implementation_effort": "medium-high",
-                    },
-                ),
-            ]:
+            judge = _build_judge(args)
+            for label, mode, policy, classifier, profile in _comparison_scenarios(args):
                 comparison_assistant = build_assistant(
                     corpus_path,
                     mode=mode,
@@ -205,14 +212,25 @@ def main() -> None:
                     index_dir=args.index_dir,
                     course_id=args.course_id,
                     guardrail_policy=policy,
+                    embedding_provider=args.embedding_provider,
+                    embedding_model=args.embedding_model,
+                    allow_remote_models=args.allow_remote_models,
+                    env_file=args.env_file,
+                    generator=args.generator,
+                    answer_model=args.answer_model,
+                    guard_classifier=classifier,
+                    classifier_model=args.classifier_model,
                 )
                 comparison_results = run_evaluation(comparison_assistant, cases)
                 comparison_summary = profile | summarize(comparison_results)
-                if args.judge == "heuristic":
-                    comparison_summary["judge"] = summarize_judgments(judge_results(cases, comparison_results))
+                if judge:
+                    comparison_summary["judge"] = summarize_judgments(judge_results(cases, comparison_results, judge))
                 comparisons[label] = comparison_summary
-        except VectorIndexNotFoundError as exc:
+        except (VectorIndexError, RemoteModelsNotAllowedError, MissingModelCredentialError) as exc:
             parser.error(str(exc))
+        if args.output_json:
+            args.output_json.parent.mkdir(parents=True, exist_ok=True)
+            args.output_json.write_text(json.dumps(comparisons, indent=2), encoding="utf-8")
         print(json.dumps(comparisons, indent=2))
         return
 
@@ -225,8 +243,16 @@ def main() -> None:
             index_dir=args.index_dir,
             course_id=args.course_id,
             guardrail_policy=guardrail_policy,
+            embedding_provider=getattr(args, "embedding_provider", "hashing"),
+            embedding_model=getattr(args, "embedding_model", None),
+            allow_remote_models=getattr(args, "allow_remote_models", False),
+            env_file=getattr(args, "env_file", None),
+            generator=getattr(args, "generator", "extractive"),
+            answer_model=getattr(args, "answer_model", None),
+            guard_classifier=getattr(args, "guard_classifier", "none"),
+            classifier_model=getattr(args, "classifier_model", None),
         )
-    except VectorIndexNotFoundError as exc:
+    except (VectorIndexError, RemoteModelsNotAllowedError, MissingModelCredentialError) as exc:
         parser.error(str(exc))
     if args.command == "query":
         response = assistant.answer(args.question)
@@ -234,18 +260,148 @@ def main() -> None:
         return
 
     cases = load_eval_cases(args.cases)
+    cases = _limit_cases(cases, getattr(args, "limit_cases", None))
     results = run_evaluation(assistant, cases)
     summary = summarize(results)
-    if args.judge == "heuristic":
-        judgments = judge_results(cases, results)
+    try:
+        judge = _build_judge(args)
+    except (RemoteModelsNotAllowedError, MissingModelCredentialError) as exc:
+        parser.error(str(exc))
+    judgments = []
+    if judge:
+        judgments = judge_results(cases, results, judge)
         summary["judge"] = summarize_judgments(judgments)
     print(json.dumps(summary, indent=2))
     if args.output_csv:
         write_results_csv(results, args.output_csv)
     if args.show_results:
         print(results_to_json(results))
-    if args.show_judgments and args.judge == "heuristic":
+    if args.output_judgments and judgments:
+        args.output_judgments.parent.mkdir(parents=True, exist_ok=True)
+        args.output_judgments.write_text(judgments_to_json(judgments), encoding="utf-8")
+    if args.show_judgments and judgments:
         print(judgments_to_json(judgments))
+
+
+def _add_embedding_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--embedding-provider", choices=["hashing", "openai"], default="hashing")
+    parser.add_argument("--embedding-model")
+    parser.add_argument("--allow-remote-models", action="store_true")
+    parser.add_argument("--env-file", type=Path)
+
+
+def _add_generation_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--generator", choices=["extractive", "openai"], default="extractive")
+    parser.add_argument("--answer-model")
+
+
+def _add_guard_classifier_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--guard-classifier", choices=["none", "openai"], default="none")
+    parser.add_argument("--classifier-model")
+
+
+def _limit_cases(cases, limit: int | None):
+    if limit is None:
+        return cases
+    return cases[: max(limit, 0)]
+
+
+def _build_judge(args):
+    if getattr(args, "judge", "none") == "none":
+        return None
+    if args.judge == "heuristic":
+        from .judging import HeuristicJudge
+
+        return HeuristicJudge()
+    if args.judge == "openai":
+        from .model_config import DEFAULT_OPENAI_JUDGE_MODEL, OpenAIModelConfig
+        from .openai_models import OpenAIJudge
+
+        return OpenAIJudge(
+            OpenAIModelConfig(
+                judge_model=args.judge_model or DEFAULT_OPENAI_JUDGE_MODEL,
+                allow_remote_models=args.allow_remote_models,
+                env_file=args.env_file,
+            )
+        )
+    raise ValueError("judge must be 'none', 'heuristic', or 'openai'")
+
+
+def _comparison_scenarios(args):
+    policy = load_guardrail_policy(args.policy)
+    scenarios = [
+        (
+            "baseline",
+            "baseline",
+            None,
+            "none",
+            {
+                "technique": "RAG without guardrails",
+                "guardrail_layers": [],
+                "latency_expected": "lowest",
+                "robustness_expected": "lowest",
+                "implementation_effort": "low",
+            },
+        ),
+        (
+            "default_guardrails",
+            "guardrailed",
+            None,
+            "none",
+            {
+                "technique": "rule-based checks + metadata retrieval filters",
+                "guardrail_layers": ["regex_input", "metadata_filter", "context_sanitization", "output_check"],
+                "latency_expected": "low",
+                "robustness_expected": "medium",
+                "implementation_effort": "medium",
+            },
+        ),
+        (
+            "hybrid_policy_guardrails",
+            "guardrailed",
+            policy,
+            "none",
+            {
+                "technique": "configurable policy + regex + metadata filters + embedding similarity examples",
+                "guardrail_layers": [
+                    "policy_file",
+                    "regex_input",
+                    "embedding_similarity_input",
+                    "metadata_filter",
+                    "context_sanitization",
+                    "output_check",
+                ],
+                "latency_expected": "low-medium",
+                "robustness_expected": "medium-high",
+                "implementation_effort": "medium-high",
+            },
+        ),
+    ]
+    if args.guard_classifier != "none":
+        scenarios.append(
+            (
+                "model_classifier_guardrails",
+                "guardrailed",
+                policy,
+                args.guard_classifier,
+                {
+                    "technique": "hybrid policy + model classifier for ambiguous prompts",
+                    "guardrail_layers": [
+                        "policy_file",
+                        "regex_input",
+                        "embedding_similarity_input",
+                        "model_classifier",
+                        "metadata_filter",
+                        "context_sanitization",
+                        "output_check",
+                    ],
+                    "latency_expected": "highest",
+                    "robustness_expected": "highest_on_paraphrases",
+                    "implementation_effort": "high",
+                },
+            )
+        )
+    return scenarios
 
 
 if __name__ == "__main__":

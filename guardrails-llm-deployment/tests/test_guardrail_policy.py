@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from guardrails_llm.evaluation import EvalResult, load_eval_cases, summarize
-from guardrails_llm.guardrail_policy import default_policy_path, load_guardrail_policy
+from guardrails_llm.guardrail_policy import GuardrailPolicy, default_policy_path, load_guardrail_policy
 from guardrails_llm.guards import input_guard, output_guard
 
 
@@ -10,6 +10,12 @@ def test_policy_file_loads_similarity_rules() -> None:
 
     assert len(policy.input_similarity_rules) == 3
     assert "public" in policy.allowed_visibility
+
+
+def test_loaded_policy_preserves_default_similarity_embedder() -> None:
+    policy = load_guardrail_policy(default_policy_path())
+
+    assert policy.similarity_embedder is GuardrailPolicy.default().similarity_embedder
 
 
 def test_similarity_guard_catches_paraphrased_private_data_request() -> None:

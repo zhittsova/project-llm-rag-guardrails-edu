@@ -77,7 +77,11 @@ class HeuristicJudge:
 def judge_results(cases: list[EvalCase], results: list[EvalResult], judge: HeuristicJudge | None = None) -> list[JudgeResult]:
     judge = judge or HeuristicJudge()
     cases_by_id = {case.case_id: case for case in cases}
-    return [judge.judge(cases_by_id[result.case_id], result) for result in results if result.case_id in cases_by_id]
+    unknown_case_ids = [result.case_id for result in results if result.case_id not in cases_by_id]
+    if unknown_case_ids:
+        joined = ", ".join(sorted(set(unknown_case_ids)))
+        raise ValueError(f"evaluation results contain unknown case_id values: {joined}")
+    return [judge.judge(cases_by_id[result.case_id], result) for result in results]
 
 
 def summarize_judgments(judgments: list[JudgeResult]) -> dict[str, object]:

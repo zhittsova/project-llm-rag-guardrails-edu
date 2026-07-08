@@ -5,8 +5,10 @@ from pathlib import Path
 from time import perf_counter
 from typing import Protocol
 
+from .answering import AnswerGenerator
 from .baseline_pipeline import BaselineRagAssistant, build_baseline_assistant
 from .corpus import Chunk, chunk_documents, load_documents
+from .guard_classifier import GuardClassifier, should_use_model_classifier
 from .guardrail_policy import GuardrailPolicy
 from .guards import input_guard, make_integrity_safe, output_guard, sanitize_untrusted_context
 from .retrieval import LexicalRetriever
@@ -42,6 +44,8 @@ class LearningAssistant:
         course_id: str = "guardrails-101",
         retriever_backend: str = "lexical",
         guardrail_policy: GuardrailPolicy | None = None,
+        answer_generator: AnswerGenerator | None = None,
+        guard_classifier: GuardClassifier | None = None,
     ) -> None:
         if mode not in {"baseline", "guardrailed"}:
             raise ValueError("mode must be 'baseline' or 'guardrailed'")
@@ -50,6 +54,8 @@ class LearningAssistant:
         self._course_id = course_id
         self._retriever_backend = retriever_backend
         self._guardrail_policy = guardrail_policy or GuardrailPolicy.default()
+        self._answer_generator = answer_generator
+        self._guard_classifier = guard_classifier
 
     def answer(self, question: str) -> AssistantResponse:
         started_at = perf_counter()
@@ -63,6 +69,27 @@ class LearningAssistant:
             triggers.extend(input_result.triggers)
             if not input_result.allowed:
                 return self._response(input_result.message or "Request blocked.", [], triggers, started_at, [])
+            if should_use_model_classifier(question, self._guardrail_policy, triggers) and self._guard_classifier:
+                classification = self._guard_classifier.classify(question)
+                if classification.label != "safe" and classification.confidence >= 0.65:
+                    triggers.append(classification.label)
+                    if classification.label == "unsupported":
+                        triggers.append("ungrounded")
+                        return self._response(
+                            self._guardrail_policy.ungrounded_message,
+                            [],
+                            triggers,
+                            started_at,
+                            [],
+                        )
+                    if classification.label in self._guardrail_policy.blocking_triggers:
+                        return self._response(
+                            self._guardrail_policy.input_block_message,
+                            [],
+                            triggers,
+                            started_at,
+                            [],
+                        )
 
         # Retrieval общий для baseline и guardrailed режимов, но фильтры разные:
         # baseline ищет по всему индексу, guardrailed ограничивает поиск текущим
@@ -89,9 +116,13 @@ class LearningAssistant:
             answer = make_integrity_safe(question, self._guardrail_policy)
             citations = [citation_for(chunk) for chunk, _score in retrieved[:1]]
         else:
-            # Это локальный baseline answer generator: он не вызывает LLM, а
-            # собирает короткий extractive answer из найденных chunks.
-            answer = synthesize_answer(question, [chunk for chunk, _score in retrieved])
+            # Default answer generation is local/extractive. Optional remote
+            # generation is gated by --allow-remote-models in the CLI.
+            retrieved_chunks = [chunk for chunk, _score in retrieved]
+            if self._answer_generator:
+                answer = self._answer_generator.generate(question, retrieved_chunks)
+            else:
+                answer = synthesize_answer(question, retrieved_chunks)
             citations = [citation_for(chunk) for chunk, _score in retrieved]
 
         # Output guard проверяет уже готовый ответ. Baseline снова пропускает
@@ -129,17 +160,42 @@ def build_assistant(
     index_dir: Path | None = None,
     course_id: str = "guardrails-101",
     guardrail_policy: GuardrailPolicy | None = None,
+    embedding_provider: str = "hashing",
+    embedding_model: str | None = None,
+    allow_remote_models: bool = False,
+    env_file: Path | None = None,
+    generator: str = "extractive",
+    answer_model: str | None = None,
+    guard_classifier: str = "none",
+    classifier_model: str | None = None,
 ) -> BaselineRagAssistant | LearningAssistant:
+    answer_generator = _build_answer_generator(
+        generator,
+        answer_model=answer_model,
+        allow_remote_models=allow_remote_models,
+        env_file=env_file,
+    )
     if mode == "baseline":
         return build_baseline_assistant(
             corpus_path,
             retriever_backend=retriever_backend,
             index_dir=index_dir,
             course_id=course_id,
+            embedding_provider=embedding_provider,
+            embedding_model=embedding_model,
+            allow_remote_models=allow_remote_models,
+            env_file=env_file,
+            answer_generator=answer_generator,
         )
 
     # Ниже строится guardrailed assistant. Baseline уже ушел в отдельный
     # baseline_pipeline.py, чтобы его можно было читать без guardrail веток.
+    classifier = _build_guard_classifier(
+        guard_classifier,
+        classifier_model=classifier_model,
+        allow_remote_models=allow_remote_models,
+        env_file=env_file,
+    )
     if retriever_backend == "lexical":
         documents = load_documents(corpus_path)
         retriever = LexicalRetriever(chunk_documents(documents))
@@ -151,7 +207,13 @@ def build_assistant(
     elif retriever_backend == "vector":
         from .vector import VectorRetriever, default_index_path
 
-        retriever = VectorRetriever(index_dir or default_index_path())
+        retriever = VectorRetriever(
+            index_dir or default_index_path(),
+            embedding_provider=embedding_provider,
+            embedding_model=embedding_model,
+            allow_remote_models=allow_remote_models,
+            env_file=env_file,
+        )
     else:
         raise ValueError("retriever_backend must be 'lexical', 'langchain', or 'vector'")
     return LearningAssistant(
@@ -160,7 +222,55 @@ def build_assistant(
         course_id=course_id,
         retriever_backend=retriever_backend,
         guardrail_policy=guardrail_policy,
+        answer_generator=answer_generator,
+        guard_classifier=classifier,
     )
+
+
+def _build_answer_generator(
+    generator: str,
+    *,
+    answer_model: str | None = None,
+    allow_remote_models: bool = False,
+    env_file: Path | None = None,
+) -> AnswerGenerator | None:
+    if generator == "extractive":
+        return None
+    if generator == "openai":
+        from .model_config import DEFAULT_OPENAI_ANSWER_MODEL, OpenAIModelConfig
+        from .openai_models import OpenAIAnswerGenerator
+
+        return OpenAIAnswerGenerator(
+            OpenAIModelConfig(
+                answer_model=answer_model or DEFAULT_OPENAI_ANSWER_MODEL,
+                allow_remote_models=allow_remote_models,
+                env_file=env_file,
+            )
+        )
+    raise ValueError("generator must be 'extractive' or 'openai'")
+
+
+def _build_guard_classifier(
+    guard_classifier: str,
+    *,
+    classifier_model: str | None = None,
+    allow_remote_models: bool = False,
+    env_file: Path | None = None,
+) -> GuardClassifier | None:
+    if guard_classifier == "none":
+        return None
+    if guard_classifier == "openai":
+        from .model_config import DEFAULT_OPENAI_CLASSIFIER_MODEL, OpenAIModelConfig
+        from .openai_models import OpenAIGuardClassifier
+
+        return OpenAIGuardClassifier(
+            OpenAIModelConfig(
+                classifier_model=classifier_model or DEFAULT_OPENAI_CLASSIFIER_MODEL,
+                allow_remote_models=allow_remote_models,
+                env_file=env_file,
+            )
+        )
+    raise ValueError("guard_classifier must be 'none' or 'openai'")
 
 
 def synthesize_answer(question: str, chunks: list[Chunk]) -> str:

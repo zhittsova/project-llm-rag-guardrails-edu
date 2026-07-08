@@ -5,6 +5,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Protocol
 
+from .answering import AnswerGenerator
 from .corpus import Chunk, chunk_documents, load_documents
 from .retrieval import LexicalRetriever
 
@@ -44,10 +45,12 @@ class BaselineRagAssistant:
         *,
         course_id: str = "guardrails-101",
         retriever_backend: str = "lexical",
+        answer_generator: AnswerGenerator | None = None,
     ) -> None:
         self._retriever = retriever
         self._course_id = course_id
         self._retriever_backend = retriever_backend
+        self._answer_generator = answer_generator
 
     def answer(self, question: str) -> BaselineRagResponse:
         started_at = perf_counter()
@@ -57,9 +60,12 @@ class BaselineRagAssistant:
         # or injected content, showing why guardrails are needed.
         retrieved = self._retriever.search(question)
 
-        # Baseline generation is extractive and local: no LLM call here.
-        # It simply turns retrieved chunks into a short evidence-based answer.
-        answer = synthesize_baseline_answer([chunk for chunk, _score in retrieved])
+        retrieved_chunks = [chunk for chunk, _score in retrieved]
+        if self._answer_generator:
+            answer = self._answer_generator.generate(question, retrieved_chunks)
+        else:
+            # Baseline generation is extractive and local by default: no LLM call.
+            answer = synthesize_baseline_answer(retrieved_chunks)
         citations = [citation_for(chunk) for chunk, _score in retrieved]
 
         return BaselineRagResponse(
@@ -77,6 +83,11 @@ def build_baseline_assistant(
     retriever_backend: str = "lexical",
     index_dir: Path | None = None,
     course_id: str = "guardrails-101",
+    embedding_provider: str = "hashing",
+    embedding_model: str | None = None,
+    allow_remote_models: bool = False,
+    env_file: Path | None = None,
+    answer_generator: AnswerGenerator | None = None,
 ) -> BaselineRagAssistant:
     if retriever_backend == "lexical":
         documents = load_documents(corpus_path)
@@ -89,10 +100,21 @@ def build_baseline_assistant(
     elif retriever_backend == "vector":
         from .vector import VectorRetriever, default_index_path
 
-        retriever = VectorRetriever(index_dir or default_index_path())
+        retriever = VectorRetriever(
+            index_dir or default_index_path(),
+            embedding_provider=embedding_provider,
+            embedding_model=embedding_model,
+            allow_remote_models=allow_remote_models,
+            env_file=env_file,
+        )
     else:
         raise ValueError("retriever_backend must be 'lexical', 'langchain', or 'vector'")
-    return BaselineRagAssistant(retriever, course_id=course_id, retriever_backend=retriever_backend)
+    return BaselineRagAssistant(
+        retriever,
+        course_id=course_id,
+        retriever_backend=retriever_backend,
+        answer_generator=answer_generator,
+    )
 
 
 def synthesize_baseline_answer(chunks: list[Chunk]) -> str:
