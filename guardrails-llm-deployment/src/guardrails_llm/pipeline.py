@@ -73,6 +73,15 @@ class LearningAssistant:
                 classification = self._guard_classifier.classify(question)
                 if classification.label != "safe" and classification.confidence >= 0.65:
                     triggers.append(classification.label)
+                    if classification.label == "unsupported":
+                        triggers.append("ungrounded")
+                        return self._response(
+                            self._guardrail_policy.ungrounded_message,
+                            [],
+                            triggers,
+                            started_at,
+                            [],
+                        )
                     if classification.label in self._guardrail_policy.blocking_triggers:
                         return self._response(
                             self._guardrail_policy.input_block_message,

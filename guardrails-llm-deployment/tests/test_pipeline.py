@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from guardrails_llm.baseline_pipeline import BaselineRagAssistant, build_baseline_assistant
+from guardrails_llm.corpus import chunk_documents, load_documents
 from guardrails_llm.guard_classifier import GuardClassification
 from guardrails_llm.model_config import RemoteModelsNotAllowedError
 from guardrails_llm.pipeline import LearningAssistant, build_assistant
@@ -57,6 +58,24 @@ def test_guardrailed_assistant_uses_classifier_for_ambiguous_risky_prompt() -> N
     assert classifier.calls == 1
     assert not response.citations
     assert "pii" in response.guard_triggers
+
+
+def test_classifier_unsupported_label_abstains_without_retrieval_answer() -> None:
+    classifier = CountingClassifier("unsupported")
+    assistant = LearningAssistant(
+        LexicalRetriever(chunk_documents(load_documents(DATA))),
+        mode="guardrailed",
+        guard_classifier=classifier,
+    )
+
+    response = assistant.answer("What is the private deployment API key?")
+
+    assert classifier.calls == 1
+    assert not response.citations
+    assert not response.retrieved_chunks
+    assert "unsupported" in response.guard_triggers
+    assert "ungrounded" in response.guard_triggers
+    assert "do not have enough course-grounded evidence" in response.answer
 
 
 def test_deterministic_input_guard_short_circuits_classifier() -> None:
