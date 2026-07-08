@@ -29,6 +29,7 @@ def main() -> None:
     query_parser.add_argument("--retriever", choices=["lexical", "langchain", "vector"], default="lexical")
     _add_embedding_args(query_parser)
     _add_generation_args(query_parser)
+    _add_guard_classifier_args(query_parser)
     query_parser.add_argument("--policy", type=Path)
     query_parser.add_argument("--question", required=True)
 
@@ -40,6 +41,7 @@ def main() -> None:
     eval_parser.add_argument("--retriever", choices=["lexical", "langchain", "vector"], default="lexical")
     _add_embedding_args(eval_parser)
     _add_generation_args(eval_parser)
+    _add_guard_classifier_args(eval_parser)
     eval_parser.add_argument("--cases", type=Path, default=Path(__file__).resolve().parents[2] / "data" / "eval_cases.jsonl")
     eval_parser.add_argument("--policy", type=Path)
     eval_parser.add_argument("--judge", choices=["none", "heuristic"], default="none")
@@ -54,6 +56,7 @@ def main() -> None:
     compare_parser.add_argument("--retriever", choices=["lexical", "langchain", "vector"], default="lexical")
     _add_embedding_args(compare_parser)
     _add_generation_args(compare_parser)
+    _add_guard_classifier_args(compare_parser)
     compare_parser.add_argument("--cases", type=Path, default=Path(__file__).resolve().parents[2] / "data" / "eval_cases.jsonl")
     compare_parser.add_argument("--policy", type=Path, default=default_policy_path())
     compare_parser.add_argument("--judge", choices=["none", "heuristic"], default="none")
@@ -88,6 +91,7 @@ def main() -> None:
     visualize_parser.add_argument("--retriever", choices=["lexical", "langchain", "vector"], default="lexical")
     _add_embedding_args(visualize_parser)
     _add_generation_args(visualize_parser)
+    _add_guard_classifier_args(visualize_parser)
     visualize_parser.add_argument("--policy", type=Path)
     visualize_parser.add_argument("--question", required=True)
     visualize_parser.add_argument("--output", type=Path, required=True)
@@ -172,6 +176,8 @@ def main() -> None:
                 env_file=args.env_file,
                 generator=args.generator,
                 answer_model=args.answer_model,
+                guard_classifier=args.guard_classifier,
+                classifier_model=args.classifier_model,
             )
         except (VectorIndexError, RemoteModelsNotAllowedError, MissingModelCredentialError) as exc:
             parser.error(str(exc))
@@ -242,6 +248,8 @@ def main() -> None:
                     env_file=args.env_file,
                     generator=args.generator,
                     answer_model=args.answer_model,
+                    guard_classifier=args.guard_classifier,
+                    classifier_model=args.classifier_model,
                 )
                 comparison_results = run_evaluation(comparison_assistant, cases)
                 comparison_summary = profile | summarize(comparison_results)
@@ -268,6 +276,8 @@ def main() -> None:
             env_file=getattr(args, "env_file", None),
             generator=getattr(args, "generator", "extractive"),
             answer_model=getattr(args, "answer_model", None),
+            guard_classifier=getattr(args, "guard_classifier", "none"),
+            classifier_model=getattr(args, "classifier_model", None),
         )
     except (VectorIndexError, RemoteModelsNotAllowedError, MissingModelCredentialError) as exc:
         parser.error(str(exc))
@@ -301,6 +311,11 @@ def _add_embedding_args(parser: argparse.ArgumentParser) -> None:
 def _add_generation_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--generator", choices=["extractive", "openai"], default="extractive")
     parser.add_argument("--answer-model")
+
+
+def _add_guard_classifier_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--guard-classifier", choices=["none", "openai"], default="none")
+    parser.add_argument("--classifier-model")
 
 
 if __name__ == "__main__":

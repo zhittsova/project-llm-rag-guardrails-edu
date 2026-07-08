@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from openai import OpenAI
 
 from .corpus import Chunk
+from .guard_classifier import GuardClassification
 from .model_config import OpenAIModelConfig, ensure_openai_api_key, ensure_remote_models_allowed
 
 
@@ -42,6 +44,35 @@ class OpenAIAnswerGenerator:
         return _response_text(response)
 
 
+class OpenAIGuardClassifier:
+    def __init__(self, config: OpenAIModelConfig, *, client: Any | None = None) -> None:
+        ensure_remote_models_allowed(config)
+        ensure_openai_api_key(config)
+        self.model_name = config.classifier_model
+        self._client = client or OpenAI()
+
+    def classify(self, text: str) -> GuardClassification:
+        response = self._client.responses.create(
+            model=self.model_name,
+            input=_guard_classifier_prompt(text),
+        )
+        payload = _json_response(response)
+        label = str(payload.get("label", "unsafe_request"))
+        confidence = _float_in_range(payload.get("confidence", 1.0))
+        explanation = str(payload.get("explanation", "")).strip()
+        allowed_labels = {
+            "safe",
+            "prompt_injection",
+            "pii",
+            "academic_integrity",
+            "unsafe_request",
+            "unsupported",
+        }
+        if label not in allowed_labels:
+            label = "unsafe_request"
+        return GuardClassification(label=label, confidence=confidence, explanation=explanation)
+
+
 def _answer_prompt(question: str, chunks: list[Chunk]) -> str:
     context = "\n\n".join(
         f"[{chunk.chunk_id}] {chunk.title}\n{chunk.text}"
@@ -54,6 +85,15 @@ def _answer_prompt(question: str, chunks: list[Chunk]) -> str:
         f"Question:\n{question}\n\n"
         f"Context:\n{context}\n\n"
         "Answer:"
+    )
+
+
+def _guard_classifier_prompt(text: str) -> str:
+    return (
+        "Classify the user request for a course RAG assistant. Return only JSON with "
+        "keys: label, confidence, explanation. Allowed labels: safe, prompt_injection, "
+        "pii, academic_integrity, unsafe_request, unsupported.\n\n"
+        f"User request:\n{text}"
     )
 
 
@@ -75,3 +115,20 @@ def _response_text(response: Any) -> str:
         if texts:
             return "\n".join(texts)
     raise ValueError("OpenAI response did not contain text output")
+
+
+def _json_response(response: Any) -> dict[str, object]:
+    text = _response_text(response)
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError("OpenAI classifier response was not valid JSON") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("OpenAI classifier response must be a JSON object")
+    return payload
+
+
+def _float_in_range(value: object) -> float:
+    if not isinstance(value, int | float):
+        return 1.0
+    return max(0.0, min(1.0, float(value)))

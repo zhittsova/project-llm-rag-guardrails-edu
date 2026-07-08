@@ -32,6 +32,8 @@ def write_rag_visualization(
     env_file: Path | None = None,
     generator: str = "extractive",
     answer_model: str | None = None,
+    guard_classifier: str = "none",
+    classifier_model: str | None = None,
 ) -> VisualizationStats:
     assistant = build_assistant(
         corpus_path,
@@ -46,6 +48,8 @@ def write_rag_visualization(
         env_file=env_file,
         generator=generator,
         answer_model=answer_model,
+        guard_classifier=guard_classifier,
+        classifier_model=classifier_model,
     )
     response = assistant.answer(question)
     chunk_lookup = _chunk_lookup(corpus_path, retriever_backend)

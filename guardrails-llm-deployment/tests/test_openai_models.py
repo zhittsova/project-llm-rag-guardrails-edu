@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from guardrails_llm.corpus import Chunk
 from guardrails_llm.model_config import OpenAIModelConfig
-from guardrails_llm.openai_models import OpenAIAnswerGenerator, OpenAIEmbeddingModel
+from guardrails_llm.openai_models import OpenAIAnswerGenerator, OpenAIEmbeddingModel, OpenAIGuardClassifier
 
 
 class FakeEmbeddingsEndpoint:
@@ -22,18 +24,19 @@ class FakeEmbeddingsEndpoint:
 
 
 class FakeOpenAIClient:
-    def __init__(self) -> None:
+    def __init__(self, *, response_text: str = "RAG combines retrieval with generation.") -> None:
         self.embeddings = FakeEmbeddingsEndpoint()
-        self.responses = FakeResponsesEndpoint()
+        self.responses = FakeResponsesEndpoint(response_text)
 
 
 class FakeResponsesEndpoint:
-    def __init__(self) -> None:
+    def __init__(self, response_text: str) -> None:
         self.calls: list[tuple[str, str]] = []
+        self._response_text = response_text
 
     def create(self, *, model: str, input: str):
         self.calls.append((model, input))
-        return SimpleNamespace(output_text="RAG combines retrieval with generation.")
+        return SimpleNamespace(output_text=self._response_text)
 
 
 def test_openai_embedding_model_uses_configured_model_with_fake_client(tmp_path, monkeypatch) -> None:
@@ -88,3 +91,42 @@ def test_openai_answer_generator_uses_retrieved_context_with_fake_client(tmp_pat
     assert model == "gpt-5.4-mini"
     assert "rag-basics:0" in prompt
     assert "What is RAG?" in prompt
+
+
+def test_openai_guard_classifier_parses_strict_json_with_fake_client(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text("OPENAI_API_KEY=test-key\n", encoding="utf-8")
+    client = FakeOpenAIClient(
+        response_text='{"label":"pii","confidence":0.91,"explanation":"asks for personal records"}'
+    )
+
+    classifier = OpenAIGuardClassifier(
+        OpenAIModelConfig(
+            classifier_model="gpt-5.4-nano",
+            allow_remote_models=True,
+            env_file=env_file,
+        ),
+        client=client,
+    )
+
+    result = classifier.classify("Can I see the class marks?")
+
+    assert result.label == "pii"
+    assert result.confidence == 0.91
+    model, prompt = client.responses.calls[0]
+    assert model == "gpt-5.4-nano"
+    assert "Can I see the class marks?" in prompt
+
+
+def test_openai_guard_classifier_rejects_malformed_json(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text("OPENAI_API_KEY=test-key\n", encoding="utf-8")
+    classifier = OpenAIGuardClassifier(
+        OpenAIModelConfig(allow_remote_models=True, env_file=env_file),
+        client=FakeOpenAIClient(response_text="not json"),
+    )
+
+    with pytest.raises(ValueError, match="valid JSON"):
+        classifier.classify("Can I see the class marks?")

@@ -8,6 +8,7 @@ from typing import Protocol
 from .answering import AnswerGenerator
 from .baseline_pipeline import BaselineRagAssistant, build_baseline_assistant
 from .corpus import Chunk, chunk_documents, load_documents
+from .guard_classifier import GuardClassifier, should_use_model_classifier
 from .guardrail_policy import GuardrailPolicy
 from .guards import input_guard, make_integrity_safe, output_guard, sanitize_untrusted_context
 from .retrieval import LexicalRetriever
@@ -44,6 +45,7 @@ class LearningAssistant:
         retriever_backend: str = "lexical",
         guardrail_policy: GuardrailPolicy | None = None,
         answer_generator: AnswerGenerator | None = None,
+        guard_classifier: GuardClassifier | None = None,
     ) -> None:
         if mode not in {"baseline", "guardrailed"}:
             raise ValueError("mode must be 'baseline' or 'guardrailed'")
@@ -53,6 +55,7 @@ class LearningAssistant:
         self._retriever_backend = retriever_backend
         self._guardrail_policy = guardrail_policy or GuardrailPolicy.default()
         self._answer_generator = answer_generator
+        self._guard_classifier = guard_classifier
 
     def answer(self, question: str) -> AssistantResponse:
         started_at = perf_counter()
@@ -66,6 +69,18 @@ class LearningAssistant:
             triggers.extend(input_result.triggers)
             if not input_result.allowed:
                 return self._response(input_result.message or "Request blocked.", [], triggers, started_at, [])
+            if should_use_model_classifier(question, self._guardrail_policy, triggers) and self._guard_classifier:
+                classification = self._guard_classifier.classify(question)
+                if classification.label != "safe" and classification.confidence >= 0.65:
+                    triggers.append(classification.label)
+                    if classification.label in self._guardrail_policy.blocking_triggers:
+                        return self._response(
+                            self._guardrail_policy.input_block_message,
+                            [],
+                            triggers,
+                            started_at,
+                            [],
+                        )
 
         # Retrieval общий для baseline и guardrailed режимов, но фильтры разные:
         # baseline ищет по всему индексу, guardrailed ограничивает поиск текущим
@@ -142,6 +157,8 @@ def build_assistant(
     env_file: Path | None = None,
     generator: str = "extractive",
     answer_model: str | None = None,
+    guard_classifier: str = "none",
+    classifier_model: str | None = None,
 ) -> BaselineRagAssistant | LearningAssistant:
     answer_generator = _build_answer_generator(
         generator,
@@ -164,6 +181,12 @@ def build_assistant(
 
     # Ниже строится guardrailed assistant. Baseline уже ушел в отдельный
     # baseline_pipeline.py, чтобы его можно было читать без guardrail веток.
+    classifier = _build_guard_classifier(
+        guard_classifier,
+        classifier_model=classifier_model,
+        allow_remote_models=allow_remote_models,
+        env_file=env_file,
+    )
     if retriever_backend == "lexical":
         documents = load_documents(corpus_path)
         retriever = LexicalRetriever(chunk_documents(documents))
@@ -191,6 +214,7 @@ def build_assistant(
         retriever_backend=retriever_backend,
         guardrail_policy=guardrail_policy,
         answer_generator=answer_generator,
+        guard_classifier=classifier,
     )
 
 
@@ -215,6 +239,29 @@ def _build_answer_generator(
             )
         )
     raise ValueError("generator must be 'extractive' or 'openai'")
+
+
+def _build_guard_classifier(
+    guard_classifier: str,
+    *,
+    classifier_model: str | None = None,
+    allow_remote_models: bool = False,
+    env_file: Path | None = None,
+) -> GuardClassifier | None:
+    if guard_classifier == "none":
+        return None
+    if guard_classifier == "openai":
+        from .model_config import DEFAULT_OPENAI_CLASSIFIER_MODEL, OpenAIModelConfig
+        from .openai_models import OpenAIGuardClassifier
+
+        return OpenAIGuardClassifier(
+            OpenAIModelConfig(
+                classifier_model=classifier_model or DEFAULT_OPENAI_CLASSIFIER_MODEL,
+                allow_remote_models=allow_remote_models,
+                env_file=env_file,
+            )
+        )
+    raise ValueError("guard_classifier must be 'none' or 'openai'")
 
 
 def synthesize_answer(question: str, chunks: list[Chunk]) -> str:

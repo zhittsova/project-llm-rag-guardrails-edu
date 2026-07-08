@@ -42,14 +42,17 @@ class SimilarityRule:
     examples: tuple[str, ...]
     threshold: float
 
-    def matches(self, text: str, embedder: HashingEmbedder) -> bool:
+    def score(self, text: str, embedder: HashingEmbedder) -> float:
         if not text.strip() or not self.examples:
-            return False
+            return 0.0
         query_vector = embedder.embed(text)
-        return any(
-            cosine_similarity(query_vector, embedder.embed(example)) >= self.threshold
+        return max(
+            cosine_similarity(query_vector, embedder.embed(example))
             for example in self.examples
         )
+
+    def matches(self, text: str, embedder: HashingEmbedder) -> bool:
+        return self.score(text, embedder) >= self.threshold
 
 
 @dataclass(frozen=True)
@@ -79,6 +82,12 @@ class GuardrailPolicy:
             if rule.matches(text, self.similarity_embedder)
         )
         return _unique(triggers)
+
+    def has_near_similarity_trigger(self, text: str, *, margin: float = 0.08) -> bool:
+        return any(
+            rule.threshold - margin <= rule.score(text, self.similarity_embedder) < rule.threshold
+            for rule in self.input_similarity_rules
+        )
 
     def output_triggers(self, text: str) -> list[str]:
         return _unique([rule.trigger for rule in self.output_rules if rule.matches(text)])
