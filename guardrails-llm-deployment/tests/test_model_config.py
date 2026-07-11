@@ -11,11 +11,15 @@ from guardrails_llm.model_config import (
     ensure_openai_api_key,
     ensure_remote_models_allowed,
     openai_config_summary,
+    resolve_openai_base_url,
+    should_use_chat_completions,
 )
 
 
 def test_openai_config_summary_reports_key_presence_without_secret(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENAI_API_URL", raising=False)
     env_file = tmp_path / ".env"
     env_file.write_text("OPENAI_API_KEY=secret-test-value\n", encoding="utf-8")
 
@@ -24,6 +28,59 @@ def test_openai_config_summary_reports_key_presence_without_secret(tmp_path, mon
 
     assert summary["api_key_present"] is True
     assert "secret-test-value" not in rendered
+
+
+def test_openai_config_summary_reports_api_url_alias_without_key(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENAI_API_URL", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "OPENAI_API_KEY=secret-test-value",
+                "OPENAI_API_URL=https://learning.example.edu/litellm/v1",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    summary = openai_config_summary(env_file)
+    rendered = json.dumps(summary)
+
+    assert summary["base_url_present"] is True
+    assert summary["base_url_source"] == "OPENAI_API_URL"
+    assert summary["base_url_host"] == "learning.example.edu"
+    assert "secret-test-value" not in rendered
+
+
+def test_explicit_openai_base_url_wins_over_api_url_alias(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENAI_API_URL", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "OPENAI_BASE_URL=https://official.example.com/v1",
+                "OPENAI_API_URL=https://alias.example.com/v1",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    resolved = resolve_openai_base_url(OpenAIModelConfig(env_file=env_file))
+
+    assert resolved == "https://official.example.com/v1"
+
+
+def test_openai_compatible_base_url_uses_chat_completions(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENAI_API_URL", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text("OPENAI_API_URL=https://learning.example.edu/litellm/v1", encoding="utf-8")
+
+    assert should_use_chat_completions(OpenAIModelConfig(env_file=env_file)) is True
 
 
 def test_remote_model_calls_require_explicit_allow_flag() -> None:

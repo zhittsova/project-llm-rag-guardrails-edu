@@ -9,7 +9,13 @@ from .corpus import Chunk
 from .evaluation import EvalCase, EvalResult
 from .guard_classifier import GuardClassification
 from .judging import JudgeResult
-from .model_config import OpenAIModelConfig, ensure_openai_api_key, ensure_remote_models_allowed
+from .model_config import (
+    OpenAIModelConfig,
+    ensure_openai_api_key,
+    ensure_remote_models_allowed,
+    openai_client_kwargs,
+    should_use_chat_completions,
+)
 
 
 class OpenAIEmbeddingModel:
@@ -17,7 +23,7 @@ class OpenAIEmbeddingModel:
         ensure_remote_models_allowed(config)
         ensure_openai_api_key(config)
         self.model_name = config.embedding_model
-        self._client = client or OpenAI()
+        self._client = client or OpenAI(**openai_client_kwargs(config))
 
     def embed(self, text: str) -> list[float]:
         return self.embed_many([text])[0]
@@ -34,14 +40,23 @@ class OpenAIAnswerGenerator:
         ensure_remote_models_allowed(config)
         ensure_openai_api_key(config)
         self.model_name = config.answer_model
-        self._client = client or OpenAI()
+        self._client = client or OpenAI(**openai_client_kwargs(config))
+        self._use_chat_completions = should_use_chat_completions(config)
 
     def generate(self, question: str, chunks: list[Chunk]) -> str:
         if not chunks:
             return "I do not know based on the available course material."
+        prompt = _answer_prompt(question, chunks)
+        if self._use_chat_completions:
+            response = self._client.chat.completions.create(
+                model=self.model_name,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0,
+            )
+            return _chat_response_text(response)
         response = self._client.responses.create(
             model=self.model_name,
-            input=_answer_prompt(question, chunks),
+            input=prompt,
             text={"verbosity": "low"},
         )
         return _response_text(response)
@@ -52,16 +67,30 @@ class OpenAIGuardClassifier:
         ensure_remote_models_allowed(config)
         ensure_openai_api_key(config)
         self.model_name = config.classifier_model
-        self._client = client or OpenAI()
+        self._client = client or OpenAI(**openai_client_kwargs(config))
+        self._use_chat_completions = should_use_chat_completions(config)
 
     def classify(self, text: str) -> GuardClassification:
         try:
-            response = self._client.responses.create(
-                model=self.model_name,
-                input=_guard_classifier_prompt(text),
-                text=_json_schema_text_config("guard_classification", GUARD_CLASSIFIER_SCHEMA),
-            )
-            payload = _json_response(response, "OpenAI guard classifier")
+            prompt = _guard_classifier_prompt(text)
+            if self._use_chat_completions:
+                response = self._client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[{"role": "user", "content": prompt}],
+                    response_format={"type": "json_object"},
+                    temperature=0,
+                )
+                payload = _json_from_text(
+                    _chat_response_text(response),
+                    "OpenAI guard classifier",
+                )
+            else:
+                response = self._client.responses.create(
+                    model=self.model_name,
+                    input=prompt,
+                    text=_json_schema_text_config("guard_classification", GUARD_CLASSIFIER_SCHEMA),
+                )
+                payload = _json_response(response, "OpenAI guard classifier")
             label = str(payload.get("label", "unsafe_request"))
             confidence = _float_in_range(payload.get("confidence", 1.0), default=1.0)
             explanation = str(payload.get("explanation", "")).strip()
@@ -89,16 +118,27 @@ class OpenAIJudge:
         ensure_remote_models_allowed(config)
         ensure_openai_api_key(config)
         self.model_name = config.judge_model
-        self._client = client or OpenAI()
+        self._client = client or OpenAI(**openai_client_kwargs(config))
+        self._use_chat_completions = should_use_chat_completions(config)
 
     def judge(self, case: EvalCase, result: EvalResult) -> JudgeResult:
         try:
-            response = self._client.responses.create(
-                model=self.model_name,
-                input=_judge_prompt(case, result),
-                text=_json_schema_text_config("guardrail_judgment", JUDGE_SCHEMA),
-            )
-            payload = _json_response(response, "OpenAI judge")
+            prompt = _judge_prompt(case, result)
+            if self._use_chat_completions:
+                response = self._client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[{"role": "user", "content": prompt}],
+                    response_format={"type": "json_object"},
+                    temperature=0,
+                )
+                payload = _json_from_text(_chat_response_text(response), "OpenAI judge")
+            else:
+                response = self._client.responses.create(
+                    model=self.model_name,
+                    input=prompt,
+                    text=_json_schema_text_config("guardrail_judgment", JUDGE_SCHEMA),
+                )
+                payload = _json_response(response, "OpenAI judge")
             notes = payload.get("notes", [])
             if not isinstance(notes, list) or not all(isinstance(note, str) for note in notes):
                 notes = ["invalid_judge_notes"]
@@ -192,7 +232,10 @@ def _response_text(response: Any) -> str:
 
 
 def _json_response(response: Any, label: str) -> dict[str, object]:
-    text = _response_text(response)
+    return _json_from_text(_response_text(response), label)
+
+
+def _json_from_text(text: str, label: str) -> dict[str, object]:
     try:
         payload = json.loads(text)
     except json.JSONDecodeError as exc:
@@ -200,6 +243,16 @@ def _json_response(response: Any, label: str) -> dict[str, object]:
     if not isinstance(payload, dict):
         raise ValueError(f"{label} response must be a JSON object")
     return payload
+
+
+def _chat_response_text(response: Any) -> str:
+    choices = getattr(response, "choices", None)
+    if isinstance(choices, list) and choices:
+        message = getattr(choices[0], "message", None)
+        content = getattr(message, "content", None)
+        if isinstance(content, str) and content.strip():
+            return content.strip()
+    raise ValueError("OpenAI chat response did not contain text output")
 
 
 def _float_in_range(value: object, *, default: float) -> float:
