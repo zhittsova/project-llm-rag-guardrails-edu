@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .embeddings import HashingEmbedder, cosine_similarity
+from .guard_text import fuzzy_phrase_matches, guard_text_candidates, normalize_guard_text
 
 
 DEFAULT_INPUT_BLOCK_MESSAGE = (
@@ -45,9 +46,9 @@ class SimilarityRule:
     def score(self, text: str, embedder: HashingEmbedder) -> float:
         if not text.strip() or not self.examples:
             return 0.0
-        query_vector = embedder.embed(text)
+        query_vector = embedder.embed(normalize_guard_text(text))
         return max(
-            cosine_similarity(query_vector, embedder.embed(example))
+            cosine_similarity(query_vector, embedder.embed(normalize_guard_text(example)))
             for example in self.examples
         )
 
@@ -56,11 +57,27 @@ class SimilarityRule:
 
 
 @dataclass(frozen=True)
+class FuzzyRule:
+    trigger: str
+    phrases: tuple[str, ...]
+    threshold: float
+
+    def matches(self, text: str) -> bool:
+        return any(
+            fuzzy_phrase_matches(text, phrase, threshold=self.threshold)
+            for phrase in self.phrases
+        )
+
+
+@dataclass(frozen=True)
 class GuardrailPolicy:
     input_rules: tuple[RegexRule, ...] = field(default_factory=tuple)
     input_similarity_rules: tuple[SimilarityRule, ...] = field(default_factory=tuple)
+    input_fuzzy_rules: tuple[FuzzyRule, ...] = field(default_factory=tuple)
     output_rules: tuple[RegexRule, ...] = field(default_factory=tuple)
+    output_fuzzy_rules: tuple[FuzzyRule, ...] = field(default_factory=tuple)
     context_rules: tuple[RegexRule, ...] = field(default_factory=tuple)
+    context_fuzzy_rules: tuple[FuzzyRule, ...] = field(default_factory=tuple)
     blocking_triggers: frozenset[str] = frozenset({"prompt_injection", "pii", "unsafe_request"})
     allowed_visibility: frozenset[str] = frozenset({"public"})
     require_citations: bool = True
@@ -75,12 +92,18 @@ class GuardrailPolicy:
         return DEFAULT_POLICY
 
     def input_triggers(self, text: str) -> list[str]:
-        triggers = [rule.trigger for rule in self.input_rules if rule.matches(text)]
+        candidates = guard_text_candidates(text)
+        triggers = [
+            rule.trigger
+            for rule in self.input_rules
+            if any(rule.matches(candidate) for candidate in candidates)
+        ]
         triggers.extend(
             rule.trigger
             for rule in self.input_similarity_rules
             if rule.matches(text, self.similarity_embedder)
         )
+        triggers.extend(rule.trigger for rule in self.input_fuzzy_rules if rule.matches(text))
         return _unique(triggers)
 
     def has_near_similarity_trigger(self, text: str, *, margin: float = 0.08) -> bool:
@@ -90,10 +113,21 @@ class GuardrailPolicy:
         )
 
     def output_triggers(self, text: str) -> list[str]:
-        return _unique([rule.trigger for rule in self.output_rules if rule.matches(text)])
+        candidates = guard_text_candidates(text)
+        triggers = [
+            rule.trigger
+            for rule in self.output_rules
+            if any(rule.matches(candidate) for candidate in candidates)
+        ]
+        triggers.extend(rule.trigger for rule in self.output_fuzzy_rules if rule.matches(text))
+        return _unique(triggers)
 
     def has_context_injection(self, text: str) -> bool:
-        return any(rule.matches(text) for rule in self.context_rules)
+        candidates = guard_text_candidates(text)
+        return any(
+            any(rule.matches(candidate) for candidate in candidates)
+            for rule in self.context_rules
+        ) or any(rule.matches(text) for rule in self.context_fuzzy_rules)
 
 
 def default_policy_path() -> Path:
@@ -115,8 +149,11 @@ def load_guardrail_policy(path: Path) -> GuardrailPolicy:
         input_rules=base.input_rules + _regex_rules(input_section, "input.rules"),
         input_similarity_rules=base.input_similarity_rules
         + _similarity_rules(input_section, "input.similarity_rules"),
+        input_fuzzy_rules=base.input_fuzzy_rules + _fuzzy_rules(input_section, "input.fuzzy_rules"),
         output_rules=base.output_rules + _regex_rules(output_section, "output.rules"),
+        output_fuzzy_rules=base.output_fuzzy_rules + _fuzzy_rules(output_section, "output.fuzzy_rules"),
         context_rules=base.context_rules + _regex_rules(context_section, "context.rules"),
+        context_fuzzy_rules=base.context_fuzzy_rules + _fuzzy_rules(context_section, "context.fuzzy_rules"),
         blocking_triggers=frozenset(
             _string_list(input_section.get("blocking_triggers", sorted(base.blocking_triggers)), "input.blocking_triggers")
         ),
@@ -171,6 +208,22 @@ def _similarity_rules(section: dict[str, object], label: str) -> tuple[Similarit
         examples = tuple(_string_list(rule.get("examples"), f"{label}[{index}].examples"))
         threshold = _as_float(rule.get("threshold", 0.45), f"{label}[{index}].threshold")
         rules.append(SimilarityRule(trigger=trigger, examples=examples, threshold=threshold))
+    return tuple(rules)
+
+
+def _fuzzy_rules(section: dict[str, object], label: str) -> tuple[FuzzyRule, ...]:
+    raw_rules = section.get("fuzzy_rules", [])
+    if not isinstance(raw_rules, list):
+        raise ValueError(f"{label} must be a list")
+    rules = []
+    for index, raw_rule in enumerate(raw_rules):
+        rule = _as_table(raw_rule, f"{label}[{index}]")
+        trigger = _as_string(rule.get("trigger"), f"{label}[{index}].trigger")
+        phrases = tuple(_string_list(rule.get("phrases"), f"{label}[{index}].phrases"))
+        threshold = _as_float(rule.get("threshold", 0.88), f"{label}[{index}].threshold")
+        if not 0.0 < threshold <= 1.0:
+            raise ValueError(f"{label}[{index}].threshold must be > 0 and <= 1")
+        rules.append(FuzzyRule(trigger=trigger, phrases=phrases, threshold=threshold))
     return tuple(rules)
 
 
@@ -247,6 +300,61 @@ DEFAULT_POLICY = GuardrailPolicy(
             ],
         ),
     ),
+    input_fuzzy_rules=(
+        FuzzyRule(
+            trigger="prompt_injection",
+            threshold=0.86,
+            phrases=(
+                "ignore previous instructions",
+                "ignore system instructions",
+                "disregard instructions",
+                "reveal hidden prompt",
+                "reveal system prompt",
+                "show hidden prompt",
+                "show developer message",
+                "print hidden prompt",
+                "act as a different assistant",
+            ),
+        ),
+        FuzzyRule(
+            trigger="pii",
+            threshold=0.88,
+            phrases=(
+                "student emails",
+                "student email addresses",
+                "student grades",
+                "student ids",
+                "student accommodations",
+                "class marks",
+                "private roster",
+                "confidential records",
+                "internal student data",
+            ),
+        ),
+        FuzzyRule(
+            trigger="academic_integrity",
+            threshold=0.86,
+            phrases=(
+                "final answer",
+                "full solution",
+                "answer key",
+                "complete my assignment",
+                "complete graded assignment",
+                "solve my homework",
+                "write my exam response",
+                "final submission",
+            ),
+        ),
+        FuzzyRule(
+            trigger="unsafe_request",
+            threshold=0.9,
+            phrases=(
+                "build malware",
+                "make a bomb",
+                "build a weapon",
+            ),
+        ),
+    ),
     output_rules=(
         RegexRule.from_strings(
             "prompt_injection_output",
@@ -274,6 +382,19 @@ DEFAULT_POLICY = GuardrailPolicy(
             ],
         ),
     ),
+    output_fuzzy_rules=(
+        FuzzyRule(
+            trigger="prompt_injection_output",
+            threshold=0.86,
+            phrases=(
+                "ignore previous instructions",
+                "reveal hidden prompt",
+                "reveal system prompt",
+                "hidden system prompt",
+                "developer message",
+            ),
+        ),
+    ),
     context_rules=(
         RegexRule.from_strings(
             "prompt_injection",
@@ -284,6 +405,21 @@ DEFAULT_POLICY = GuardrailPolicy(
                 r"\byou are now\b",
                 r"<\s*script\b",
             ],
+        ),
+    ),
+    context_fuzzy_rules=(
+        FuzzyRule(
+            trigger="prompt_injection",
+            threshold=0.86,
+            phrases=(
+                "ignore previous instructions",
+                "ignore system instructions",
+                "disregard instructions",
+                "reveal hidden prompt",
+                "reveal system prompt",
+                "hidden system prompt",
+                "developer message",
+            ),
         ),
     ),
 )
