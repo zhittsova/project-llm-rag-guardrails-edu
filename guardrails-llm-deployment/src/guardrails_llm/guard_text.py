@@ -82,10 +82,6 @@ def _candidate_starts(
     anchor_indexes = [index for index, token in enumerate(tokens) if token in anchor_tokens]
 
     if not anchor_indexes:
-        if len(tokens) > 24:
-            return starts
-        for window_size in starts:
-            starts[window_size].update(range(0, len(tokens) - window_size + 1))
         return starts
 
     for index in anchor_indexes:

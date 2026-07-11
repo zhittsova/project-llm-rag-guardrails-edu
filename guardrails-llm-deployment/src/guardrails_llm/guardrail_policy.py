@@ -338,6 +338,7 @@ DEFAULT_POLICY = GuardrailPolicy(
                 "final answer",
                 "full solution",
                 "answer key",
+                "graded assignment",
                 "complete my assignment",
                 "complete graded assignment",
                 "solve my homework",
