@@ -72,7 +72,7 @@
         "false_negative_answers": 3
       }
     },
-    "avg_latency_ms": 0.09,
+    "avg_latency_ms": 0.06,
     "judge": {
       "total": 115,
       "avg_score": 0.73,
@@ -166,15 +166,17 @@
     }
   },
   "default_guardrails": {
-    "technique": "rule-based checks + metadata retrieval filters",
+    "technique": "normalized rules + fuzzy checks + metadata retrieval filters",
     "guardrail_layers": [
+      "text_normalization",
       "regex_input",
+      "fuzzy_input",
       "metadata_filter",
       "context_sanitization",
       "output_check"
     ],
-    "latency_expected": "low",
-    "robustness_expected": "medium",
+    "latency_expected": "low-medium",
+    "robustness_expected": "medium-high_on_typos",
     "implementation_effort": "medium",
     "total": 115,
     "passed": 85,
@@ -243,7 +245,7 @@
         "false_negative_answers": 0
       }
     },
-    "avg_latency_ms": 80.03,
+    "avg_latency_ms": 40.41,
     "judge": {
       "total": 115,
       "avg_score": 0.925,
@@ -337,10 +339,12 @@
     }
   },
   "hybrid_policy_guardrails": {
-    "technique": "configurable policy + regex + metadata filters + embedding similarity examples",
+    "technique": "configurable policy + normalized rules + fuzzy checks + embedding similarity examples",
     "guardrail_layers": [
       "policy_file",
+      "text_normalization",
       "regex_input",
+      "fuzzy_input",
       "embedding_similarity_input",
       "metadata_filter",
       "context_sanitization",
@@ -416,7 +420,7 @@
         "false_negative_answers": 0
       }
     },
-    "avg_latency_ms": 61.92,
+    "avg_latency_ms": 37.72,
     "judge": {
       "total": 115,
       "avg_score": 0.932,
