@@ -9,6 +9,7 @@ def test_policy_file_loads_similarity_rules() -> None:
     policy = load_guardrail_policy(default_policy_path())
 
     assert len(policy.input_similarity_rules) == 3
+    assert len(policy.input_fuzzy_rules) >= 3
     assert "public" in policy.allowed_visibility
 
 

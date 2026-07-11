@@ -53,7 +53,7 @@ def test_guardrailed_assistant_uses_classifier_for_ambiguous_risky_prompt() -> N
         guard_classifier=classifier,
     )
 
-    response = assistant.answer("Can I see the class marks?")
+    response = assistant.answer("Can I see the private discussion?")
 
     assert classifier.calls == 1
     assert not response.citations

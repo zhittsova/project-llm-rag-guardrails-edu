@@ -1,0 +1,516 @@
+{
+  "baseline": {
+    "technique": "RAG without guardrails",
+    "guardrail_layers": [],
+    "latency_expected": "lowest",
+    "robustness_expected": "lowest",
+    "implementation_effort": "low",
+    "total": 115,
+    "passed": 24,
+    "pass_rate": 0.209,
+    "false_positive_refusals": 2,
+    "false_negative_answers": 59,
+    "by_category": {
+      "normal_course": {
+        "total": 15,
+        "passed": 12,
+        "false_positive_refusals": 1,
+        "false_negative_answers": 0
+      },
+      "borderline_tutoring": {
+        "total": 12,
+        "passed": 11,
+        "false_positive_refusals": 1,
+        "false_negative_answers": 0
+      },
+      "prompt_injection_direct": {
+        "total": 15,
+        "passed": 0,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 14
+      },
+      "prompt_injection_paraphrase": {
+        "total": 12,
+        "passed": 0,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 11
+      },
+      "privacy_pii": {
+        "total": 15,
+        "passed": 0,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 15
+      },
+      "retrieval_access": {
+        "total": 10,
+        "passed": 0,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 9
+      },
+      "academic_integrity": {
+        "total": 15,
+        "passed": 0,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      },
+      "unsupported_abstention": {
+        "total": 10,
+        "passed": 0,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 7
+      },
+      "indirect_prompt_injection": {
+        "total": 6,
+        "passed": 1,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      },
+      "robust_obfuscation": {
+        "total": 5,
+        "passed": 0,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 3
+      }
+    },
+    "avg_latency_ms": 0.06,
+    "judge": {
+      "total": 115,
+      "avg_score": 0.73,
+      "grounded_rate": 0.47,
+      "privacy_safe_rate": 1.0,
+      "injection_safe_rate": 0.713,
+      "integrity_safe_rate": 1.0,
+      "refusal_appropriate_rate": 0.47,
+      "by_category": {
+        "normal_course": {
+          "total": 15,
+          "grounded": 14,
+          "privacy_safe": 15,
+          "injection_safe": 10,
+          "integrity_safe": 15,
+          "refusal_appropriate": 14
+        },
+        "borderline_tutoring": {
+          "total": 12,
+          "grounded": 11,
+          "privacy_safe": 12,
+          "injection_safe": 8,
+          "integrity_safe": 12,
+          "refusal_appropriate": 11
+        },
+        "prompt_injection_direct": {
+          "total": 15,
+          "grounded": 1,
+          "privacy_safe": 15,
+          "injection_safe": 9,
+          "integrity_safe": 15,
+          "refusal_appropriate": 1
+        },
+        "prompt_injection_paraphrase": {
+          "total": 12,
+          "grounded": 1,
+          "privacy_safe": 12,
+          "injection_safe": 9,
+          "integrity_safe": 12,
+          "refusal_appropriate": 1
+        },
+        "privacy_pii": {
+          "total": 15,
+          "grounded": 0,
+          "privacy_safe": 15,
+          "injection_safe": 10,
+          "integrity_safe": 15,
+          "refusal_appropriate": 0
+        },
+        "retrieval_access": {
+          "total": 10,
+          "grounded": 1,
+          "privacy_safe": 10,
+          "injection_safe": 9,
+          "integrity_safe": 10,
+          "refusal_appropriate": 1
+        },
+        "academic_integrity": {
+          "total": 15,
+          "grounded": 15,
+          "privacy_safe": 15,
+          "injection_safe": 14,
+          "integrity_safe": 15,
+          "refusal_appropriate": 15
+        },
+        "unsupported_abstention": {
+          "total": 10,
+          "grounded": 3,
+          "privacy_safe": 10,
+          "injection_safe": 8,
+          "integrity_safe": 10,
+          "refusal_appropriate": 3
+        },
+        "indirect_prompt_injection": {
+          "total": 6,
+          "grounded": 6,
+          "privacy_safe": 6,
+          "injection_safe": 1,
+          "integrity_safe": 6,
+          "refusal_appropriate": 6
+        },
+        "robust_obfuscation": {
+          "total": 5,
+          "grounded": 2,
+          "privacy_safe": 5,
+          "injection_safe": 4,
+          "integrity_safe": 5,
+          "refusal_appropriate": 2
+        }
+      }
+    }
+  },
+  "default_guardrails": {
+    "technique": "normalized rules + fuzzy checks + metadata retrieval filters",
+    "guardrail_layers": [
+      "text_normalization",
+      "regex_input",
+      "fuzzy_input",
+      "metadata_filter",
+      "context_sanitization",
+      "output_check"
+    ],
+    "latency_expected": "low-medium",
+    "robustness_expected": "medium-high_on_typos",
+    "implementation_effort": "medium",
+    "total": 115,
+    "passed": 85,
+    "pass_rate": 0.739,
+    "false_positive_refusals": 2,
+    "false_negative_answers": 19,
+    "by_category": {
+      "normal_course": {
+        "total": 15,
+        "passed": 13,
+        "false_positive_refusals": 1,
+        "false_negative_answers": 0
+      },
+      "borderline_tutoring": {
+        "total": 12,
+        "passed": 11,
+        "false_positive_refusals": 1,
+        "false_negative_answers": 0
+      },
+      "prompt_injection_direct": {
+        "total": 15,
+        "passed": 13,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      },
+      "prompt_injection_paraphrase": {
+        "total": 12,
+        "passed": 1,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 10
+      },
+      "privacy_pii": {
+        "total": 15,
+        "passed": 15,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      },
+      "retrieval_access": {
+        "total": 10,
+        "passed": 5,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 4
+      },
+      "academic_integrity": {
+        "total": 15,
+        "passed": 13,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      },
+      "unsupported_abstention": {
+        "total": 10,
+        "passed": 3,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 5
+      },
+      "indirect_prompt_injection": {
+        "total": 6,
+        "passed": 6,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      },
+      "robust_obfuscation": {
+        "total": 5,
+        "passed": 5,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      }
+    },
+    "avg_latency_ms": 40.41,
+    "judge": {
+      "total": 115,
+      "avg_score": 0.925,
+      "grounded_rate": 0.817,
+      "privacy_safe_rate": 1.0,
+      "injection_safe_rate": 0.991,
+      "integrity_safe_rate": 1.0,
+      "refusal_appropriate_rate": 0.817,
+      "by_category": {
+        "normal_course": {
+          "total": 15,
+          "grounded": 14,
+          "privacy_safe": 15,
+          "injection_safe": 14,
+          "integrity_safe": 15,
+          "refusal_appropriate": 14
+        },
+        "borderline_tutoring": {
+          "total": 12,
+          "grounded": 11,
+          "privacy_safe": 12,
+          "injection_safe": 12,
+          "integrity_safe": 12,
+          "refusal_appropriate": 11
+        },
+        "prompt_injection_direct": {
+          "total": 15,
+          "grounded": 15,
+          "privacy_safe": 15,
+          "injection_safe": 15,
+          "integrity_safe": 15,
+          "refusal_appropriate": 15
+        },
+        "prompt_injection_paraphrase": {
+          "total": 12,
+          "grounded": 2,
+          "privacy_safe": 12,
+          "injection_safe": 12,
+          "integrity_safe": 12,
+          "refusal_appropriate": 2
+        },
+        "privacy_pii": {
+          "total": 15,
+          "grounded": 15,
+          "privacy_safe": 15,
+          "injection_safe": 15,
+          "integrity_safe": 15,
+          "refusal_appropriate": 15
+        },
+        "retrieval_access": {
+          "total": 10,
+          "grounded": 6,
+          "privacy_safe": 10,
+          "injection_safe": 10,
+          "integrity_safe": 10,
+          "refusal_appropriate": 6
+        },
+        "academic_integrity": {
+          "total": 15,
+          "grounded": 15,
+          "privacy_safe": 15,
+          "injection_safe": 15,
+          "integrity_safe": 15,
+          "refusal_appropriate": 15
+        },
+        "unsupported_abstention": {
+          "total": 10,
+          "grounded": 5,
+          "privacy_safe": 10,
+          "injection_safe": 10,
+          "integrity_safe": 10,
+          "refusal_appropriate": 5
+        },
+        "indirect_prompt_injection": {
+          "total": 6,
+          "grounded": 6,
+          "privacy_safe": 6,
+          "injection_safe": 6,
+          "integrity_safe": 6,
+          "refusal_appropriate": 6
+        },
+        "robust_obfuscation": {
+          "total": 5,
+          "grounded": 5,
+          "privacy_safe": 5,
+          "injection_safe": 5,
+          "integrity_safe": 5,
+          "refusal_appropriate": 5
+        }
+      }
+    }
+  },
+  "hybrid_policy_guardrails": {
+    "technique": "configurable policy + normalized rules + fuzzy checks + embedding similarity examples",
+    "guardrail_layers": [
+      "policy_file",
+      "text_normalization",
+      "regex_input",
+      "fuzzy_input",
+      "embedding_similarity_input",
+      "metadata_filter",
+      "context_sanitization",
+      "output_check"
+    ],
+    "latency_expected": "low-medium",
+    "robustness_expected": "medium-high",
+    "implementation_effort": "medium-high",
+    "total": 115,
+    "passed": 89,
+    "pass_rate": 0.774,
+    "false_positive_refusals": 2,
+    "false_negative_answers": 17,
+    "by_category": {
+      "normal_course": {
+        "total": 15,
+        "passed": 13,
+        "false_positive_refusals": 1,
+        "false_negative_answers": 0
+      },
+      "borderline_tutoring": {
+        "total": 12,
+        "passed": 11,
+        "false_positive_refusals": 1,
+        "false_negative_answers": 0
+      },
+      "prompt_injection_direct": {
+        "total": 15,
+        "passed": 14,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      },
+      "prompt_injection_paraphrase": {
+        "total": 12,
+        "passed": 3,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 8
+      },
+      "privacy_pii": {
+        "total": 15,
+        "passed": 15,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      },
+      "retrieval_access": {
+        "total": 10,
+        "passed": 5,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 4
+      },
+      "academic_integrity": {
+        "total": 15,
+        "passed": 14,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      },
+      "unsupported_abstention": {
+        "total": 10,
+        "passed": 3,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 5
+      },
+      "indirect_prompt_injection": {
+        "total": 6,
+        "passed": 6,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      },
+      "robust_obfuscation": {
+        "total": 5,
+        "passed": 5,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      }
+    },
+    "avg_latency_ms": 37.72,
+    "judge": {
+      "total": 115,
+      "avg_score": 0.932,
+      "grounded_rate": 0.835,
+      "privacy_safe_rate": 1.0,
+      "injection_safe_rate": 0.991,
+      "integrity_safe_rate": 1.0,
+      "refusal_appropriate_rate": 0.835,
+      "by_category": {
+        "normal_course": {
+          "total": 15,
+          "grounded": 14,
+          "privacy_safe": 15,
+          "injection_safe": 14,
+          "integrity_safe": 15,
+          "refusal_appropriate": 14
+        },
+        "borderline_tutoring": {
+          "total": 12,
+          "grounded": 11,
+          "privacy_safe": 12,
+          "injection_safe": 12,
+          "integrity_safe": 12,
+          "refusal_appropriate": 11
+        },
+        "prompt_injection_direct": {
+          "total": 15,
+          "grounded": 15,
+          "privacy_safe": 15,
+          "injection_safe": 15,
+          "integrity_safe": 15,
+          "refusal_appropriate": 15
+        },
+        "prompt_injection_paraphrase": {
+          "total": 12,
+          "grounded": 4,
+          "privacy_safe": 12,
+          "injection_safe": 12,
+          "integrity_safe": 12,
+          "refusal_appropriate": 4
+        },
+        "privacy_pii": {
+          "total": 15,
+          "grounded": 15,
+          "privacy_safe": 15,
+          "injection_safe": 15,
+          "integrity_safe": 15,
+          "refusal_appropriate": 15
+        },
+        "retrieval_access": {
+          "total": 10,
+          "grounded": 6,
+          "privacy_safe": 10,
+          "injection_safe": 10,
+          "integrity_safe": 10,
+          "refusal_appropriate": 6
+        },
+        "academic_integrity": {
+          "total": 15,
+          "grounded": 15,
+          "privacy_safe": 15,
+          "injection_safe": 15,
+          "integrity_safe": 15,
+          "refusal_appropriate": 15
+        },
+        "unsupported_abstention": {
+          "total": 10,
+          "grounded": 5,
+          "privacy_safe": 10,
+          "injection_safe": 10,
+          "integrity_safe": 10,
+          "refusal_appropriate": 5
+        },
+        "indirect_prompt_injection": {
+          "total": 6,
+          "grounded": 6,
+          "privacy_safe": 6,
+          "injection_safe": 6,
+          "integrity_safe": 6,
+          "refusal_appropriate": 6
+        },
+        "robust_obfuscation": {
+          "total": 5,
+          "grounded": 5,
+          "privacy_safe": 5,
+          "injection_safe": 5,
+          "integrity_safe": 5,
+          "refusal_appropriate": 5
+        }
+      }
+    }
+  }
+}
