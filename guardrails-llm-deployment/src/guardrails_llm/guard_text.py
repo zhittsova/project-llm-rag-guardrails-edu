@@ -55,17 +55,46 @@ def fuzzy_phrase_matches(text: str, phrase: str, *, threshold: float) -> bool:
         return True
 
     tokens = normalized_text.split()
-    phrase_token_count = len(normalized_phrase.split())
+    phrase_tokens = normalized_phrase.split()
+    phrase_token_count = len(phrase_tokens)
     min_window = max(1, phrase_token_count - 1)
     max_window = min(len(tokens), phrase_token_count + 6)
+    starts = _candidate_starts(tokens, phrase_tokens, min_window, max_window)
     for window_size in range(min_window, max_window + 1):
-        for start in range(0, len(tokens) - window_size + 1):
+        for start in starts[window_size]:
             candidate = " ".join(tokens[start : start + window_size])
             if _similarity(candidate, normalized_phrase) >= threshold:
                 return True
-            if _similarity(compact_guard_text(candidate), compact_phrase) >= threshold:
+            compact_candidate = "".join(candidate.split())
+            if _similarity(compact_candidate, compact_phrase) >= threshold:
                 return True
     return False
+
+
+def _candidate_starts(
+    tokens: list[str],
+    phrase_tokens: list[str],
+    min_window: int,
+    max_window: int,
+) -> dict[int, set[int]]:
+    starts = {window_size: set() for window_size in range(min_window, max_window + 1)}
+    anchor_tokens = {token for token in phrase_tokens if len(token) >= 5}
+    anchor_indexes = [index for index, token in enumerate(tokens) if token in anchor_tokens]
+
+    if not anchor_indexes:
+        if len(tokens) > 24:
+            return starts
+        for window_size in starts:
+            starts[window_size].update(range(0, len(tokens) - window_size + 1))
+        return starts
+
+    for index in anchor_indexes:
+        for window_size in starts:
+            earliest = max(0, index - window_size + 1)
+            latest = min(index, len(tokens) - window_size)
+            if latest >= earliest:
+                starts[window_size].update(range(earliest, latest + 1))
+    return starts
 
 
 def _similarity(left: str, right: str) -> float:
