@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .corpus import default_data_path, validate_corpus
 from .course_corpus import default_course_output_path, default_course_source_path, normalize_course_corpus
+from .embeddings import create_embedder
 from .evaluation import load_eval_cases, results_to_json, run_evaluation, summarize, write_results_csv
 from .guardrail_policy import default_policy_path, load_guardrail_policy
 from .judging import judge_results, judgments_to_json, summarize_judgments
@@ -36,6 +37,7 @@ def main() -> None:
     _add_generation_args(query_parser)
     _add_guard_classifier_args(query_parser)
     query_parser.add_argument("--policy", type=Path)
+    _add_guard_embedding_args(query_parser)
     query_parser.add_argument("--question", required=True)
 
     eval_parser = subparsers.add_parser("evaluate", help="Run JSONL evaluation")
@@ -49,6 +51,7 @@ def main() -> None:
     _add_guard_classifier_args(eval_parser)
     eval_parser.add_argument("--cases", type=Path, default=Path(__file__).resolve().parents[2] / "data" / "eval_cases.jsonl")
     eval_parser.add_argument("--policy", type=Path)
+    _add_guard_embedding_args(eval_parser)
     eval_parser.add_argument("--judge", choices=["none", "heuristic", "openai"], default="none")
     eval_parser.add_argument("--judge-model")
     eval_parser.add_argument("--limit-cases", type=int)
@@ -67,6 +70,7 @@ def main() -> None:
     _add_guard_classifier_args(compare_parser)
     compare_parser.add_argument("--cases", type=Path, default=Path(__file__).resolve().parents[2] / "data" / "eval_cases.jsonl")
     compare_parser.add_argument("--policy", type=Path, default=default_policy_path())
+    _add_guard_embedding_args(compare_parser)
     compare_parser.add_argument("--judge", choices=["none", "heuristic", "openai"], default="none")
     compare_parser.add_argument("--judge-model")
     compare_parser.add_argument("--limit-cases", type=int)
@@ -104,6 +108,7 @@ def main() -> None:
     _add_generation_args(visualize_parser)
     _add_guard_classifier_args(visualize_parser)
     visualize_parser.add_argument("--policy", type=Path)
+    _add_guard_embedding_args(visualize_parser)
     visualize_parser.add_argument("--question", required=True)
     visualize_parser.add_argument("--output", type=Path, required=True)
 
@@ -178,8 +183,8 @@ def main() -> None:
         return
 
     if args.command == "visualize":
-        guardrail_policy = load_guardrail_policy(args.policy) if args.policy else None
         try:
+            guardrail_policy = _load_guardrail_policy(args)
             stats = write_rag_visualization(
                 corpus_path=corpus_path,
                 output_path=args.output,
@@ -222,7 +227,11 @@ def main() -> None:
         try:
             comparisons = {}
             judge = _build_judge(args)
-            for label, mode, policy, classifier, profile in _comparison_scenarios(args):
+            guardrail_policy = _load_guardrail_policy(args)
+            for label, mode, policy, classifier, profile in _comparison_scenarios(
+                args,
+                guardrail_policy,
+            ):
                 comparison_assistant = build_assistant(
                     corpus_path,
                     mode=mode,
@@ -258,7 +267,7 @@ def main() -> None:
         return
 
     try:
-        guardrail_policy = load_guardrail_policy(args.policy) if getattr(args, "policy", None) else None
+        guardrail_policy = _load_guardrail_policy(args)
         assistant = build_assistant(
             corpus_path,
             mode=args.mode,
@@ -334,6 +343,11 @@ def _add_guard_classifier_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--classifier-model")
 
 
+def _add_guard_embedding_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--guard-embedding-provider", choices=["hashing", "openai"], default="hashing")
+    parser.add_argument("--guard-embedding-model")
+
+
 def _limit_cases(cases, limit: int | None):
     if limit is None:
         return cases
@@ -361,8 +375,20 @@ def _build_judge(args):
     raise ValueError("judge must be 'none', 'heuristic', or 'openai'")
 
 
-def _comparison_scenarios(args):
-    policy = load_guardrail_policy(args.policy)
+def _load_guardrail_policy(args):
+    policy_path = getattr(args, "policy", None)
+    if policy_path is None:
+        return None
+    similarity_embedder = create_embedder(
+        args.guard_embedding_provider,
+        model=args.guard_embedding_model,
+        allow_remote_models=args.allow_remote_models,
+        env_file=args.env_file,
+    )
+    return load_guardrail_policy(policy_path, similarity_embedder=similarity_embedder)
+
+
+def _comparison_scenarios(args, policy):
     scenarios = [
         (
             "baseline",

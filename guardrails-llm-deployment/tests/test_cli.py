@@ -68,3 +68,28 @@ def test_build_index_reports_remote_model_error_without_traceback(monkeypatch, c
     captured = capsys.readouterr()
     assert "OpenAI embedding request failed: AuthenticationError" in captured.err
     assert "Traceback" not in captured.err
+
+
+def test_remote_guard_embeddings_require_explicit_allowance(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "compare-guardrails",
+            "--corpus",
+            str(DATA),
+            "--cases",
+            str(CASES),
+            "--guard-embedding-provider",
+            "openai",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert "Remote model calls are disabled" in captured.err
+    assert "Traceback" not in captured.err
