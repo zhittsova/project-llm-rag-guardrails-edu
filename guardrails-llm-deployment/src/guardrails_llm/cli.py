@@ -9,7 +9,12 @@ from .course_corpus import default_course_output_path, default_course_source_pat
 from .evaluation import load_eval_cases, results_to_json, run_evaluation, summarize, write_results_csv
 from .guardrail_policy import default_policy_path, load_guardrail_policy
 from .judging import judge_results, judgments_to_json, summarize_judgments
-from .model_config import MissingModelCredentialError, RemoteModelsNotAllowedError, openai_config_summary
+from .model_config import (
+    MissingModelCredentialError,
+    RemoteModelCallError,
+    RemoteModelsNotAllowedError,
+    openai_config_summary,
+)
 from .pipeline import build_assistant
 from .vector import VectorIndexError, build_vector_index, default_index_path
 from .visualization import write_rag_visualization
@@ -162,7 +167,12 @@ def main() -> None:
                 allow_remote_models=args.allow_remote_models,
                 env_file=args.env_file,
             )
-        except (VectorIndexError, RemoteModelsNotAllowedError, MissingModelCredentialError) as exc:
+        except (
+            VectorIndexError,
+            RemoteModelsNotAllowedError,
+            MissingModelCredentialError,
+            RemoteModelCallError,
+        ) as exc:
             parser.error(str(exc))
         print(json.dumps(stats.__dict__ | {"corpus": str(stats.corpus), "index_dir": str(stats.index_dir)}, indent=2))
         return
@@ -188,7 +198,12 @@ def main() -> None:
                 guard_classifier=args.guard_classifier,
                 classifier_model=args.classifier_model,
             )
-        except (VectorIndexError, RemoteModelsNotAllowedError, MissingModelCredentialError) as exc:
+        except (
+            VectorIndexError,
+            RemoteModelsNotAllowedError,
+            MissingModelCredentialError,
+            RemoteModelCallError,
+        ) as exc:
             parser.error(str(exc))
         print(
             json.dumps(
@@ -229,7 +244,12 @@ def main() -> None:
                 if judge:
                     comparison_summary["judge"] = summarize_judgments(judge_results(cases, comparison_results, judge))
                 comparisons[label] = comparison_summary
-        except (VectorIndexError, RemoteModelsNotAllowedError, MissingModelCredentialError) as exc:
+        except (
+            VectorIndexError,
+            RemoteModelsNotAllowedError,
+            MissingModelCredentialError,
+            RemoteModelCallError,
+        ) as exc:
             parser.error(str(exc))
         if args.output_json:
             args.output_json.parent.mkdir(parents=True, exist_ok=True)
@@ -255,16 +275,27 @@ def main() -> None:
             guard_classifier=getattr(args, "guard_classifier", "none"),
             classifier_model=getattr(args, "classifier_model", None),
         )
-    except (VectorIndexError, RemoteModelsNotAllowedError, MissingModelCredentialError) as exc:
+    except (
+        VectorIndexError,
+        RemoteModelsNotAllowedError,
+        MissingModelCredentialError,
+        RemoteModelCallError,
+    ) as exc:
         parser.error(str(exc))
     if args.command == "query":
-        response = assistant.answer(args.question)
+        try:
+            response = assistant.answer(args.question)
+        except RemoteModelCallError as exc:
+            parser.error(str(exc))
         print(json.dumps(response.__dict__, indent=2))
         return
 
     cases = load_eval_cases(args.cases)
     cases = _limit_cases(cases, getattr(args, "limit_cases", None))
-    results = run_evaluation(assistant, cases)
+    try:
+        results = run_evaluation(assistant, cases)
+    except RemoteModelCallError as exc:
+        parser.error(str(exc))
     summary = summarize(results)
     try:
         judge = _build_judge(args)

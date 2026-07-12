@@ -4,16 +4,21 @@ from types import SimpleNamespace
 
 from guardrails_llm.corpus import Chunk
 from guardrails_llm.evaluation import EvalCase, EvalResult
-from guardrails_llm.model_config import OpenAIModelConfig
+import pytest
+
+from guardrails_llm.model_config import OpenAIModelConfig, RemoteModelCallError
 from guardrails_llm.openai_models import OpenAIAnswerGenerator, OpenAIEmbeddingModel, OpenAIGuardClassifier, OpenAIJudge
 
 
 class FakeEmbeddingsEndpoint:
-    def __init__(self) -> None:
+    def __init__(self, *, error: Exception | None = None) -> None:
         self.calls: list[tuple[str, list[str]]] = []
+        self._error = error
 
     def create(self, *, model: str, input: list[str]):
         self.calls.append((model, input))
+        if self._error:
+            raise self._error
         return SimpleNamespace(
             data=[
                 SimpleNamespace(embedding=[float(index), 1.0])
@@ -23,29 +28,45 @@ class FakeEmbeddingsEndpoint:
 
 
 class FakeOpenAIClient:
-    def __init__(self, *, response_text: str = "RAG combines retrieval with generation.") -> None:
-        self.embeddings = FakeEmbeddingsEndpoint()
+    def __init__(
+        self,
+        *,
+        response_text: str = "RAG combines retrieval with generation.",
+        embedding_error: Exception | None = None,
+        response_error: Exception | None = None,
+        chat_error: Exception | None = None,
+    ) -> None:
+        self.embeddings = FakeEmbeddingsEndpoint(error=embedding_error)
         self.responses = FakeResponsesEndpoint(response_text)
-        self.chat = SimpleNamespace(completions=FakeChatCompletionsEndpoint(response_text))
+        self.responses.error = response_error
+        self.chat = SimpleNamespace(
+            completions=FakeChatCompletionsEndpoint(response_text, error=chat_error)
+        )
 
 
 class FakeResponsesEndpoint:
     def __init__(self, response_text: str) -> None:
         self.calls: list[dict[str, object]] = []
         self._response_text = response_text
+        self.error: Exception | None = None
 
     def create(self, *, model: str, input: str, **kwargs):
         self.calls.append({"model": model, "input": input, **kwargs})
+        if self.error:
+            raise self.error
         return SimpleNamespace(output_text=self._response_text)
 
 
 class FakeChatCompletionsEndpoint:
-    def __init__(self, response_text: str) -> None:
+    def __init__(self, response_text: str, *, error: Exception | None = None) -> None:
         self.calls: list[dict[str, object]] = []
         self._response_text = response_text
+        self._error = error
 
     def create(self, *, model: str, messages: list[dict[str, str]], **kwargs):
         self.calls.append({"model": model, "messages": messages, **kwargs})
+        if self._error:
+            raise self._error
         return SimpleNamespace(
             choices=[
                 SimpleNamespace(
@@ -76,6 +97,25 @@ def test_openai_embedding_model_uses_configured_model_with_fake_client(tmp_path,
 
     assert vectors == [[0.0, 1.0], [1.0, 1.0]]
     assert client.embeddings.calls == [("text-embedding-3-small", ["alpha", "beta"])]
+
+
+def test_openai_embedding_model_wraps_provider_errors(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENAI_API_URL", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text("OPENAI_API_KEY=test-key\n", encoding="utf-8")
+    embedder = OpenAIEmbeddingModel(
+        OpenAIModelConfig(
+            embedding_model="BAAI/bge-m3",
+            allow_remote_models=True,
+            env_file=env_file,
+        ),
+        client=FakeOpenAIClient(embedding_error=RuntimeError("provider rejected token")),
+    )
+
+    with pytest.raises(RemoteModelCallError, match="OpenAI embedding request failed: RuntimeError"):
+        embedder.embed_many(["hello"])
 
 
 def test_openai_answer_generator_uses_retrieved_context_with_fake_client(tmp_path, monkeypatch) -> None:
@@ -113,6 +153,34 @@ def test_openai_answer_generator_uses_retrieved_context_with_fake_client(tmp_pat
     assert call["text"] == {"verbosity": "low"}
     assert "rag-basics:0" in prompt
     assert "What is RAG?" in prompt
+
+
+def test_openai_answer_generator_wraps_provider_errors(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENAI_API_URL", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text("OPENAI_API_KEY=test-key\n", encoding="utf-8")
+    chunk = Chunk(
+        chunk_id="rag-basics:0",
+        doc_id="rag-basics",
+        course_id="guardrails-101",
+        title="RAG Basics",
+        visibility="public",
+        source_type="lecture",
+        text="Retrieval augmented generation combines retrieval with generation.",
+    )
+    generator = OpenAIAnswerGenerator(
+        OpenAIModelConfig(
+            answer_model="Qwen/Qwen3.6-35B-A3B",
+            allow_remote_models=True,
+            env_file=env_file,
+        ),
+        client=FakeOpenAIClient(response_error=RuntimeError("provider rejected token")),
+    )
+
+    with pytest.raises(RemoteModelCallError, match="OpenAI answer request failed: RuntimeError"):
+        generator.generate("What is RAG?", [chunk])
 
 
 def test_openai_answer_generator_uses_chat_for_compatible_base_url(tmp_path, monkeypatch) -> None:

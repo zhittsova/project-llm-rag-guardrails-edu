@@ -4,7 +4,10 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 from guardrails_llm.cli import main
+from guardrails_llm.model_config import RemoteModelCallError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,3 +40,31 @@ def test_compare_guardrails_writes_json_artifact(tmp_path: Path, monkeypatch) ->
     assert "baseline" in data
     assert "default_guardrails" in data
     assert "hybrid_policy_guardrails" in data
+
+
+def test_build_index_reports_remote_model_error_without_traceback(monkeypatch, capsys) -> None:
+    def fail_build(*args, **kwargs):
+        raise RemoteModelCallError("OpenAI embedding request failed: AuthenticationError")
+
+    monkeypatch.setattr("guardrails_llm.cli.build_vector_index", fail_build)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "build-index",
+            "--corpus",
+            str(DATA),
+            "--embedding-provider",
+            "openai",
+            "--allow-remote-models",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert "OpenAI embedding request failed: AuthenticationError" in captured.err
+    assert "Traceback" not in captured.err

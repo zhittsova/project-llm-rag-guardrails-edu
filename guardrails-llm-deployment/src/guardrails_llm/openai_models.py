@@ -11,6 +11,7 @@ from .guard_classifier import GuardClassification
 from .judging import JudgeResult
 from .model_config import (
     OpenAIModelConfig,
+    RemoteModelCallError,
     ensure_openai_api_key,
     ensure_remote_models_allowed,
     openai_client_kwargs,
@@ -31,7 +32,10 @@ class OpenAIEmbeddingModel:
     def embed_many(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
-        response = self._client.embeddings.create(model=self.model_name, input=texts)
+        try:
+            response = self._client.embeddings.create(model=self.model_name, input=texts)
+        except Exception as exc:
+            raise _remote_model_error("embedding", exc) from exc
         return [list(item.embedding) for item in response.data]
 
 
@@ -47,19 +51,22 @@ class OpenAIAnswerGenerator:
         if not chunks:
             return "I do not know based on the available course material."
         prompt = _answer_prompt(question, chunks)
-        if self._use_chat_completions:
-            response = self._client.chat.completions.create(
+        try:
+            if self._use_chat_completions:
+                response = self._client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0,
+                )
+                return _chat_response_text(response)
+            response = self._client.responses.create(
                 model=self.model_name,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0,
+                input=prompt,
+                text={"verbosity": "low"},
             )
-            return _chat_response_text(response)
-        response = self._client.responses.create(
-            model=self.model_name,
-            input=prompt,
-            text={"verbosity": "low"},
-        )
-        return _response_text(response)
+            return _response_text(response)
+        except Exception as exc:
+            raise _remote_model_error("answer", exc) from exc
 
 
 class OpenAIGuardClassifier:
@@ -253,6 +260,10 @@ def _chat_response_text(response: Any) -> str:
         if isinstance(content, str) and content.strip():
             return content.strip()
     raise ValueError("OpenAI chat response did not contain text output")
+
+
+def _remote_model_error(operation: str, exc: Exception) -> RemoteModelCallError:
+    return RemoteModelCallError(f"OpenAI {operation} request failed: {type(exc).__name__}")
 
 
 def _float_in_range(value: object, *, default: float) -> float:
