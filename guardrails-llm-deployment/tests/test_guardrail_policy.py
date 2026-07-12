@@ -5,6 +5,32 @@ from guardrails_llm.guardrail_policy import GuardrailPolicy, default_policy_path
 from guardrails_llm.guards import input_guard, output_guard
 
 
+class RecordingSemanticEmbedder:
+    model_name = "recording-semantic"
+
+    def __init__(self) -> None:
+        self.embed_calls: list[str] = []
+        self.embed_many_calls: list[list[str]] = []
+
+    def embed(self, text: str) -> list[float]:
+        self.embed_calls.append(text)
+        return self._vector(text)
+
+    def embed_many(self, texts: list[str]) -> list[list[float]]:
+        self.embed_many_calls.append(list(texts))
+        return [self._vector(text) for text in texts]
+
+    @staticmethod
+    def _vector(text: str) -> list[float]:
+        private_meaning = (
+            "semantic private request",
+            "confidential student grade records",
+            "private roster with emails",
+            "student ids phone numbers and accommodations",
+        )
+        return [1.0, 0.0] if any(phrase in text for phrase in private_meaning) else [0.0, 1.0]
+
+
 def test_policy_file_loads_similarity_rules() -> None:
     policy = load_guardrail_policy(default_policy_path())
 
@@ -26,6 +52,27 @@ def test_similarity_guard_catches_paraphrased_private_data_request() -> None:
 
     assert not result.allowed
     assert "pii" in result.triggers
+
+
+def test_policy_uses_injected_semantic_embedder() -> None:
+    embedder = RecordingSemanticEmbedder()
+    policy = load_guardrail_policy(default_policy_path(), similarity_embedder=embedder)
+
+    result = input_guard("semantic private request", policy)
+
+    assert not result.allowed
+    assert "pii" in result.triggers
+
+
+def test_policy_caches_similarity_examples_and_embeds_each_query_once() -> None:
+    embedder = RecordingSemanticEmbedder()
+    policy = load_guardrail_policy(default_policy_path(), similarity_embedder=embedder)
+
+    input_guard("semantic private request alpha", policy)
+    input_guard("semantic private request beta", policy)
+
+    assert len(embedder.embed_many_calls) == 1
+    assert len(embedder.embed_calls) == 2
 
 
 def test_custom_policy_can_add_instructor_rule(tmp_path: Path) -> None:
