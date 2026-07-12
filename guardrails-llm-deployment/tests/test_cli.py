@@ -37,9 +37,12 @@ def test_compare_guardrails_writes_json_artifact(tmp_path: Path, monkeypatch) ->
     main()
 
     data = json.loads(output.read_text(encoding="utf-8"))
-    assert "baseline" in data
-    assert "default_guardrails" in data
-    assert "hybrid_policy_guardrails" in data
+    assert list(data) == [
+        "baseline",
+        "normalized_regex_guardrails",
+        "default_guardrails",
+        "hybrid_policy_guardrails",
+    ]
 
 
 def test_build_index_reports_remote_model_error_without_traceback(monkeypatch, capsys) -> None:

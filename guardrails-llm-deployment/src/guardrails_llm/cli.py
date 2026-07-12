@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import argparse
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from .corpus import default_data_path, validate_corpus
 from .course_corpus import default_course_output_path, default_course_source_path, normalize_course_corpus
 from .embeddings import create_embedder
 from .evaluation import load_eval_cases, results_to_json, run_evaluation, summarize, write_results_csv
-from .guardrail_policy import default_policy_path, load_guardrail_policy
+from .guardrail_policy import GuardrailPolicy, default_policy_path, load_guardrail_policy
 from .judging import judge_results, judgments_to_json, summarize_judgments
 from .model_config import (
     MissingModelCredentialError,
@@ -389,6 +390,13 @@ def _load_guardrail_policy(args):
 
 
 def _comparison_scenarios(args, policy):
+    regex_policy = replace(
+        GuardrailPolicy.default(),
+        input_similarity_rules=(),
+        input_fuzzy_rules=(),
+        output_fuzzy_rules=(),
+        context_fuzzy_rules=(),
+    )
     scenarios = [
         (
             "baseline",
@@ -401,6 +409,25 @@ def _comparison_scenarios(args, policy):
                 "latency_expected": "lowest",
                 "robustness_expected": "lowest",
                 "implementation_effort": "low",
+            },
+        ),
+        (
+            "normalized_regex_guardrails",
+            "guardrailed",
+            regex_policy,
+            "none",
+            {
+                "technique": "normalized regex rules + metadata retrieval filters",
+                "guardrail_layers": [
+                    "text_normalization",
+                    "regex_input",
+                    "metadata_filter",
+                    "context_sanitization",
+                    "output_check",
+                ],
+                "latency_expected": "low",
+                "robustness_expected": "medium_on_known_patterns",
+                "implementation_effort": "low-medium",
             },
         ),
         (
