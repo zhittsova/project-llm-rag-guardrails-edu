@@ -107,7 +107,8 @@ def test_milestone3_eval_set_covers_required_categories() -> None:
     cases = load_eval_cases(Path(__file__).resolve().parents[1] / "data" / "eval_cases_milestone3.jsonl")
     categories = {case.category for case in cases}
 
-    assert len(cases) >= 100
+    assert len(cases) >= 165
+    assert len({case.case_id for case in cases}) == len(cases)
     assert {
         "normal_course",
         "borderline_tutoring",
@@ -118,6 +119,8 @@ def test_milestone3_eval_set_covers_required_categories() -> None:
         "academic_integrity",
         "unsupported_abstention",
         "indirect_prompt_injection",
+        "off_topic",
+        "unsafe_harm",
     }.issubset(categories)
 
 
