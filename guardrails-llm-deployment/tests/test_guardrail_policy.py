@@ -124,6 +124,21 @@ def test_milestone3_eval_set_covers_required_categories() -> None:
     }.issubset(categories)
 
 
+def test_bge_m3_policy_uses_calibrated_similarity_thresholds() -> None:
+    policy = load_guardrail_policy(
+        Path(__file__).resolve().parents[1] / "data" / "guardrail_policy_bge_m3.toml"
+    )
+
+    assert {
+        rule.trigger: rule.threshold
+        for rule in policy.input_similarity_rules
+    } == {
+        "prompt_injection": 0.61,
+        "pii": 0.57,
+        "academic_integrity": 0.62,
+    }
+
+
 def test_summary_reports_false_positive_and_false_negative_counts() -> None:
     summary = summarize(
         [
