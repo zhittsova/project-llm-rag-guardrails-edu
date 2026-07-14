@@ -1,0 +1,816 @@
+{
+  "baseline": {
+    "technique": "RAG without guardrails",
+    "guardrail_layers": [],
+    "latency_expected": "lowest",
+    "robustness_expected": "lowest",
+    "implementation_effort": "low",
+    "total": 165,
+    "passed": 33,
+    "pass_rate": 0.2,
+    "false_positive_refusals": 6,
+    "false_negative_answers": 84,
+    "by_category": {
+      "normal_course": {
+        "total": 20,
+        "passed": 17,
+        "false_positive_refusals": 1,
+        "false_negative_answers": 0
+      },
+      "borderline_tutoring": {
+        "total": 17,
+        "passed": 15,
+        "false_positive_refusals": 2,
+        "false_negative_answers": 0
+      },
+      "prompt_injection_direct": {
+        "total": 15,
+        "passed": 0,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 14
+      },
+      "prompt_injection_paraphrase": {
+        "total": 20,
+        "passed": 0,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 16
+      },
+      "privacy_pii": {
+        "total": 20,
+        "passed": 0,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 18
+      },
+      "retrieval_access": {
+        "total": 15,
+        "passed": 0,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 13
+      },
+      "academic_integrity": {
+        "total": 19,
+        "passed": 0,
+        "false_positive_refusals": 3,
+        "false_negative_answers": 0
+      },
+      "unsupported_abstention": {
+        "total": 15,
+        "passed": 0,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 11
+      },
+      "indirect_prompt_injection": {
+        "total": 6,
+        "passed": 1,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      },
+      "robust_obfuscation": {
+        "total": 8,
+        "passed": 0,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 5
+      },
+      "off_topic": {
+        "total": 5,
+        "passed": 0,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 2
+      },
+      "unsafe_harm": {
+        "total": 5,
+        "passed": 0,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 5
+      }
+    },
+    "avg_latency_ms": 0.02,
+    "eval_split": "all",
+    "judge": {
+      "total": 165,
+      "avg_score": 0.732,
+      "grounded_rate": 0.455,
+      "privacy_safe_rate": 1.0,
+      "injection_safe_rate": 0.752,
+      "integrity_safe_rate": 1.0,
+      "refusal_appropriate_rate": 0.455,
+      "by_category": {
+        "normal_course": {
+          "total": 20,
+          "grounded": 19,
+          "privacy_safe": 20,
+          "injection_safe": 14,
+          "integrity_safe": 20,
+          "refusal_appropriate": 19
+        },
+        "borderline_tutoring": {
+          "total": 17,
+          "grounded": 15,
+          "privacy_safe": 17,
+          "injection_safe": 12,
+          "integrity_safe": 17,
+          "refusal_appropriate": 15
+        },
+        "prompt_injection_direct": {
+          "total": 15,
+          "grounded": 1,
+          "privacy_safe": 15,
+          "injection_safe": 9,
+          "integrity_safe": 15,
+          "refusal_appropriate": 1
+        },
+        "prompt_injection_paraphrase": {
+          "total": 20,
+          "grounded": 4,
+          "privacy_safe": 20,
+          "injection_safe": 17,
+          "integrity_safe": 20,
+          "refusal_appropriate": 4
+        },
+        "privacy_pii": {
+          "total": 20,
+          "grounded": 2,
+          "privacy_safe": 20,
+          "injection_safe": 14,
+          "integrity_safe": 20,
+          "refusal_appropriate": 2
+        },
+        "retrieval_access": {
+          "total": 15,
+          "grounded": 2,
+          "privacy_safe": 15,
+          "injection_safe": 14,
+          "integrity_safe": 15,
+          "refusal_appropriate": 2
+        },
+        "academic_integrity": {
+          "total": 19,
+          "grounded": 16,
+          "privacy_safe": 19,
+          "injection_safe": 17,
+          "integrity_safe": 19,
+          "refusal_appropriate": 16
+        },
+        "unsupported_abstention": {
+          "total": 15,
+          "grounded": 4,
+          "privacy_safe": 15,
+          "injection_safe": 12,
+          "integrity_safe": 15,
+          "refusal_appropriate": 4
+        },
+        "indirect_prompt_injection": {
+          "total": 6,
+          "grounded": 6,
+          "privacy_safe": 6,
+          "injection_safe": 1,
+          "integrity_safe": 6,
+          "refusal_appropriate": 6
+        },
+        "robust_obfuscation": {
+          "total": 8,
+          "grounded": 3,
+          "privacy_safe": 8,
+          "injection_safe": 6,
+          "integrity_safe": 8,
+          "refusal_appropriate": 3
+        },
+        "off_topic": {
+          "total": 5,
+          "grounded": 3,
+          "privacy_safe": 5,
+          "injection_safe": 5,
+          "integrity_safe": 5,
+          "refusal_appropriate": 3
+        },
+        "unsafe_harm": {
+          "total": 5,
+          "grounded": 0,
+          "privacy_safe": 5,
+          "injection_safe": 3,
+          "integrity_safe": 5,
+          "refusal_appropriate": 0
+        }
+      }
+    }
+  },
+  "normalized_regex_guardrails": {
+    "technique": "normalized regex rules + metadata retrieval filters",
+    "guardrail_layers": [
+      "text_normalization",
+      "regex_input",
+      "metadata_filter",
+      "context_sanitization",
+      "output_check"
+    ],
+    "latency_expected": "low",
+    "robustness_expected": "medium_on_known_patterns",
+    "implementation_effort": "low-medium",
+    "total": 165,
+    "passed": 94,
+    "pass_rate": 0.57,
+    "false_positive_refusals": 6,
+    "false_negative_answers": 44,
+    "by_category": {
+      "normal_course": {
+        "total": 20,
+        "passed": 18,
+        "false_positive_refusals": 1,
+        "false_negative_answers": 0
+      },
+      "borderline_tutoring": {
+        "total": 17,
+        "passed": 15,
+        "false_positive_refusals": 2,
+        "false_negative_answers": 0
+      },
+      "prompt_injection_direct": {
+        "total": 15,
+        "passed": 13,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      },
+      "prompt_injection_paraphrase": {
+        "total": 20,
+        "passed": 0,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 16
+      },
+      "privacy_pii": {
+        "total": 20,
+        "passed": 15,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 3
+      },
+      "retrieval_access": {
+        "total": 15,
+        "passed": 5,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 7
+      },
+      "academic_integrity": {
+        "total": 19,
+        "passed": 12,
+        "false_positive_refusals": 3,
+        "false_negative_answers": 0
+      },
+      "unsupported_abstention": {
+        "total": 15,
+        "passed": 4,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 9
+      },
+      "indirect_prompt_injection": {
+        "total": 6,
+        "passed": 6,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      },
+      "robust_obfuscation": {
+        "total": 8,
+        "passed": 2,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 4
+      },
+      "off_topic": {
+        "total": 5,
+        "passed": 3,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 2
+      },
+      "unsafe_harm": {
+        "total": 5,
+        "passed": 1,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 3
+      }
+    },
+    "avg_latency_ms": 0.32,
+    "eval_split": "all",
+    "judge": {
+      "total": 165,
+      "avg_score": 0.875,
+      "grounded_rate": 0.697,
+      "privacy_safe_rate": 1.0,
+      "injection_safe_rate": 0.982,
+      "integrity_safe_rate": 1.0,
+      "refusal_appropriate_rate": 0.697,
+      "by_category": {
+        "normal_course": {
+          "total": 20,
+          "grounded": 19,
+          "privacy_safe": 20,
+          "injection_safe": 19,
+          "integrity_safe": 20,
+          "refusal_appropriate": 19
+        },
+        "borderline_tutoring": {
+          "total": 17,
+          "grounded": 15,
+          "privacy_safe": 17,
+          "injection_safe": 17,
+          "integrity_safe": 17,
+          "refusal_appropriate": 15
+        },
+        "prompt_injection_direct": {
+          "total": 15,
+          "grounded": 15,
+          "privacy_safe": 15,
+          "injection_safe": 15,
+          "integrity_safe": 15,
+          "refusal_appropriate": 15
+        },
+        "prompt_injection_paraphrase": {
+          "total": 20,
+          "grounded": 4,
+          "privacy_safe": 20,
+          "injection_safe": 19,
+          "integrity_safe": 20,
+          "refusal_appropriate": 4
+        },
+        "privacy_pii": {
+          "total": 20,
+          "grounded": 17,
+          "privacy_safe": 20,
+          "injection_safe": 20,
+          "integrity_safe": 20,
+          "refusal_appropriate": 17
+        },
+        "retrieval_access": {
+          "total": 15,
+          "grounded": 8,
+          "privacy_safe": 15,
+          "injection_safe": 15,
+          "integrity_safe": 15,
+          "refusal_appropriate": 8
+        },
+        "academic_integrity": {
+          "total": 19,
+          "grounded": 16,
+          "privacy_safe": 19,
+          "injection_safe": 19,
+          "integrity_safe": 19,
+          "refusal_appropriate": 16
+        },
+        "unsupported_abstention": {
+          "total": 15,
+          "grounded": 6,
+          "privacy_safe": 15,
+          "injection_safe": 15,
+          "integrity_safe": 15,
+          "refusal_appropriate": 6
+        },
+        "indirect_prompt_injection": {
+          "total": 6,
+          "grounded": 6,
+          "privacy_safe": 6,
+          "injection_safe": 6,
+          "integrity_safe": 6,
+          "refusal_appropriate": 6
+        },
+        "robust_obfuscation": {
+          "total": 8,
+          "grounded": 4,
+          "privacy_safe": 8,
+          "injection_safe": 7,
+          "integrity_safe": 8,
+          "refusal_appropriate": 4
+        },
+        "off_topic": {
+          "total": 5,
+          "grounded": 3,
+          "privacy_safe": 5,
+          "injection_safe": 5,
+          "integrity_safe": 5,
+          "refusal_appropriate": 3
+        },
+        "unsafe_harm": {
+          "total": 5,
+          "grounded": 2,
+          "privacy_safe": 5,
+          "injection_safe": 5,
+          "integrity_safe": 5,
+          "refusal_appropriate": 2
+        }
+      }
+    }
+  },
+  "default_guardrails": {
+    "technique": "normalized rules + fuzzy checks + metadata retrieval filters",
+    "guardrail_layers": [
+      "text_normalization",
+      "regex_input",
+      "fuzzy_input",
+      "metadata_filter",
+      "context_sanitization",
+      "output_check"
+    ],
+    "latency_expected": "low-medium",
+    "robustness_expected": "medium-high_on_typos",
+    "implementation_effort": "medium",
+    "total": 165,
+    "passed": 102,
+    "pass_rate": 0.618,
+    "false_positive_refusals": 6,
+    "false_negative_answers": 39,
+    "by_category": {
+      "normal_course": {
+        "total": 20,
+        "passed": 18,
+        "false_positive_refusals": 1,
+        "false_negative_answers": 0
+      },
+      "borderline_tutoring": {
+        "total": 17,
+        "passed": 15,
+        "false_positive_refusals": 2,
+        "false_negative_answers": 0
+      },
+      "prompt_injection_direct": {
+        "total": 15,
+        "passed": 13,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      },
+      "prompt_injection_paraphrase": {
+        "total": 20,
+        "passed": 1,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 15
+      },
+      "privacy_pii": {
+        "total": 20,
+        "passed": 15,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 3
+      },
+      "retrieval_access": {
+        "total": 15,
+        "passed": 5,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 7
+      },
+      "academic_integrity": {
+        "total": 19,
+        "passed": 14,
+        "false_positive_refusals": 3,
+        "false_negative_answers": 0
+      },
+      "unsupported_abstention": {
+        "total": 15,
+        "passed": 4,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 9
+      },
+      "indirect_prompt_injection": {
+        "total": 6,
+        "passed": 6,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      },
+      "robust_obfuscation": {
+        "total": 8,
+        "passed": 7,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      },
+      "off_topic": {
+        "total": 5,
+        "passed": 3,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 2
+      },
+      "unsafe_harm": {
+        "total": 5,
+        "passed": 1,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 3
+      }
+    },
+    "avg_latency_ms": 13.22,
+    "eval_split": "all",
+    "judge": {
+      "total": 165,
+      "avg_score": 0.89,
+      "grounded_rate": 0.727,
+      "privacy_safe_rate": 1.0,
+      "injection_safe_rate": 0.994,
+      "integrity_safe_rate": 1.0,
+      "refusal_appropriate_rate": 0.727,
+      "by_category": {
+        "normal_course": {
+          "total": 20,
+          "grounded": 19,
+          "privacy_safe": 20,
+          "injection_safe": 19,
+          "integrity_safe": 20,
+          "refusal_appropriate": 19
+        },
+        "borderline_tutoring": {
+          "total": 17,
+          "grounded": 15,
+          "privacy_safe": 17,
+          "injection_safe": 17,
+          "integrity_safe": 17,
+          "refusal_appropriate": 15
+        },
+        "prompt_injection_direct": {
+          "total": 15,
+          "grounded": 15,
+          "privacy_safe": 15,
+          "injection_safe": 15,
+          "integrity_safe": 15,
+          "refusal_appropriate": 15
+        },
+        "prompt_injection_paraphrase": {
+          "total": 20,
+          "grounded": 5,
+          "privacy_safe": 20,
+          "injection_safe": 20,
+          "integrity_safe": 20,
+          "refusal_appropriate": 5
+        },
+        "privacy_pii": {
+          "total": 20,
+          "grounded": 17,
+          "privacy_safe": 20,
+          "injection_safe": 20,
+          "integrity_safe": 20,
+          "refusal_appropriate": 17
+        },
+        "retrieval_access": {
+          "total": 15,
+          "grounded": 8,
+          "privacy_safe": 15,
+          "injection_safe": 15,
+          "integrity_safe": 15,
+          "refusal_appropriate": 8
+        },
+        "academic_integrity": {
+          "total": 19,
+          "grounded": 16,
+          "privacy_safe": 19,
+          "injection_safe": 19,
+          "integrity_safe": 19,
+          "refusal_appropriate": 16
+        },
+        "unsupported_abstention": {
+          "total": 15,
+          "grounded": 6,
+          "privacy_safe": 15,
+          "injection_safe": 15,
+          "integrity_safe": 15,
+          "refusal_appropriate": 6
+        },
+        "indirect_prompt_injection": {
+          "total": 6,
+          "grounded": 6,
+          "privacy_safe": 6,
+          "injection_safe": 6,
+          "integrity_safe": 6,
+          "refusal_appropriate": 6
+        },
+        "robust_obfuscation": {
+          "total": 8,
+          "grounded": 8,
+          "privacy_safe": 8,
+          "injection_safe": 8,
+          "integrity_safe": 8,
+          "refusal_appropriate": 8
+        },
+        "off_topic": {
+          "total": 5,
+          "grounded": 3,
+          "privacy_safe": 5,
+          "injection_safe": 5,
+          "integrity_safe": 5,
+          "refusal_appropriate": 3
+        },
+        "unsafe_harm": {
+          "total": 5,
+          "grounded": 2,
+          "privacy_safe": 5,
+          "injection_safe": 5,
+          "integrity_safe": 5,
+          "refusal_appropriate": 2
+        }
+      }
+    }
+  },
+  "hybrid_policy_guardrails": {
+    "technique": "configurable policy + normalized rules + fuzzy checks + embedding similarity examples",
+    "guardrail_layers": [
+      "policy_file",
+      "text_normalization",
+      "regex_input",
+      "fuzzy_input",
+      "embedding_similarity_input",
+      "metadata_filter",
+      "context_sanitization",
+      "output_check"
+    ],
+    "latency_expected": "low-medium",
+    "robustness_expected": "medium-high",
+    "implementation_effort": "medium-high",
+    "total": 165,
+    "passed": 126,
+    "pass_rate": 0.764,
+    "false_positive_refusals": 6,
+    "false_negative_answers": 20,
+    "by_category": {
+      "normal_course": {
+        "total": 20,
+        "passed": 17,
+        "false_positive_refusals": 2,
+        "false_negative_answers": 0
+      },
+      "borderline_tutoring": {
+        "total": 17,
+        "passed": 14,
+        "false_positive_refusals": 3,
+        "false_negative_answers": 0
+      },
+      "prompt_injection_direct": {
+        "total": 15,
+        "passed": 14,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      },
+      "prompt_injection_paraphrase": {
+        "total": 20,
+        "passed": 12,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 4
+      },
+      "privacy_pii": {
+        "total": 20,
+        "passed": 18,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 2
+      },
+      "retrieval_access": {
+        "total": 15,
+        "passed": 11,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 3
+      },
+      "academic_integrity": {
+        "total": 19,
+        "passed": 18,
+        "false_positive_refusals": 1,
+        "false_negative_answers": 0
+      },
+      "unsupported_abstention": {
+        "total": 15,
+        "passed": 5,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 7
+      },
+      "indirect_prompt_injection": {
+        "total": 6,
+        "passed": 6,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      },
+      "robust_obfuscation": {
+        "total": 8,
+        "passed": 7,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 0
+      },
+      "off_topic": {
+        "total": 5,
+        "passed": 3,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 2
+      },
+      "unsafe_harm": {
+        "total": 5,
+        "passed": 1,
+        "false_positive_refusals": 0,
+        "false_negative_answers": 2
+      }
+    },
+    "avg_latency_ms": 10.45,
+    "eval_split": "all",
+    "embedding_preload": {
+      "guard_similarity": {
+        "provider": "openai",
+        "model": "BAAI/bge-m3",
+        "texts": 174,
+        "unique_texts": 173,
+        "provider_calls": 2,
+        "latency_ms": 4842.04
+      }
+    },
+    "avg_batch_amortized_latency_ms": 39.8,
+    "latency_scope": "pipeline_after_batch_preload",
+    "judge": {
+      "total": 165,
+      "avg_score": 0.936,
+      "grounded_rate": 0.842,
+      "privacy_safe_rate": 1.0,
+      "injection_safe_rate": 0.994,
+      "integrity_safe_rate": 1.0,
+      "refusal_appropriate_rate": 0.842,
+      "by_category": {
+        "normal_course": {
+          "total": 20,
+          "grounded": 18,
+          "privacy_safe": 20,
+          "injection_safe": 19,
+          "integrity_safe": 20,
+          "refusal_appropriate": 18
+        },
+        "borderline_tutoring": {
+          "total": 17,
+          "grounded": 14,
+          "privacy_safe": 17,
+          "injection_safe": 17,
+          "integrity_safe": 17,
+          "refusal_appropriate": 14
+        },
+        "prompt_injection_direct": {
+          "total": 15,
+          "grounded": 15,
+          "privacy_safe": 15,
+          "injection_safe": 15,
+          "integrity_safe": 15,
+          "refusal_appropriate": 15
+        },
+        "prompt_injection_paraphrase": {
+          "total": 20,
+          "grounded": 16,
+          "privacy_safe": 20,
+          "injection_safe": 20,
+          "integrity_safe": 20,
+          "refusal_appropriate": 16
+        },
+        "privacy_pii": {
+          "total": 20,
+          "grounded": 18,
+          "privacy_safe": 20,
+          "injection_safe": 20,
+          "integrity_safe": 20,
+          "refusal_appropriate": 18
+        },
+        "retrieval_access": {
+          "total": 15,
+          "grounded": 12,
+          "privacy_safe": 15,
+          "injection_safe": 15,
+          "integrity_safe": 15,
+          "refusal_appropriate": 12
+        },
+        "academic_integrity": {
+          "total": 19,
+          "grounded": 18,
+          "privacy_safe": 19,
+          "injection_safe": 19,
+          "integrity_safe": 19,
+          "refusal_appropriate": 18
+        },
+        "unsupported_abstention": {
+          "total": 15,
+          "grounded": 8,
+          "privacy_safe": 15,
+          "injection_safe": 15,
+          "integrity_safe": 15,
+          "refusal_appropriate": 8
+        },
+        "indirect_prompt_injection": {
+          "total": 6,
+          "grounded": 6,
+          "privacy_safe": 6,
+          "injection_safe": 6,
+          "integrity_safe": 6,
+          "refusal_appropriate": 6
+        },
+        "robust_obfuscation": {
+          "total": 8,
+          "grounded": 8,
+          "privacy_safe": 8,
+          "injection_safe": 8,
+          "integrity_safe": 8,
+          "refusal_appropriate": 8
+        },
+        "off_topic": {
+          "total": 5,
+          "grounded": 3,
+          "privacy_safe": 5,
+          "injection_safe": 5,
+          "integrity_safe": 5,
+          "refusal_appropriate": 3
+        },
+        "unsafe_harm": {
+          "total": 5,
+          "grounded": 3,
+          "privacy_safe": 5,
+          "injection_safe": 5,
+          "integrity_safe": 5,
+          "refusal_appropriate": 3
+        }
+      }
+    }
+  }
+}
