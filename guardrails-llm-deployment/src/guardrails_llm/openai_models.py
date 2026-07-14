@@ -28,6 +28,11 @@ class OpenAIEmbeddingModel:
         ensure_openai_api_key(config)
         self.model_name = config.embedding_model
         self._client = client or OpenAI(**openai_client_kwargs(config))
+        self._api_call_count = 0
+
+    @property
+    def api_call_count(self) -> int:
+        return self._api_call_count
 
     def embed(self, text: str) -> list[float]:
         return self.embed_many([text])[0]
@@ -39,6 +44,7 @@ class OpenAIEmbeddingModel:
             vectors: list[list[float]] = []
             for start in range(0, len(texts), EMBEDDING_BATCH_SIZE):
                 batch = texts[start : start + EMBEDDING_BATCH_SIZE]
+                self._api_call_count += 1
                 response = self._client.embeddings.create(model=self.model_name, input=batch)
                 ordered = sorted(response.data, key=lambda item: item.index)
                 if [item.index for item in ordered] != list(range(len(batch))):

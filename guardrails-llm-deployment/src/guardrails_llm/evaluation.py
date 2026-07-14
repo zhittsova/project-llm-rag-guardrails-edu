@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import csv
 from dataclasses import asdict, dataclass
+from hashlib import blake2b
 from pathlib import Path
 
 from .pipeline import LearningAssistant
@@ -39,6 +40,24 @@ def load_eval_cases(path: Path) -> list[EvalCase]:
             if line.strip():
                 cases.append(EvalCase(**json.loads(line)))
     return cases
+
+
+def select_eval_split(cases: list[EvalCase], split: str) -> list[EvalCase]:
+    if split == "all":
+        return cases
+    calibration = split == "calibration"
+    if not calibration and split != "validation":
+        raise ValueError("split must be 'all', 'calibration', or 'validation'")
+    return [
+        case
+        for case in cases
+        if (_eval_bucket(case.case_id) < 7) == calibration
+    ]
+
+
+def _eval_bucket(case_id: str) -> int:
+    digest = blake2b(case_id.encode("utf-8"), digest_size=2).digest()
+    return int.from_bytes(digest, "big") % 10
 
 
 def run_evaluation(assistant: LearningAssistant, cases: list[EvalCase]) -> list[EvalResult]:

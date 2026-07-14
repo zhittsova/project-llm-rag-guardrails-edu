@@ -61,6 +61,30 @@ def test_vector_retriever_filters_private_chunks(tmp_path: Path) -> None:
     assert all(chunk.doc_id != "private-roster" for chunk, _score in results)
 
 
+def test_assistant_uses_injected_retrieval_embedder(tmp_path: Path) -> None:
+    index_dir = tmp_path / "chroma"
+    embedder = FakeEmbedder()
+    build_vector_index(
+        DATA,
+        index_dir,
+        embedding_provider="openai",
+        embedding_model=embedder.model_name,
+        embedder=embedder,
+    )
+
+    assistant = build_assistant(
+        DATA,
+        mode="guardrailed",
+        retriever_backend="vector",
+        index_dir=index_dir,
+        embedding_provider="openai",
+        embedding_model=embedder.model_name,
+        retrieval_embedder=embedder,
+    )
+
+    assert assistant.answer("What is RAG?").citations
+
+
 def test_vector_retriever_explains_missing_index(tmp_path: Path) -> None:
     with pytest.raises(VectorIndexNotFoundError, match="build-index"):
         VectorRetriever(tmp_path / "missing-chroma")

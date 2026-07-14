@@ -139,6 +139,7 @@ def test_openai_embedding_model_batches_and_restores_provider_order(tmp_path, mo
 
     assert [len(call) for call in endpoint.calls] == [128, 128, 1]
     assert vectors == [[float(index)] for index in range(257)]
+    assert embedder.api_call_count == 3
 
 
 def test_openai_embedding_model_wraps_provider_errors(tmp_path, monkeypatch) -> None:

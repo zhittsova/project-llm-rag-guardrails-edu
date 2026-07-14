@@ -22,6 +22,35 @@ class TextEmbedder(Protocol):
         ...
 
 
+class CachedEmbedder:
+    def __init__(self, delegate: TextEmbedder) -> None:
+        self.model_name = delegate.model_name
+        self._delegate = delegate
+        self._cache: dict[str, list[float]] = {}
+
+    @property
+    def cached_texts(self) -> int:
+        return len(self._cache)
+
+    @property
+    def api_call_count(self) -> int | None:
+        return getattr(self._delegate, "api_call_count", None)
+
+    def embed(self, text: str) -> list[float]:
+        return self.embed_many([text])[0]
+
+    def embed_many(self, texts: list[str]) -> list[list[float]]:
+        missing = list(dict.fromkeys(text for text in texts if text not in self._cache))
+        if missing:
+            vectors = self._delegate.embed_many(missing)
+            if len(vectors) != len(missing):
+                raise ValueError(
+                    f"embedding provider returned {len(vectors)} vectors for {len(missing)} texts"
+                )
+            self._cache.update(zip(missing, vectors, strict=True))
+        return [self._cache[text] for text in texts]
+
+
 class HashingEmbedder:
     # Local deterministic embedding function for demos: no API keys, downloads,
     # or randomness. This is not a production semantic embedding model, but it

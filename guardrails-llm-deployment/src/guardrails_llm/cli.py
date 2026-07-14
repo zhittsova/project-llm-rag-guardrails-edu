@@ -4,12 +4,21 @@ import argparse
 import json
 from dataclasses import replace
 from pathlib import Path
+from time import perf_counter
 
 from .corpus import default_data_path, validate_corpus
 from .course_corpus import default_course_output_path, default_course_source_path, normalize_course_corpus
-from .embeddings import create_embedder
-from .evaluation import load_eval_cases, results_to_json, run_evaluation, summarize, write_results_csv
+from .embeddings import CachedEmbedder, create_embedder
+from .evaluation import (
+    load_eval_cases,
+    results_to_json,
+    run_evaluation,
+    select_eval_split,
+    summarize,
+    write_results_csv,
+)
 from .guardrail_policy import GuardrailPolicy, default_policy_path, load_guardrail_policy
+from .guard_text import normalize_guard_text
 from .judging import judge_results, judgments_to_json, summarize_judgments
 from .model_config import (
     MissingModelCredentialError,
@@ -56,6 +65,7 @@ def main() -> None:
     eval_parser.add_argument("--judge", choices=["none", "heuristic", "openai"], default="none")
     eval_parser.add_argument("--judge-model")
     eval_parser.add_argument("--limit-cases", type=int)
+    eval_parser.add_argument("--case-split", choices=["all", "calibration", "validation"], default="all")
     eval_parser.add_argument("--output-csv", type=Path)
     eval_parser.add_argument("--output-judgments", type=Path)
     eval_parser.add_argument("--show-results", action="store_true")
@@ -75,6 +85,7 @@ def main() -> None:
     compare_parser.add_argument("--judge", choices=["none", "heuristic", "openai"], default="none")
     compare_parser.add_argument("--judge-model")
     compare_parser.add_argument("--limit-cases", type=int)
+    compare_parser.add_argument("--case-split", choices=["all", "calibration", "validation"], default="all")
     compare_parser.add_argument("--output-json", type=Path)
 
     index_parser = subparsers.add_parser("build-index", help="Build a local Chroma vector index")
@@ -224,11 +235,13 @@ def main() -> None:
 
     if args.command == "compare-guardrails":
         cases = load_eval_cases(args.cases)
+        cases = select_eval_split(cases, args.case_split)
         cases = _limit_cases(cases, args.limit_cases)
         try:
             comparisons = {}
             judge = _build_judge(args)
-            guardrail_policy = _load_guardrail_policy(args)
+            retrieval_embedder, retrieval_preload = _preload_retrieval_embedder(args, cases)
+            guardrail_policy, guard_preload = _load_comparison_policy(args, cases)
             for label, mode, policy, classifier, profile in _comparison_scenarios(
                 args,
                 guardrail_policy,
@@ -248,9 +261,24 @@ def main() -> None:
                     answer_model=args.answer_model,
                     guard_classifier=classifier,
                     classifier_model=args.classifier_model,
+                    retrieval_embedder=retrieval_embedder,
                 )
                 comparison_results = run_evaluation(comparison_assistant, cases)
                 comparison_summary = profile | summarize(comparison_results)
+                comparison_summary["eval_split"] = args.case_split
+                preloads = {}
+                if retrieval_preload:
+                    preloads["retrieval"] = retrieval_preload
+                if guard_preload and label in {"hybrid_policy_guardrails", "model_classifier_guardrails"}:
+                    preloads["guard_similarity"] = guard_preload
+                if preloads:
+                    preload_ms = sum(float(stats["latency_ms"]) for stats in preloads.values())
+                    comparison_summary["embedding_preload"] = preloads
+                    comparison_summary["avg_batch_amortized_latency_ms"] = round(
+                        float(comparison_summary["avg_latency_ms"]) + preload_ms / max(len(cases), 1),
+                        2,
+                    )
+                    comparison_summary["latency_scope"] = "pipeline_after_batch_preload"
                 if judge:
                     comparison_summary["judge"] = summarize_judgments(judge_results(cases, comparison_results, judge))
                 comparisons[label] = comparison_summary
@@ -301,12 +329,14 @@ def main() -> None:
         return
 
     cases = load_eval_cases(args.cases)
+    cases = select_eval_split(cases, args.case_split)
     cases = _limit_cases(cases, getattr(args, "limit_cases", None))
     try:
         results = run_evaluation(assistant, cases)
     except RemoteModelCallError as exc:
         parser.error(str(exc))
     summary = summarize(results)
+    summary["eval_split"] = args.case_split
     try:
         judge = _build_judge(args)
     except (RemoteModelsNotAllowedError, MissingModelCredentialError) as exc:
@@ -387,6 +417,71 @@ def _load_guardrail_policy(args):
         env_file=args.env_file,
     )
     return load_guardrail_policy(policy_path, similarity_embedder=similarity_embedder)
+
+
+def _preload_retrieval_embedder(args, cases):
+    if args.retriever != "vector":
+        return None, None
+    embedder = CachedEmbedder(
+        create_embedder(
+            args.embedding_provider,
+            model=args.embedding_model,
+            allow_remote_models=args.allow_remote_models,
+            env_file=args.env_file,
+        )
+    )
+    stats = _preload_embeddings(
+        embedder,
+        [case.question for case in cases],
+        provider=args.embedding_provider,
+    )
+    return embedder, stats
+
+
+def _load_comparison_policy(args, cases):
+    policy_path = getattr(args, "policy", None)
+    if policy_path is None:
+        return None, None
+    embedder = CachedEmbedder(
+        create_embedder(
+            args.guard_embedding_provider,
+            model=args.guard_embedding_model,
+            allow_remote_models=args.allow_remote_models,
+            env_file=args.env_file,
+        )
+    )
+    policy = load_guardrail_policy(policy_path, similarity_embedder=embedder)
+    texts = [
+        normalize_guard_text(example)
+        for rule in policy.input_similarity_rules
+        for example in rule.examples
+    ]
+    texts.extend(normalize_guard_text(case.question) for case in cases)
+    stats = _preload_embeddings(
+        embedder,
+        texts,
+        provider=args.guard_embedding_provider,
+    )
+    return policy, stats
+
+
+def _preload_embeddings(embedder: CachedEmbedder, texts: list[str], *, provider: str) -> dict[str, object]:
+    calls_before = embedder.api_call_count
+    started_at = perf_counter()
+    embedder.embed_many(texts)
+    latency_ms = (perf_counter() - started_at) * 1000
+    calls_after = embedder.api_call_count
+    provider_calls = None
+    if calls_before is not None and calls_after is not None:
+        provider_calls = calls_after - calls_before
+    return {
+        "provider": provider,
+        "model": embedder.model_name,
+        "texts": len(texts),
+        "unique_texts": embedder.cached_texts,
+        "provider_calls": provider_calls,
+        "latency_ms": round(latency_ms, 2),
+    }
 
 
 def _comparison_scenarios(args, policy):
