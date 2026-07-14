@@ -21,7 +21,7 @@ class FakeEmbeddingsEndpoint:
             raise self._error
         return SimpleNamespace(
             data=[
-                SimpleNamespace(embedding=[float(index), 1.0])
+                SimpleNamespace(index=index, embedding=[float(index), 1.0])
                 for index, _text in enumerate(input)
             ]
         )
@@ -97,6 +97,48 @@ def test_openai_embedding_model_uses_configured_model_with_fake_client(tmp_path,
 
     assert vectors == [[0.0, 1.0], [1.0, 1.0]]
     assert client.embeddings.calls == [("text-embedding-3-small", ["alpha", "beta"])]
+
+
+def test_openai_embedding_model_batches_and_restores_provider_order(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENAI_API_URL", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text("OPENAI_API_KEY=test-key\n", encoding="utf-8")
+
+    class ReorderingEndpoint:
+        def __init__(self) -> None:
+            self.calls: list[list[str]] = []
+
+        def create(self, *, model: str, input: list[str]):
+            self.calls.append(input)
+            return SimpleNamespace(
+                data=list(
+                    reversed(
+                        [
+                            SimpleNamespace(index=index, embedding=[float(text.split("-")[-1])])
+                            for index, text in enumerate(input)
+                        ]
+                    )
+                )
+            )
+
+    endpoint = ReorderingEndpoint()
+    client = SimpleNamespace(embeddings=endpoint)
+    embedder = OpenAIEmbeddingModel(
+        OpenAIModelConfig(
+            embedding_model="BAAI/bge-m3",
+            allow_remote_models=True,
+            env_file=env_file,
+        ),
+        client=client,
+    )
+    texts = [f"text-{index}" for index in range(257)]
+
+    vectors = embedder.embed_many(texts)
+
+    assert [len(call) for call in endpoint.calls] == [128, 128, 1]
+    assert vectors == [[float(index)] for index in range(257)]
 
 
 def test_openai_embedding_model_wraps_provider_errors(tmp_path, monkeypatch) -> None:

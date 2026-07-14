@@ -19,6 +19,9 @@ from .model_config import (
 )
 
 
+EMBEDDING_BATCH_SIZE = 128
+
+
 class OpenAIEmbeddingModel:
     def __init__(self, config: OpenAIModelConfig, *, client: Any | None = None) -> None:
         ensure_remote_models_allowed(config)
@@ -33,10 +36,17 @@ class OpenAIEmbeddingModel:
         if not texts:
             return []
         try:
-            response = self._client.embeddings.create(model=self.model_name, input=texts)
+            vectors: list[list[float]] = []
+            for start in range(0, len(texts), EMBEDDING_BATCH_SIZE):
+                batch = texts[start : start + EMBEDDING_BATCH_SIZE]
+                response = self._client.embeddings.create(model=self.model_name, input=batch)
+                ordered = sorted(response.data, key=lambda item: item.index)
+                if [item.index for item in ordered] != list(range(len(batch))):
+                    raise ValueError("embedding response indexes do not match the request batch")
+                vectors.extend(list(item.embedding) for item in ordered)
         except Exception as exc:
             raise _remote_model_error("embedding", exc) from exc
-        return [list(item.embedding) for item in response.data]
+        return vectors
 
 
 class OpenAIAnswerGenerator:
