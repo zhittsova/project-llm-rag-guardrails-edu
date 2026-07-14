@@ -6,7 +6,6 @@ from difflib import SequenceMatcher
 
 
 ZERO_WIDTH_RE = re.compile(r"[\u200b\u200c\u200d\ufeff]")
-SEPARATOR_RE = re.compile(r"[^a-z0-9]+")
 LEET_TRANSLATION = str.maketrans(
     {
         "0": "o",
@@ -26,7 +25,7 @@ def normalize_guard_text(text: str) -> str:
     normalized = unicodedata.normalize("NFKC", text)
     normalized = ZERO_WIDTH_RE.sub("", normalized)
     normalized = normalized.casefold().translate(LEET_TRANSLATION)
-    normalized = SEPARATOR_RE.sub(" ", normalized)
+    normalized = "".join(character if character.isalnum() else " " for character in normalized)
     return " ".join(normalized.split())
 
 
@@ -38,7 +37,7 @@ def guard_text_candidates(text: str) -> tuple[str, ...]:
 
 
 def compact_guard_text(text: str) -> str:
-    return SEPARATOR_RE.sub("", normalize_guard_text(text))
+    return "".join(character for character in normalize_guard_text(text) if character.isalnum())
 
 
 def fuzzy_phrase_matches(text: str, phrase: str, *, threshold: float) -> bool:
