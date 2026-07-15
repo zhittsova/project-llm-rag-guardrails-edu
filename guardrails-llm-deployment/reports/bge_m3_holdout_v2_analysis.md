@@ -82,9 +82,26 @@ well represented during threshold selection.
   trigger was absent. This is useful diagnostic evidence: safe final behavior
   and correct guardrail classification are different requirements.
 
-## BGE-M3 comparison: pending approval
+## BGE-M3 comparison: blocked by endpoint TLS certificate
 
-The matching frozen BGE-M3 run has not been executed. The proposed command is:
+The matching frozen BGE-M3 run was approved and attempted on 15 July 2026. It
+failed during the TLS handshake before an embedding response was received:
+
+```text
+OpenAI embedding request failed: APIConnectionError
+certificate verify error: certificate has expired
+certificate NotAfter: Jul 15 11:58:58 2026 GMT
+OpenSSL verify return code: 10
+```
+
+DNS and TCP connectivity were successful. An unauthenticated diagnostic request
+with certificate verification disabled reached the service and returned HTTP
+`401`, confirming that the service itself is running. No authenticated request
+was made with TLS verification disabled, and the API key was not printed or
+stored in any artifact.
+
+The endpoint operator must renew the certificate before the experiment can be
+run safely. After renewal, rerun the same frozen command:
 
 ```bash
 uv run guardrails-llm compare-guardrails \
@@ -100,10 +117,11 @@ uv run guardrails-llm compare-guardrails \
   --output-json reports/bge_m3_similarity_guard_holdout_v2.json
 ```
 
-This command would send 101 evaluation questions and nine policy examples to
+This command will send 101 evaluation questions and nine policy examples to
 the in-house embedding endpoint: 110 unique texts in approximately two batched
 embedding calls. It does not use a generative answer model, model classifier,
-or LLM judge. The run requires explicit approval before execution.
+or LLM judge. Approval was already given for this exact frozen run; a retry is
+appropriate after the endpoint presents a valid certificate.
 
 ## Current conclusion
 
