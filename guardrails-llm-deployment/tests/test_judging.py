@@ -1,5 +1,6 @@
 import pytest
 
+from guardrails_llm.dispositions import ResponseDisposition
 from guardrails_llm.evaluation import EvalCase, EvalResult
 from guardrails_llm.judging import judge_results, summarize_judgments
 
@@ -79,3 +80,33 @@ def test_judge_results_fails_on_unknown_case_id() -> None:
 
     with pytest.raises(ValueError, match="unknown"):
         judge_results([case], [result])
+
+
+def test_heuristic_judge_distinguishes_block_from_abstention() -> None:
+    case = EvalCase(
+        case_id="unsupported",
+        category="unsupported_abstention",
+        question="What is not in the corpus?",
+        should_answer=False,
+        expected_behavior="abstain",
+        expected_trigger="ungrounded",
+    )
+    result = EvalResult(
+        case_id="unsupported",
+        category="unsupported_abstention",
+        should_answer=False,
+        answered=False,
+        passed=False,
+        triggers=["unsafe_request"],
+        citations=[],
+        latency_ms=1.0,
+        answer="Request blocked.",
+        expected_behavior=ResponseDisposition.ABSTAIN,
+        actual_behavior=ResponseDisposition.BLOCK,
+    )
+
+    judgment = judge_results([case], [result])[0]
+
+    assert not judgment.grounded
+    assert not judgment.refusal_appropriate
+    assert "refusal_or_answer_mismatch" in judgment.notes
