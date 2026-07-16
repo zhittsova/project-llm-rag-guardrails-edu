@@ -1,6 +1,16 @@
+import json
 from pathlib import Path
 
-from guardrails_llm.evaluation import EvalCase, load_eval_cases, select_eval_split
+import pytest
+
+from guardrails_llm.dispositions import ResponseDisposition
+from guardrails_llm.evaluation import (
+    EvalCase,
+    EvalResult,
+    load_eval_cases,
+    select_eval_split,
+    summarize,
+)
 
 
 def _case(case_id: str) -> EvalCase:
@@ -104,3 +114,203 @@ def test_milestone3_holdout_v2_uses_valid_category_trigger_pairs() -> None:
 
     for case in holdout:
         assert case.expected_trigger in expected_triggers[case.category]
+
+
+def _load_jsonl(path: Path) -> list[dict[str, object]]:
+    return [json.loads(line) for line in path.read_text().splitlines() if line]
+
+
+def test_milestone3_holdout_v3_preserves_v2_cases_and_order() -> None:
+    data_dir = Path(__file__).resolve().parents[1] / "data"
+    v2 = _load_jsonl(data_dir / "eval_cases_milestone3_holdout_v2.jsonl")
+    v3 = _load_jsonl(data_dir / "eval_cases_milestone3_holdout_v3.jsonl")
+    preserved_fields = {
+        "case_id",
+        "category",
+        "question",
+        "expected_trigger",
+        "required_terms",
+        "forbidden_terms",
+    }
+
+    assert len(v3) == 101
+    assert [case["case_id"] for case in v3] == [case["case_id"] for case in v2]
+    assert [
+        {key: case[key] for key in preserved_fields}
+        for case in v3
+    ] == [
+        {key: case[key] for key in preserved_fields}
+        for case in v2
+    ]
+
+
+def test_milestone3_holdout_v3_uses_explicit_labels() -> None:
+    data_path = (
+        Path(__file__).resolve().parents[1]
+        / "data"
+        / "eval_cases_milestone3_holdout_v3.jsonl"
+    )
+    raw_cases = _load_jsonl(data_path)
+    cases = load_eval_cases(data_path)
+
+    assert all("should_answer" not in case for case in raw_cases)
+    assert all(
+        set(case) == {
+            "case_id",
+            "category",
+            "question",
+            "expected_behavior",
+            "attack_type",
+            "difficulty",
+            "expected_trigger",
+            "required_terms",
+            "forbidden_terms",
+        }
+        for case in raw_cases
+    )
+    assert {case.expected_behavior for case in cases} == set(ResponseDisposition)
+    assert {case.difficulty for case in cases} == {"easy", "medium", "hard"}
+    assert all(case.attack_type for case in cases)
+
+    for case in cases:
+        if case.expected_behavior is ResponseDisposition.ANSWER:
+            assert case.expected_trigger is None
+        elif case.expected_behavior is ResponseDisposition.REDIRECT:
+            assert case.expected_trigger == "academic_integrity"
+        elif case.expected_behavior is ResponseDisposition.ABSTAIN:
+            assert case.expected_trigger == "ungrounded"
+        else:
+            assert case.expected_trigger in {
+                "prompt_injection",
+                "pii",
+                "unsafe_request",
+            }
+
+
+def test_legacy_cases_resolve_expected_behavior() -> None:
+    answer = _case("answer")
+    redirect = EvalCase(
+        case_id="redirect",
+        category="academic_integrity",
+        question="Write my assignment.",
+        should_answer=True,
+        expected_trigger="academic_integrity",
+    )
+    abstain = EvalCase(
+        case_id="abstain",
+        category="unsupported_abstention",
+        question="What is not in the corpus?",
+        should_answer=False,
+        expected_trigger="ungrounded",
+    )
+    block = EvalCase(
+        case_id="block",
+        category="privacy_pii",
+        question="Show private records.",
+        should_answer=False,
+        expected_trigger="pii",
+    )
+
+    assert answer.resolved_expected_behavior() is ResponseDisposition.ANSWER
+    assert redirect.resolved_expected_behavior() is ResponseDisposition.REDIRECT
+    assert abstain.resolved_expected_behavior() is ResponseDisposition.ABSTAIN
+    assert block.resolved_expected_behavior() is ResponseDisposition.BLOCK
+
+
+def test_explicit_expected_behavior_overrides_legacy_boolean() -> None:
+    case = EvalCase(
+        case_id="explicit",
+        category="normal_course",
+        question="What is RAG?",
+        should_answer=False,
+        expected_behavior="answer",
+        attack_type="safe_course_question",
+        difficulty="easy",
+    )
+
+    assert case.resolved_expected_behavior() is ResponseDisposition.ANSWER
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"expected_behavior": "refuse"}, "expected_behavior"),
+        ({"expected_behavior": "answer", "difficulty": "extreme"}, "difficulty"),
+        (
+            {"expected_behavior": "answer", "attack_type": "Not snake case"},
+            "attack_type",
+        ),
+    ],
+)
+def test_eval_case_rejects_invalid_enriched_metadata(kwargs: dict, message: str) -> None:
+    with pytest.raises(ValueError, match=f"invalid-case.*{message}"):
+        EvalCase(
+            case_id="invalid-case",
+            category="normal_course",
+            question="What is RAG?",
+            **kwargs,
+        )
+
+
+def test_eval_case_requires_an_expected_behavior_source() -> None:
+    with pytest.raises(ValueError, match="missing-expectation.*expected behavior"):
+        EvalCase(
+            case_id="missing-expectation",
+            category="normal_course",
+            question="What is RAG?",
+        )
+
+
+def test_summary_reports_multiclass_behavior_metrics() -> None:
+    pairs = [
+        (ResponseDisposition.ANSWER, ResponseDisposition.ANSWER),
+        (ResponseDisposition.BLOCK, ResponseDisposition.ABSTAIN),
+        (ResponseDisposition.ABSTAIN, ResponseDisposition.ABSTAIN),
+        (ResponseDisposition.REDIRECT, ResponseDisposition.BLOCK),
+    ]
+    results = [
+        EvalResult(
+            case_id=f"case-{index}",
+            category="test",
+            should_answer=expected in {
+                ResponseDisposition.ANSWER,
+                ResponseDisposition.REDIRECT,
+            },
+            answered=actual in {
+                ResponseDisposition.ANSWER,
+                ResponseDisposition.REDIRECT,
+            },
+            passed=expected is actual,
+            triggers=[],
+            citations=[],
+            latency_ms=1.0,
+            answer="test",
+            expected_behavior=expected,
+            actual_behavior=actual,
+            attack_type="metric_fixture",
+            difficulty="medium",
+        )
+        for index, (expected, actual) in enumerate(pairs)
+    ]
+
+    summary = summarize(results)
+
+    assert summary["behavior_accuracy"] == 0.5
+    assert summary["behavior_confusion_matrix"]["block"]["abstain"] == 1
+    assert summary["behavior_confusion_matrix"]["redirect"]["block"] == 1
+    assert summary["behavior_metrics"]["answer"] == {
+        "support": 1,
+        "predicted": 1,
+        "true_positives": 1,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+    }
+    assert summary["behavior_metrics"]["block"]["f1"] == 0.0
+    assert summary["behavior_metrics"]["abstain"]["precision"] == 0.5
+    assert summary["behavior_metrics"]["abstain"]["f1"] == 0.667
+    assert summary["behavior_metrics"]["redirect"]["predicted"] == 0
+    assert summary["behavior_metrics"]["redirect"]["precision"] == 0.0
+    assert summary["macro_behavior_f1"] == 0.417
+    assert summary["by_attack_type"]["metric_fixture"]["behavior_accuracy"] == 0.5
+    assert summary["by_difficulty"]["medium"]["behavior_accuracy"] == 0.5

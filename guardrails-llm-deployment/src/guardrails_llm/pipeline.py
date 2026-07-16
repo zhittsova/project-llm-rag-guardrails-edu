@@ -8,6 +8,7 @@ from typing import Protocol
 from .answering import AnswerGenerator
 from .baseline_pipeline import BaselineRagAssistant, build_baseline_assistant
 from .corpus import Chunk, chunk_documents, load_documents
+from .dispositions import ResponseDisposition
 from .embeddings import TextEmbedder
 from .guard_classifier import GuardClassifier, should_use_model_classifier
 from .guardrail_policy import GuardrailPolicy
@@ -19,6 +20,7 @@ from .retrieval import LexicalRetriever
 class AssistantResponse:
     answer: str
     citations: list[str]
+    disposition: ResponseDisposition
     guard_triggers: list[str] = field(default_factory=list)
     latency_ms: float = 0.0
     retrieved_chunks: list[str] = field(default_factory=list)
@@ -69,7 +71,14 @@ class LearningAssistant:
             input_result = input_guard(question, self._guardrail_policy)
             triggers.extend(input_result.triggers)
             if not input_result.allowed:
-                return self._response(input_result.message or "Request blocked.", [], triggers, started_at, [])
+                return self._response(
+                    input_result.message or "Request blocked.",
+                    [],
+                    ResponseDisposition.BLOCK,
+                    triggers,
+                    started_at,
+                    [],
+                )
             if should_use_model_classifier(question, self._guardrail_policy, triggers) and self._guard_classifier:
                 classification = self._guard_classifier.classify(question)
                 if classification.label != "safe" and classification.confidence >= 0.65:
@@ -79,6 +88,7 @@ class LearningAssistant:
                         return self._response(
                             self._guardrail_policy.ungrounded_message,
                             [],
+                            ResponseDisposition.ABSTAIN,
                             triggers,
                             started_at,
                             [],
@@ -87,6 +97,7 @@ class LearningAssistant:
                         return self._response(
                             self._guardrail_policy.input_block_message,
                             [],
+                            ResponseDisposition.BLOCK,
                             triggers,
                             started_at,
                             [],
@@ -116,6 +127,7 @@ class LearningAssistant:
             )
             answer = make_integrity_safe(question, self._guardrail_policy)
             citations = [citation_for(chunk) for chunk, _score in retrieved[:1]]
+            disposition = ResponseDisposition.REDIRECT
         else:
             # Default answer generation is local/extractive. Optional remote
             # generation is gated by --allow-remote-models in the CLI.
@@ -125,6 +137,11 @@ class LearningAssistant:
             else:
                 answer = synthesize_answer(question, retrieved_chunks)
             citations = [citation_for(chunk) for chunk, _score in retrieved]
+            disposition = (
+                ResponseDisposition.ANSWER
+                if citations
+                else ResponseDisposition.ABSTAIN
+            )
 
         # Output guard проверяет уже готовый ответ. Baseline снова пропускает
         # этот этап, поэтому может вернуть private data или ungrounded answer.
@@ -132,14 +149,34 @@ class LearningAssistant:
             output_result = output_guard(answer, citations, triggers, self._guardrail_policy)
             triggers.extend(output_result.triggers)
             if not output_result.allowed:
-                return self._response(output_result.message or "Answer blocked.", [], triggers, started_at, [])
+                output_disposition = (
+                    ResponseDisposition.ABSTAIN
+                    if set(output_result.triggers) == {"ungrounded"}
+                    else ResponseDisposition.BLOCK
+                )
+                return self._response(
+                    output_result.message or "Answer blocked.",
+                    [],
+                    output_disposition,
+                    triggers,
+                    started_at,
+                    [],
+                )
 
-        return self._response(answer, citations, triggers, started_at, [chunk.chunk_id for chunk, _score in retrieved])
+        return self._response(
+            answer,
+            citations,
+            disposition,
+            triggers,
+            started_at,
+            [chunk.chunk_id for chunk, _score in retrieved],
+        )
 
     def _response(
         self,
         answer: str,
         citations: list[str],
+        disposition: ResponseDisposition,
         triggers: list[str],
         started_at: float,
         retrieved_chunks: list[str],
@@ -147,6 +184,7 @@ class LearningAssistant:
         return AssistantResponse(
             answer=answer,
             citations=citations,
+            disposition=disposition,
             guard_triggers=sorted(set(triggers)),
             latency_ms=(perf_counter() - started_at) * 1000,
             retrieved_chunks=retrieved_chunks,

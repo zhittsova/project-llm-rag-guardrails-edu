@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 from time import perf_counter
 
@@ -87,6 +87,7 @@ def main() -> None:
     compare_parser.add_argument("--limit-cases", type=int)
     compare_parser.add_argument("--case-split", choices=["all", "calibration", "validation"], default="all")
     compare_parser.add_argument("--output-json", type=Path)
+    compare_parser.add_argument("--output-results-json", type=Path)
 
     index_parser = subparsers.add_parser("build-index", help="Build a local Chroma vector index")
     index_parser.add_argument("--corpus", dest="command_corpus", type=Path)
@@ -239,6 +240,7 @@ def main() -> None:
         cases = _limit_cases(cases, args.limit_cases)
         try:
             comparisons = {}
+            comparison_details = {}
             judge = _build_judge(args)
             retrieval_embedder, retrieval_preload = _preload_retrieval_embedder(args, cases)
             guardrail_policy, guard_preload = _load_comparison_policy(args, cases)
@@ -264,6 +266,9 @@ def main() -> None:
                     retrieval_embedder=retrieval_embedder,
                 )
                 comparison_results = run_evaluation(comparison_assistant, cases)
+                comparison_details[label] = [
+                    asdict(result) for result in comparison_results
+                ]
                 comparison_summary = profile | summarize(comparison_results)
                 comparison_summary["eval_split"] = args.case_split
                 preloads = {}
@@ -292,6 +297,12 @@ def main() -> None:
         if args.output_json:
             args.output_json.parent.mkdir(parents=True, exist_ok=True)
             args.output_json.write_text(json.dumps(comparisons, indent=2), encoding="utf-8")
+        if args.output_results_json:
+            args.output_results_json.parent.mkdir(parents=True, exist_ok=True)
+            args.output_results_json.write_text(
+                json.dumps(comparison_details, indent=2),
+                encoding="utf-8",
+            )
         print(json.dumps(comparisons, indent=2))
         return
 
