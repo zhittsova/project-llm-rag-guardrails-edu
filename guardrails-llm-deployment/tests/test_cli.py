@@ -15,6 +15,7 @@ from guardrails_llm.model_config import RemoteModelCallError
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data" / "course_docs.jsonl"
 CASES = ROOT / "data" / "eval_cases.jsonl"
+RETRIEVAL_CASES = ROOT / "data" / "retrieval_cases_milestone3_v1.jsonl"
 
 
 class TrackingEmbedder:
@@ -97,6 +98,58 @@ def test_compare_guardrails_writes_detailed_results(tmp_path: Path, monkeypatch)
             "difficulty",
         } <= set(results[0])
         assert summaries[label]["behavior_confusion_matrix"]
+
+
+def test_benchmark_retrieval_writes_summary_and_details(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    summary_output = tmp_path / "retrieval-summary.json"
+    results_output = tmp_path / "retrieval-results.json"
+    index_dir = tmp_path / "index"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "benchmark-retrieval",
+            "--corpus",
+            str(DATA),
+            "--cases",
+            str(RETRIEVAL_CASES),
+            "--index-dir",
+            str(index_dir),
+            "--output-json",
+            str(summary_output),
+            "--output-results-json",
+            str(results_output),
+        ],
+    )
+
+    main()
+
+    summaries = json.loads(summary_output.read_text(encoding="utf-8"))
+    details = json.loads(results_output.read_text(encoding="utf-8"))
+    manifest = json.loads(
+        (index_dir / "course_chunks_manifest.json").read_text(encoding="utf-8")
+    )
+    assert list(summaries) == ["lexical", "hashing_vector"]
+    assert list(details) == list(summaries)
+    assert manifest["chunk_size"] == 650
+    assert manifest["chunk_overlap"] == 80
+    for label in summaries:
+        assert summaries[label]["total"] == 24
+        assert summaries[label]["relevance_total"] == 20
+        assert summaries[label]["visibility_total"] == 4
+        assert "recall_at_1" in summaries[label]
+        assert "recall_at_3" in summaries[label]
+        assert "mrr" in summaries[label]
+        assert len(details[label]) == 24
+        assert {
+            "retrieved_doc_ids",
+            "first_relevant_rank",
+            "forbidden_hits",
+        } <= set(details[label][0])
 
 
 def test_compare_guardrails_records_validation_split(tmp_path: Path, monkeypatch) -> None:

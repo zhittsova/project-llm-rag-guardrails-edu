@@ -27,6 +27,7 @@ from .model_config import (
     openai_config_summary,
 )
 from .pipeline import build_assistant
+from .retrieval_benchmark import run_local_retrieval_benchmark
 from .vector import VectorIndexError, build_vector_index, default_index_path
 from .visualization import write_rag_visualization
 
@@ -88,6 +89,39 @@ def main() -> None:
     compare_parser.add_argument("--case-split", choices=["all", "calibration", "validation"], default="all")
     compare_parser.add_argument("--output-json", type=Path)
     compare_parser.add_argument("--output-results-json", type=Path)
+
+    retrieval_benchmark_parser = subparsers.add_parser(
+        "benchmark-retrieval",
+        help="Compare local lexical and hashing-vector retrieval quality",
+    )
+    retrieval_benchmark_parser.add_argument(
+        "--corpus",
+        dest="command_corpus",
+        type=Path,
+    )
+    retrieval_benchmark_parser.add_argument(
+        "--cases",
+        type=Path,
+        default=(
+            Path(__file__).resolve().parents[2]
+            / "data"
+            / "retrieval_cases_milestone3_v1.jsonl"
+        ),
+    )
+    retrieval_benchmark_parser.add_argument(
+        "--index-dir",
+        type=Path,
+        default=(
+            Path(__file__).resolve().parents[2]
+            / "indexes"
+            / "retrieval-benchmark-v1"
+        ),
+    )
+    retrieval_benchmark_parser.add_argument("--chunk-size", type=int, default=650)
+    retrieval_benchmark_parser.add_argument("--chunk-overlap", type=int, default=80)
+    retrieval_benchmark_parser.add_argument("--top-k", type=int, default=3)
+    retrieval_benchmark_parser.add_argument("--output-json", type=Path)
+    retrieval_benchmark_parser.add_argument("--output-results-json", type=Path)
 
     index_parser = subparsers.add_parser("build-index", help="Build a local Chroma vector index")
     index_parser.add_argument("--corpus", dest="command_corpus", type=Path)
@@ -157,6 +191,33 @@ def main() -> None:
 
     if args.command == "model-config":
         print(json.dumps(openai_config_summary(args.env_file), indent=2))
+        return
+
+    if args.command == "benchmark-retrieval":
+        try:
+            summaries, details = run_local_retrieval_benchmark(
+                corpus_path=corpus_path,
+                cases_path=args.cases,
+                index_dir=args.index_dir,
+                chunk_size=args.chunk_size,
+                chunk_overlap=args.chunk_overlap,
+                top_k=args.top_k,
+            )
+        except (ValueError, VectorIndexError) as exc:
+            parser.error(str(exc))
+        if args.output_json:
+            args.output_json.parent.mkdir(parents=True, exist_ok=True)
+            args.output_json.write_text(
+                json.dumps(summaries, indent=2),
+                encoding="utf-8",
+            )
+        if args.output_results_json:
+            args.output_results_json.parent.mkdir(parents=True, exist_ok=True)
+            args.output_results_json.write_text(
+                json.dumps(details, indent=2),
+                encoding="utf-8",
+            )
+        print(json.dumps(summaries, indent=2))
         return
 
     if args.command == "normalize-course-corpus":
