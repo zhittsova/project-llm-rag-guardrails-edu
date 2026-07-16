@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from json import JSONDecodeError
 from pathlib import Path
+from time import perf_counter
+from typing import Protocol
 
-from .corpus import Document, VISIBILITY_VALUES
+from .corpus import Chunk, Document, VISIBILITY_VALUES
 
 
 RETRIEVAL_KINDS = frozenset({"relevance", "visibility"})
@@ -58,6 +60,32 @@ class RetrievalCase:
                 raise ValueError(
                     f"{self.case_id}: visibility case requires forbidden_doc_ids"
                 )
+
+
+@dataclass(frozen=True)
+class RetrievalResult:
+    case_id: str
+    kind: str
+    difficulty: str
+    expected_doc_ids: list[str]
+    forbidden_doc_ids: list[str]
+    retrieved_doc_ids: list[str]
+    first_relevant_rank: int | None
+    forbidden_hits: list[str]
+    passed: bool
+    latency_ms: float
+
+
+class Retriever(Protocol):
+    def search(
+        self,
+        query: str,
+        *,
+        course_id: str | None = None,
+        allowed_visibility: set[str] | None = None,
+        top_k: int = 3,
+    ) -> list[tuple[Chunk, float]]:
+        ...
 
 
 def load_retrieval_cases(path: Path) -> list[RetrievalCase]:
@@ -121,6 +149,138 @@ def validate_retrieval_cases(
                     f"{case.case_id}: forbidden document '{doc_id}' is allowed by "
                     "allowed_visibility"
                 )
+
+
+def run_retrieval_evaluation(
+    retriever: Retriever,
+    cases: list[RetrievalCase],
+    *,
+    top_k: int = 3,
+) -> list[RetrievalResult]:
+    if top_k < 1:
+        raise ValueError("top_k must be at least 1")
+    results: list[RetrievalResult] = []
+    for case in cases:
+        started_at = perf_counter()
+        matches = retriever.search(
+            case.question,
+            course_id=case.course_id,
+            allowed_visibility=set(case.allowed_visibility),
+            top_k=max(top_k * 4, top_k),
+        )
+        retrieved_doc_ids = _unique_doc_ids(matches, limit=top_k)
+        first_relevant_rank = next(
+            (
+                rank
+                for rank, doc_id in enumerate(retrieved_doc_ids, start=1)
+                if doc_id in case.expected_doc_ids
+            ),
+            None,
+        )
+        forbidden_hits = [
+            doc_id
+            for doc_id in retrieved_doc_ids
+            if doc_id in case.forbidden_doc_ids
+        ]
+        passed = (
+            first_relevant_rank is not None
+            if case.kind == "relevance"
+            else not forbidden_hits
+        )
+        results.append(
+            RetrievalResult(
+                case_id=case.case_id,
+                kind=case.kind,
+                difficulty=case.difficulty,
+                expected_doc_ids=list(case.expected_doc_ids),
+                forbidden_doc_ids=list(case.forbidden_doc_ids),
+                retrieved_doc_ids=retrieved_doc_ids,
+                first_relevant_rank=first_relevant_rank,
+                forbidden_hits=forbidden_hits,
+                passed=passed,
+                latency_ms=(perf_counter() - started_at) * 1000,
+            )
+        )
+    return results
+
+
+def summarize_retrieval(results: list[RetrievalResult]) -> dict[str, object]:
+    summary = _summarize_group(results)
+    by_difficulty: dict[str, dict[str, int | float]] = {}
+    for difficulty in DIFFICULTIES:
+        grouped = [result for result in results if result.difficulty == difficulty]
+        if grouped:
+            by_difficulty[difficulty] = _summarize_group(grouped)
+    return summary | {"by_difficulty": by_difficulty}
+
+
+def retrieval_results_to_json(results: list[RetrievalResult]) -> str:
+    return json.dumps([asdict(result) for result in results], indent=2)
+
+
+def _summarize_group(results: list[RetrievalResult]) -> dict[str, int | float]:
+    total = len(results)
+    relevance = [result for result in results if result.kind == "relevance"]
+    visibility = [result for result in results if result.kind == "visibility"]
+    reciprocal_rank = sum(
+        1 / result.first_relevant_rank
+        if result.first_relevant_rank is not None
+        else 0.0
+        for result in relevance
+    )
+    return {
+        "total": total,
+        "passed": sum(result.passed for result in results),
+        "pass_rate": round(sum(result.passed for result in results) / total, 3)
+        if total
+        else 0.0,
+        "relevance_total": len(relevance),
+        "visibility_total": len(visibility),
+        "recall_at_1": _rate(
+            sum(result.first_relevant_rank == 1 for result in relevance),
+            len(relevance),
+        ),
+        "recall_at_3": _rate(
+            sum(
+                result.first_relevant_rank is not None
+                and result.first_relevant_rank <= 3
+                for result in relevance
+            ),
+            len(relevance),
+        ),
+        "mrr": round(reciprocal_rank / len(relevance), 3) if relevance else 0.0,
+        "visibility_filter_success_rate": _rate(
+            sum(not result.forbidden_hits for result in visibility),
+            len(visibility),
+        ),
+        "avg_latency_ms": round(
+            sum(result.latency_ms for result in results) / total,
+            2,
+        )
+        if total
+        else 0.0,
+    }
+
+
+def _unique_doc_ids(
+    matches: list[tuple[Chunk, float]],
+    *,
+    limit: int,
+) -> list[str]:
+    doc_ids: list[str] = []
+    seen: set[str] = set()
+    for chunk, _score in matches:
+        if chunk.doc_id in seen:
+            continue
+        seen.add(chunk.doc_id)
+        doc_ids.append(chunk.doc_id)
+        if len(doc_ids) == limit:
+            break
+    return doc_ids
+
+
+def _rate(numerator: int, denominator: int) -> float:
+    return round(numerator / denominator, 3) if denominator else 0.0
 
 
 def _validate_string_list(case_id: str, field_name: str, value: object) -> None:
