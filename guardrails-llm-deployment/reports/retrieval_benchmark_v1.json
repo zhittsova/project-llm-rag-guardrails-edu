@@ -1,0 +1,110 @@
+{
+  "lexical": {
+    "technique": "TF-IDF-style lexical term matching",
+    "chunk_size": 650,
+    "chunk_overlap": 80,
+    "top_k": 3,
+    "total": 24,
+    "passed": 24,
+    "pass_rate": 1.0,
+    "relevance_total": 20,
+    "visibility_total": 4,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "mrr": 1.0,
+    "visibility_filter_success_rate": 1.0,
+    "avg_latency_ms": 0.11,
+    "by_difficulty": {
+      "hard": {
+        "total": 7,
+        "passed": 7,
+        "pass_rate": 1.0,
+        "relevance_total": 5,
+        "visibility_total": 2,
+        "recall_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "mrr": 1.0,
+        "visibility_filter_success_rate": 1.0,
+        "avg_latency_ms": 0.15
+      },
+      "medium": {
+        "total": 6,
+        "passed": 6,
+        "pass_rate": 1.0,
+        "relevance_total": 5,
+        "visibility_total": 1,
+        "recall_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "mrr": 1.0,
+        "visibility_filter_success_rate": 1.0,
+        "avg_latency_ms": 0.08
+      },
+      "easy": {
+        "total": 11,
+        "passed": 11,
+        "pass_rate": 1.0,
+        "relevance_total": 10,
+        "visibility_total": 1,
+        "recall_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "mrr": 1.0,
+        "visibility_filter_success_rate": 1.0,
+        "avg_latency_ms": 0.1
+      }
+    }
+  },
+  "hashing_vector": {
+    "technique": "local deterministic hashing-vector similarity",
+    "chunk_size": 650,
+    "chunk_overlap": 80,
+    "top_k": 3,
+    "total": 24,
+    "passed": 24,
+    "pass_rate": 1.0,
+    "relevance_total": 20,
+    "visibility_total": 4,
+    "recall_at_1": 0.9,
+    "recall_at_3": 1.0,
+    "mrr": 0.95,
+    "visibility_filter_success_rate": 1.0,
+    "avg_latency_ms": 7.89,
+    "by_difficulty": {
+      "hard": {
+        "total": 7,
+        "passed": 7,
+        "pass_rate": 1.0,
+        "relevance_total": 5,
+        "visibility_total": 2,
+        "recall_at_1": 0.8,
+        "recall_at_3": 1.0,
+        "mrr": 0.9,
+        "visibility_filter_success_rate": 1.0,
+        "avg_latency_ms": 8.5
+      },
+      "medium": {
+        "total": 6,
+        "passed": 6,
+        "pass_rate": 1.0,
+        "relevance_total": 5,
+        "visibility_total": 1,
+        "recall_at_1": 0.8,
+        "recall_at_3": 1.0,
+        "mrr": 0.9,
+        "visibility_filter_success_rate": 1.0,
+        "avg_latency_ms": 4.64
+      },
+      "easy": {
+        "total": 11,
+        "passed": 11,
+        "pass_rate": 1.0,
+        "relevance_total": 10,
+        "visibility_total": 1,
+        "recall_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "mrr": 1.0,
+        "visibility_filter_success_rate": 1.0,
+        "avg_latency_ms": 9.28
+      }
+    }
+  }
+}
