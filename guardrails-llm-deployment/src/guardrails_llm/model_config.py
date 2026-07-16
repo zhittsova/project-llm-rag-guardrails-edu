@@ -25,6 +25,10 @@ class MissingModelCredentialError(RuntimeError):
     pass
 
 
+class RemoteModelCallError(RuntimeError):
+    pass
+
+
 @dataclass(frozen=True)
 class OpenAIModelConfig:
     api_key_env: str = DEFAULT_OPENAI_API_KEY_ENV

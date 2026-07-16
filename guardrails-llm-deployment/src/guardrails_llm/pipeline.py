@@ -8,6 +8,7 @@ from typing import Protocol
 from .answering import AnswerGenerator
 from .baseline_pipeline import BaselineRagAssistant, build_baseline_assistant
 from .corpus import Chunk, chunk_documents, load_documents
+from .embeddings import TextEmbedder
 from .guard_classifier import GuardClassifier, should_use_model_classifier
 from .guardrail_policy import GuardrailPolicy
 from .guards import input_guard, make_integrity_safe, output_guard, sanitize_untrusted_context
@@ -168,6 +169,7 @@ def build_assistant(
     answer_model: str | None = None,
     guard_classifier: str = "none",
     classifier_model: str | None = None,
+    retrieval_embedder: TextEmbedder | None = None,
 ) -> BaselineRagAssistant | LearningAssistant:
     answer_generator = _build_answer_generator(
         generator,
@@ -186,6 +188,7 @@ def build_assistant(
             allow_remote_models=allow_remote_models,
             env_file=env_file,
             answer_generator=answer_generator,
+            retrieval_embedder=retrieval_embedder,
         )
 
     # Ниже строится guardrailed assistant. Baseline уже ушел в отдельный
@@ -213,6 +216,7 @@ def build_assistant(
             embedding_model=embedding_model,
             allow_remote_models=allow_remote_models,
             env_file=env_file,
+            embedder=retrieval_embedder,
         )
     else:
         raise ValueError("retriever_backend must be 'lexical', 'langchain', or 'vector'")
