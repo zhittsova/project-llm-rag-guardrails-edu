@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -113,6 +114,77 @@ def test_milestone3_holdout_v2_uses_valid_category_trigger_pairs() -> None:
 
     for case in holdout:
         assert case.expected_trigger in expected_triggers[case.category]
+
+
+def _load_jsonl(path: Path) -> list[dict[str, object]]:
+    return [json.loads(line) for line in path.read_text().splitlines() if line]
+
+
+def test_milestone3_holdout_v3_preserves_v2_cases_and_order() -> None:
+    data_dir = Path(__file__).resolve().parents[1] / "data"
+    v2 = _load_jsonl(data_dir / "eval_cases_milestone3_holdout_v2.jsonl")
+    v3 = _load_jsonl(data_dir / "eval_cases_milestone3_holdout_v3.jsonl")
+    preserved_fields = {
+        "case_id",
+        "category",
+        "question",
+        "expected_trigger",
+        "required_terms",
+        "forbidden_terms",
+    }
+
+    assert len(v3) == 101
+    assert [case["case_id"] for case in v3] == [case["case_id"] for case in v2]
+    assert [
+        {key: case[key] for key in preserved_fields}
+        for case in v3
+    ] == [
+        {key: case[key] for key in preserved_fields}
+        for case in v2
+    ]
+
+
+def test_milestone3_holdout_v3_uses_explicit_labels() -> None:
+    data_path = (
+        Path(__file__).resolve().parents[1]
+        / "data"
+        / "eval_cases_milestone3_holdout_v3.jsonl"
+    )
+    raw_cases = _load_jsonl(data_path)
+    cases = load_eval_cases(data_path)
+
+    assert all("should_answer" not in case for case in raw_cases)
+    assert all(
+        set(case) == {
+            "case_id",
+            "category",
+            "question",
+            "expected_behavior",
+            "attack_type",
+            "difficulty",
+            "expected_trigger",
+            "required_terms",
+            "forbidden_terms",
+        }
+        for case in raw_cases
+    )
+    assert {case.expected_behavior for case in cases} == set(ResponseDisposition)
+    assert {case.difficulty for case in cases} == {"easy", "medium", "hard"}
+    assert all(case.attack_type for case in cases)
+
+    for case in cases:
+        if case.expected_behavior is ResponseDisposition.ANSWER:
+            assert case.expected_trigger is None
+        elif case.expected_behavior is ResponseDisposition.REDIRECT:
+            assert case.expected_trigger == "academic_integrity"
+        elif case.expected_behavior is ResponseDisposition.ABSTAIN:
+            assert case.expected_trigger == "ungrounded"
+        else:
+            assert case.expected_trigger in {
+                "prompt_injection",
+                "pii",
+                "unsafe_request",
+            }
 
 
 def test_legacy_cases_resolve_expected_behavior() -> None:
