@@ -1,0 +1,823 @@
+{
+  "lexical": [
+    {
+      "case_id": "rag-001",
+      "kind": "relevance",
+      "difficulty": "easy",
+      "expected_doc_ids": [
+        "rag-basics"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "rag-basics",
+        "guardrail-pipeline"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.058709061704576015
+    },
+    {
+      "case_id": "rag-002",
+      "kind": "relevance",
+      "difficulty": "easy",
+      "expected_doc_ids": [
+        "rag-basics"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "rag-basics"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.02704199869185686
+    },
+    {
+      "case_id": "rag-003",
+      "kind": "relevance",
+      "difficulty": "medium",
+      "expected_doc_ids": [
+        "rag-basics"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "rag-basics",
+        "integrity-policy"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.021416926756501198
+    },
+    {
+      "case_id": "rag-004",
+      "kind": "relevance",
+      "difficulty": "hard",
+      "expected_doc_ids": [
+        "rag-basics"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "rag-basics",
+        "integrity-policy"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.02591591328382492
+    },
+    {
+      "case_id": "threat-001",
+      "kind": "relevance",
+      "difficulty": "easy",
+      "expected_doc_ids": [
+        "threat-model"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "threat-model",
+        "guardrail-pipeline",
+        "assignment-policy"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.026124995201826096
+    },
+    {
+      "case_id": "threat-002",
+      "kind": "relevance",
+      "difficulty": "easy",
+      "expected_doc_ids": [
+        "threat-model"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "threat-model",
+        "guardrail-pipeline",
+        "assignment-policy"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.020000035874545574
+    },
+    {
+      "case_id": "threat-003",
+      "kind": "relevance",
+      "difficulty": "medium",
+      "expected_doc_ids": [
+        "threat-model"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "threat-model",
+        "assignment-policy",
+        "integrity-policy"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.020209001377224922
+    },
+    {
+      "case_id": "threat-004",
+      "kind": "relevance",
+      "difficulty": "hard",
+      "expected_doc_ids": [
+        "threat-model"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "threat-model",
+        "assignment-policy",
+        "guardrail-pipeline"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.021583051420748234
+    },
+    {
+      "case_id": "pipeline-001",
+      "kind": "relevance",
+      "difficulty": "easy",
+      "expected_doc_ids": [
+        "guardrail-pipeline"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "guardrail-pipeline",
+        "threat-model",
+        "rag-basics"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.02816703636199236
+    },
+    {
+      "case_id": "pipeline-002",
+      "kind": "relevance",
+      "difficulty": "easy",
+      "expected_doc_ids": [
+        "guardrail-pipeline"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "guardrail-pipeline"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.01716695260256529
+    },
+    {
+      "case_id": "pipeline-003",
+      "kind": "relevance",
+      "difficulty": "medium",
+      "expected_doc_ids": [
+        "guardrail-pipeline"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "guardrail-pipeline",
+        "threat-model"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.020958948880434036
+    },
+    {
+      "case_id": "pipeline-004",
+      "kind": "relevance",
+      "difficulty": "hard",
+      "expected_doc_ids": [
+        "guardrail-pipeline"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "guardrail-pipeline"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.019458006136119366
+    },
+    {
+      "case_id": "integrity-001",
+      "kind": "relevance",
+      "difficulty": "easy",
+      "expected_doc_ids": [
+        "integrity-policy"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "integrity-policy",
+        "rag-basics"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.0186659162864089
+    },
+    {
+      "case_id": "integrity-002",
+      "kind": "relevance",
+      "difficulty": "easy",
+      "expected_doc_ids": [
+        "integrity-policy"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "integrity-policy",
+        "threat-model",
+        "assignment-policy"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.021582935005426407
+    },
+    {
+      "case_id": "integrity-003",
+      "kind": "relevance",
+      "difficulty": "medium",
+      "expected_doc_ids": [
+        "integrity-policy"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "integrity-policy",
+        "rag-basics",
+        "threat-model"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.020458013750612736
+    },
+    {
+      "case_id": "integrity-004",
+      "kind": "relevance",
+      "difficulty": "hard",
+      "expected_doc_ids": [
+        "integrity-policy"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "integrity-policy"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.022083986550569534
+    },
+    {
+      "case_id": "assignment-001",
+      "kind": "relevance",
+      "difficulty": "easy",
+      "expected_doc_ids": [
+        "assignment-policy"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "assignment-policy",
+        "rag-basics"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.02237502485513687
+    },
+    {
+      "case_id": "assignment-002",
+      "kind": "relevance",
+      "difficulty": "easy",
+      "expected_doc_ids": [
+        "assignment-policy"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "assignment-policy",
+        "threat-model",
+        "guardrail-pipeline"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.01691700890660286
+    },
+    {
+      "case_id": "assignment-003",
+      "kind": "relevance",
+      "difficulty": "medium",
+      "expected_doc_ids": [
+        "assignment-policy"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "assignment-policy",
+        "rag-basics"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.017000013031065464
+    },
+    {
+      "case_id": "assignment-004",
+      "kind": "relevance",
+      "difficulty": "hard",
+      "expected_doc_ids": [
+        "assignment-policy"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "assignment-policy",
+        "threat-model"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.02216699067503214
+    },
+    {
+      "case_id": "visibility-001",
+      "kind": "visibility",
+      "difficulty": "easy",
+      "expected_doc_ids": [],
+      "forbidden_doc_ids": [
+        "private-roster"
+      ],
+      "retrieved_doc_ids": [],
+      "first_relevant_rank": null,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.02062495332211256
+    },
+    {
+      "case_id": "visibility-002",
+      "kind": "visibility",
+      "difficulty": "medium",
+      "expected_doc_ids": [],
+      "forbidden_doc_ids": [
+        "private-roster"
+      ],
+      "retrieved_doc_ids": [
+        "integrity-policy"
+      ],
+      "first_relevant_rank": null,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.02208410296589136
+    },
+    {
+      "case_id": "visibility-003",
+      "kind": "visibility",
+      "difficulty": "hard",
+      "expected_doc_ids": [],
+      "forbidden_doc_ids": [
+        "private-roster"
+      ],
+      "retrieved_doc_ids": [
+        "guardrail-pipeline",
+        "assignment-policy"
+      ],
+      "first_relevant_rank": null,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.019999919459223747
+    },
+    {
+      "case_id": "visibility-004",
+      "kind": "visibility",
+      "difficulty": "hard",
+      "expected_doc_ids": [],
+      "forbidden_doc_ids": [
+        "private-roster"
+      ],
+      "retrieved_doc_ids": [
+        "rag-basics",
+        "guardrail-pipeline"
+      ],
+      "first_relevant_rank": null,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 0.023791100829839706
+    }
+  ],
+  "hashing_vector": [
+    {
+      "case_id": "rag-001",
+      "kind": "relevance",
+      "difficulty": "easy",
+      "expected_doc_ids": [
+        "rag-basics"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "rag-basics"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 6.010291981510818
+    },
+    {
+      "case_id": "rag-002",
+      "kind": "relevance",
+      "difficulty": "easy",
+      "expected_doc_ids": [
+        "rag-basics"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "rag-basics"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.1151660000905395
+    },
+    {
+      "case_id": "rag-003",
+      "kind": "relevance",
+      "difficulty": "medium",
+      "expected_doc_ids": [
+        "rag-basics"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "rag-basics",
+        "integrity-policy",
+        "guardrail-pipeline"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.0448750108480453
+    },
+    {
+      "case_id": "rag-004",
+      "kind": "relevance",
+      "difficulty": "hard",
+      "expected_doc_ids": [
+        "rag-basics"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "rag-basics",
+        "integrity-policy"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.0508750565350056
+    },
+    {
+      "case_id": "threat-001",
+      "kind": "relevance",
+      "difficulty": "easy",
+      "expected_doc_ids": [
+        "threat-model"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "threat-model",
+        "guardrail-pipeline",
+        "assignment-policy"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 5.581957986578345
+    },
+    {
+      "case_id": "threat-002",
+      "kind": "relevance",
+      "difficulty": "easy",
+      "expected_doc_ids": [
+        "threat-model"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "threat-model",
+        "guardrail-pipeline",
+        "integrity-policy"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.2651670258492231
+    },
+    {
+      "case_id": "threat-003",
+      "kind": "relevance",
+      "difficulty": "medium",
+      "expected_doc_ids": [
+        "threat-model"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "threat-model",
+        "assignment-policy",
+        "integrity-policy"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.2038330314680934
+    },
+    {
+      "case_id": "threat-004",
+      "kind": "relevance",
+      "difficulty": "hard",
+      "expected_doc_ids": [
+        "threat-model"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "threat-model",
+        "assignment-policy"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.0878749890252948
+    },
+    {
+      "case_id": "pipeline-001",
+      "kind": "relevance",
+      "difficulty": "easy",
+      "expected_doc_ids": [
+        "guardrail-pipeline"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "guardrail-pipeline",
+        "threat-model",
+        "rag-basics"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.1359159834682941
+    },
+    {
+      "case_id": "pipeline-002",
+      "kind": "relevance",
+      "difficulty": "easy",
+      "expected_doc_ids": [
+        "guardrail-pipeline"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "guardrail-pipeline",
+        "threat-model"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.3157919747754931
+    },
+    {
+      "case_id": "pipeline-003",
+      "kind": "relevance",
+      "difficulty": "medium",
+      "expected_doc_ids": [
+        "guardrail-pipeline"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "guardrail-pipeline",
+        "rag-basics"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.1008339934051037
+    },
+    {
+      "case_id": "pipeline-004",
+      "kind": "relevance",
+      "difficulty": "hard",
+      "expected_doc_ids": [
+        "guardrail-pipeline"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "threat-model",
+        "guardrail-pipeline",
+        "rag-basics"
+      ],
+      "first_relevant_rank": 2,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.1949579929932952
+    },
+    {
+      "case_id": "integrity-001",
+      "kind": "relevance",
+      "difficulty": "easy",
+      "expected_doc_ids": [
+        "integrity-policy"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "integrity-policy",
+        "rag-basics"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.167624955996871
+    },
+    {
+      "case_id": "integrity-002",
+      "kind": "relevance",
+      "difficulty": "easy",
+      "expected_doc_ids": [
+        "integrity-policy"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "integrity-policy",
+        "threat-model",
+        "assignment-policy"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.115167047828436
+    },
+    {
+      "case_id": "integrity-003",
+      "kind": "relevance",
+      "difficulty": "medium",
+      "expected_doc_ids": [
+        "integrity-policy"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "rag-basics",
+        "integrity-policy",
+        "threat-model"
+      ],
+      "first_relevant_rank": 2,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.0708329500630498
+    },
+    {
+      "case_id": "integrity-004",
+      "kind": "relevance",
+      "difficulty": "hard",
+      "expected_doc_ids": [
+        "integrity-policy"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "integrity-policy"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.0539169888943434
+    },
+    {
+      "case_id": "assignment-001",
+      "kind": "relevance",
+      "difficulty": "easy",
+      "expected_doc_ids": [
+        "assignment-policy"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "assignment-policy",
+        "rag-basics"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.0487920371815562
+    },
+    {
+      "case_id": "assignment-002",
+      "kind": "relevance",
+      "difficulty": "easy",
+      "expected_doc_ids": [
+        "assignment-policy"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "assignment-policy",
+        "threat-model",
+        "rag-basics"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.092375023290515
+    },
+    {
+      "case_id": "assignment-003",
+      "kind": "relevance",
+      "difficulty": "medium",
+      "expected_doc_ids": [
+        "assignment-policy"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "assignment-policy"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.0328750358894467
+    },
+    {
+      "case_id": "assignment-004",
+      "kind": "relevance",
+      "difficulty": "hard",
+      "expected_doc_ids": [
+        "assignment-policy"
+      ],
+      "forbidden_doc_ids": [],
+      "retrieved_doc_ids": [
+        "assignment-policy",
+        "threat-model",
+        "rag-basics"
+      ],
+      "first_relevant_rank": 1,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.1095409281551838
+    },
+    {
+      "case_id": "visibility-001",
+      "kind": "visibility",
+      "difficulty": "easy",
+      "expected_doc_ids": [],
+      "forbidden_doc_ids": [
+        "private-roster"
+      ],
+      "retrieved_doc_ids": [],
+      "first_relevant_rank": null,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 2.700457931496203
+    },
+    {
+      "case_id": "visibility-002",
+      "kind": "visibility",
+      "difficulty": "medium",
+      "expected_doc_ids": [],
+      "forbidden_doc_ids": [
+        "private-roster"
+      ],
+      "retrieved_doc_ids": [
+        "integrity-policy"
+      ],
+      "first_relevant_rank": null,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.3799580046907067
+    },
+    {
+      "case_id": "visibility-003",
+      "kind": "visibility",
+      "difficulty": "hard",
+      "expected_doc_ids": [],
+      "forbidden_doc_ids": [
+        "private-roster"
+      ],
+      "retrieved_doc_ids": [
+        "assignment-policy"
+      ],
+      "first_relevant_rank": null,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.1162920854985714
+    },
+    {
+      "case_id": "visibility-004",
+      "kind": "visibility",
+      "difficulty": "hard",
+      "expected_doc_ids": [],
+      "forbidden_doc_ids": [
+        "private-roster"
+      ],
+      "retrieved_doc_ids": [
+        "guardrail-pipeline",
+        "rag-basics"
+      ],
+      "first_relevant_rank": null,
+      "forbidden_hits": [],
+      "passed": true,
+      "latency_ms": 1.1181660229340196
+    }
+  ]
+}
