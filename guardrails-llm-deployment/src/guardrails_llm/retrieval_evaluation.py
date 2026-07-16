@@ -11,7 +11,7 @@ from .corpus import Chunk, Document, VISIBILITY_VALUES
 
 
 RETRIEVAL_KINDS = frozenset({"relevance", "visibility"})
-DIFFICULTIES = frozenset({"easy", "medium", "hard"})
+DIFFICULTIES = ("easy", "medium", "hard")
 
 
 @dataclass(frozen=True)
@@ -236,18 +236,8 @@ def _summarize_group(results: list[RetrievalResult]) -> dict[str, int | float]:
         else 0.0,
         "relevance_total": len(relevance),
         "visibility_total": len(visibility),
-        "recall_at_1": _rate(
-            sum(result.first_relevant_rank == 1 for result in relevance),
-            len(relevance),
-        ),
-        "recall_at_3": _rate(
-            sum(
-                result.first_relevant_rank is not None
-                and result.first_relevant_rank <= 3
-                for result in relevance
-            ),
-            len(relevance),
-        ),
+        "recall_at_1": _mean_recall(relevance, at_k=1),
+        "recall_at_3": _mean_recall(relevance, at_k=3),
         "mrr": round(reciprocal_rank / len(relevance), 3) if relevance else 0.0,
         "visibility_filter_success_rate": _rate(
             sum(not result.forbidden_hits for result in visibility),
@@ -281,6 +271,17 @@ def _unique_doc_ids(
 
 def _rate(numerator: int, denominator: int) -> float:
     return round(numerator / denominator, 3) if denominator else 0.0
+
+
+def _mean_recall(results: list[RetrievalResult], *, at_k: int) -> float:
+    if not results:
+        return 0.0
+    recalls = []
+    for result in results:
+        expected = set(result.expected_doc_ids)
+        retrieved = set(result.retrieved_doc_ids[:at_k])
+        recalls.append(len(expected & retrieved) / len(expected) if expected else 0.0)
+    return round(sum(recalls) / len(recalls), 3)
 
 
 def _validate_string_list(case_id: str, field_name: str, value: object) -> None:

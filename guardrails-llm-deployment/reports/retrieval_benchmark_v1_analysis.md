@@ -21,8 +21,8 @@ remote embeddings, LLM, answer generator, classifier, or model judge were used.
 
 | Retriever | Recall@1 | Recall@3 | MRR | Visibility success | Mean query latency |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Lexical | 1.000 | 1.000 | 1.000 | 1.000 | 0.11 ms |
-| Hashing vector | 0.900 | 1.000 | 0.950 | 1.000 | 7.89 ms |
+| Lexical | 1.000 | 1.000 | 1.000 | 1.000 | 0.02 ms |
+| Hashing vector | 0.900 | 1.000 | 0.950 | 1.000 | 1.59 ms |
 
 Both retrievers found an expected public document in the first three unique
 document ranks for all 20 relevance queries. The lexical retriever placed the

@@ -209,13 +209,16 @@ def _result(
     forbidden_hits: list[str] | None = None,
     latency_ms: float = 1.0,
 ) -> RetrievalResult:
+    retrieved_doc_ids: list[str] = []
+    if kind == "relevance" and rank is not None:
+        retrieved_doc_ids = ["wrong"] * (rank - 1) + ["expected"]
     return RetrievalResult(
         case_id=case_id,
         kind=kind,
         difficulty=difficulty,
         expected_doc_ids=["expected"] if kind == "relevance" else [],
         forbidden_doc_ids=["private"] if kind == "visibility" else [],
-        retrieved_doc_ids=[],
+        retrieved_doc_ids=retrieved_doc_ids,
         first_relevant_rank=rank if kind == "relevance" else None,
         forbidden_hits=forbidden_hits or [],
         passed=(rank is not None) if kind == "relevance" else not forbidden_hits,
@@ -257,6 +260,28 @@ def test_summarize_retrieval_uses_hand_calculated_metrics() -> None:
     assert summary["by_difficulty"]["easy"]["mrr"] == 0.75
     assert summary["by_difficulty"]["hard"]["visibility_filter_success_rate"] == 1.0
     assert summary["by_difficulty"]["medium"]["relevance_total"] == 0
+    assert list(summary["by_difficulty"]) == ["easy", "medium", "hard"]
+
+
+def test_summarize_retrieval_uses_fractional_recall_for_multiple_labels() -> None:
+    result = RetrievalResult(
+        case_id="multiple-labels",
+        kind="relevance",
+        difficulty="medium",
+        expected_doc_ids=["expected-a", "expected-b"],
+        forbidden_doc_ids=[],
+        retrieved_doc_ids=["expected-a", "other", "expected-b"],
+        first_relevant_rank=1,
+        forbidden_hits=[],
+        passed=True,
+        latency_ms=1.0,
+    )
+
+    summary = summarize_retrieval([result])
+
+    assert summary["recall_at_1"] == 0.5
+    assert summary["recall_at_3"] == 1.0
+    assert summary["mrr"] == 1.0
 
 
 def test_summarize_retrieval_handles_empty_results() -> None:

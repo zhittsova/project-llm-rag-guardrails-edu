@@ -15,7 +15,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.22787495981901884
+      "latency_ms": 0.058709061704576015
     },
     {
       "case_id": "rag-002",
@@ -31,7 +31,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.06404193118214607
+      "latency_ms": 0.02704199869185686
     },
     {
       "case_id": "rag-003",
@@ -48,7 +48,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.0439169816672802
+      "latency_ms": 0.021416926756501198
     },
     {
       "case_id": "rag-004",
@@ -65,7 +65,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.05016603972762823
+      "latency_ms": 0.02591591328382492
     },
     {
       "case_id": "threat-001",
@@ -83,7 +83,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.050625065341591835
+      "latency_ms": 0.026124995201826096
     },
     {
       "case_id": "threat-002",
@@ -101,7 +101,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.041207997128367424
+      "latency_ms": 0.020000035874545574
     },
     {
       "case_id": "threat-003",
@@ -119,7 +119,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.04087504930794239
+      "latency_ms": 0.020209001377224922
     },
     {
       "case_id": "threat-004",
@@ -137,7 +137,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.04158401861786842
+      "latency_ms": 0.021583051420748234
     },
     {
       "case_id": "pipeline-001",
@@ -155,7 +155,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.05462497938424349
+      "latency_ms": 0.02816703636199236
     },
     {
       "case_id": "pipeline-002",
@@ -171,7 +171,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.15712494496256113
+      "latency_ms": 0.01716695260256529
     },
     {
       "case_id": "pipeline-003",
@@ -188,7 +188,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.059416983276605606
+      "latency_ms": 0.020958948880434036
     },
     {
       "case_id": "pipeline-004",
@@ -204,7 +204,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.04433398135006428
+      "latency_ms": 0.019458006136119366
     },
     {
       "case_id": "integrity-001",
@@ -221,7 +221,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.039792037568986416
+      "latency_ms": 0.0186659162864089
     },
     {
       "case_id": "integrity-002",
@@ -239,7 +239,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.04479195922613144
+      "latency_ms": 0.021582935005426407
     },
     {
       "case_id": "integrity-003",
@@ -257,7 +257,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.042082974687218666
+      "latency_ms": 0.020458013750612736
     },
     {
       "case_id": "integrity-004",
@@ -273,7 +273,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.24670897983014584
+      "latency_ms": 0.022083986550569534
     },
     {
       "case_id": "assignment-001",
@@ -290,7 +290,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.04950002767145634
+      "latency_ms": 0.02237502485513687
     },
     {
       "case_id": "assignment-002",
@@ -308,7 +308,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.035207951441407204
+      "latency_ms": 0.01691700890660286
     },
     {
       "case_id": "assignment-003",
@@ -325,7 +325,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.03724999260157347
+      "latency_ms": 0.017000013031065464
     },
     {
       "case_id": "assignment-004",
@@ -342,7 +342,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.5241669714450836
+      "latency_ms": 0.02216699067503214
     },
     {
       "case_id": "visibility-001",
@@ -356,7 +356,7 @@
       "first_relevant_rank": null,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.2835419727489352
+      "latency_ms": 0.02062495332211256
     },
     {
       "case_id": "visibility-002",
@@ -372,7 +372,7 @@
       "first_relevant_rank": null,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.24216691963374615
+      "latency_ms": 0.02208410296589136
     },
     {
       "case_id": "visibility-003",
@@ -389,7 +389,7 @@
       "first_relevant_rank": null,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.08920894470065832
+      "latency_ms": 0.019999919459223747
     },
     {
       "case_id": "visibility-004",
@@ -406,7 +406,7 @@
       "first_relevant_rank": null,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 0.049749971367418766
+      "latency_ms": 0.023791100829839706
     }
   ],
   "hashing_vector": [
@@ -424,7 +424,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 23.529042024165392
+      "latency_ms": 6.010291981510818
     },
     {
       "case_id": "rag-002",
@@ -440,7 +440,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 2.3848330602049828
+      "latency_ms": 1.1151660000905395
     },
     {
       "case_id": "rag-003",
@@ -458,7 +458,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 2.614959026686847
+      "latency_ms": 1.0448750108480453
     },
     {
       "case_id": "rag-004",
@@ -475,7 +475,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 4.026332986541092
+      "latency_ms": 1.0508750565350056
     },
     {
       "case_id": "threat-001",
@@ -493,7 +493,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 4.9587920075282454
+      "latency_ms": 5.581957986578345
     },
     {
       "case_id": "threat-002",
@@ -511,7 +511,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 3.500624909065664
+      "latency_ms": 1.2651670258492231
     },
     {
       "case_id": "threat-003",
@@ -529,7 +529,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 4.887582967057824
+      "latency_ms": 1.2038330314680934
     },
     {
       "case_id": "threat-004",
@@ -546,7 +546,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 14.333917060866952
+      "latency_ms": 1.0878749890252948
     },
     {
       "case_id": "pipeline-001",
@@ -564,7 +564,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 6.442375015467405
+      "latency_ms": 1.1359159834682941
     },
     {
       "case_id": "pipeline-002",
@@ -581,7 +581,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 4.714417038485408
+      "latency_ms": 1.3157919747754931
     },
     {
       "case_id": "pipeline-003",
@@ -598,7 +598,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 4.401541082188487
+      "latency_ms": 1.1008339934051037
     },
     {
       "case_id": "pipeline-004",
@@ -616,7 +616,7 @@
       "first_relevant_rank": 2,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 3.2939580269157887
+      "latency_ms": 1.1949579929932952
     },
     {
       "case_id": "integrity-001",
@@ -633,7 +633,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 4.044667002744973
+      "latency_ms": 1.167624955996871
     },
     {
       "case_id": "integrity-002",
@@ -651,7 +651,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 5.548665998503566
+      "latency_ms": 1.115167047828436
     },
     {
       "case_id": "integrity-003",
@@ -669,7 +669,7 @@
       "first_relevant_rank": 2,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 6.785416975617409
+      "latency_ms": 1.0708329500630498
     },
     {
       "case_id": "integrity-004",
@@ -685,7 +685,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 11.337833013385534
+      "latency_ms": 1.0539169888943434
     },
     {
       "case_id": "assignment-001",
@@ -702,7 +702,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 15.058124903589487
+      "latency_ms": 1.0487920371815562
     },
     {
       "case_id": "assignment-002",
@@ -720,7 +720,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 8.422874961979687
+      "latency_ms": 1.092375023290515
     },
     {
       "case_id": "assignment-003",
@@ -736,7 +736,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 5.743083078414202
+      "latency_ms": 1.0328750358894467
     },
     {
       "case_id": "assignment-004",
@@ -754,7 +754,7 @@
       "first_relevant_rank": 1,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 8.20583407767117
+      "latency_ms": 1.1095409281551838
     },
     {
       "case_id": "visibility-001",
@@ -768,7 +768,7 @@
       "first_relevant_rank": null,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 23.453625035472214
+      "latency_ms": 2.700457931496203
     },
     {
       "case_id": "visibility-002",
@@ -784,7 +784,7 @@
       "first_relevant_rank": null,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 3.390416968613863
+      "latency_ms": 1.3799580046907067
     },
     {
       "case_id": "visibility-003",
@@ -800,7 +800,7 @@
       "first_relevant_rank": null,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 4.520292044617236
+      "latency_ms": 1.1162920854985714
     },
     {
       "case_id": "visibility-004",
@@ -817,7 +817,7 @@
       "first_relevant_rank": null,
       "forbidden_hits": [],
       "passed": true,
-      "latency_ms": 13.772582984529436
+      "latency_ms": 1.1181660229340196
     }
   ]
 }
