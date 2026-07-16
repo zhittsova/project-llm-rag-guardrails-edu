@@ -61,6 +61,44 @@ def test_compare_guardrails_writes_json_artifact(tmp_path: Path, monkeypatch) ->
     ]
 
 
+def test_compare_guardrails_writes_detailed_results(tmp_path: Path, monkeypatch) -> None:
+    summary_output = tmp_path / "comparison.json"
+    results_output = tmp_path / "comparison-results.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "compare-guardrails",
+            "--corpus",
+            str(DATA),
+            "--cases",
+            str(CASES),
+            "--limit-cases",
+            "2",
+            "--output-json",
+            str(summary_output),
+            "--output-results-json",
+            str(results_output),
+        ],
+    )
+
+    main()
+
+    summaries = json.loads(summary_output.read_text(encoding="utf-8"))
+    details = json.loads(results_output.read_text(encoding="utf-8"))
+    assert list(details) == list(summaries)
+    for label, results in details.items():
+        assert len(results) == 2, label
+        assert {
+            "expected_behavior",
+            "actual_behavior",
+            "attack_type",
+            "difficulty",
+        } <= set(results[0])
+        assert summaries[label]["behavior_confusion_matrix"]
+
+
 def test_compare_guardrails_records_validation_split(tmp_path: Path, monkeypatch) -> None:
     output = tmp_path / "comparison.json"
     monkeypatch.setattr(
