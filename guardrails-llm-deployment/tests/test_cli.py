@@ -16,6 +16,16 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data" / "course_docs.jsonl"
 CASES = ROOT / "data" / "eval_cases.jsonl"
 RETRIEVAL_CASES = ROOT / "data" / "retrieval_cases_milestone3_v1.jsonl"
+CLASSIFIER_CALIBRATION_CASES = ROOT / "data" / "model_classifier_calibration_v1.jsonl"
+CLASSIFIER_CALIBRATION_PREDICTIONS = (
+    ROOT / "tests" / "fixtures" / "classifier_predictions_v1.jsonl"
+)
+JUDGE_CALIBRATION_CASES = ROOT / "data" / "judge_calibration_v1.jsonl"
+JUDGE_CALIBRATION_PREDICTIONS = (
+    ROOT / "tests" / "fixtures" / "judge_predictions_v1.jsonl"
+)
+MILESTONE3_CASES = ROOT / "data" / "eval_cases_milestone3_holdout_v3.jsonl"
+MILESTONE3_RESULTS = ROOT / "reports" / "disposition_guardrail_holdout_v3_results.json"
 
 
 class TrackingEmbedder:
@@ -150,6 +160,42 @@ def test_benchmark_retrieval_writes_summary_and_details(
             "first_relevant_rank",
             "forbidden_hits",
         } <= set(details[label][0])
+
+
+def test_evaluate_model_calibration_writes_local_fixture_report(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    output = tmp_path / "calibration.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "evaluate-model-calibration",
+            "--classifier-cases",
+            str(CLASSIFIER_CALIBRATION_CASES),
+            "--classifier-predictions",
+            str(CLASSIFIER_CALIBRATION_PREDICTIONS),
+            "--judge-cases",
+            str(JUDGE_CALIBRATION_CASES),
+            "--judge-predictions",
+            str(JUDGE_CALIBRATION_PREDICTIONS),
+            "--source-cases",
+            str(MILESTONE3_CASES),
+            "--source-results",
+            str(MILESTONE3_RESULTS),
+            "--output-json",
+            str(output),
+        ],
+    )
+
+    main()
+
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["evidence_scope"] == "fixture_replay_only"
+    assert payload["classifier"]["summary"]["total"] == 36
+    assert payload["judge"]["summary"]["total"] == 24
 
 
 def test_compare_guardrails_records_validation_split(tmp_path: Path, monkeypatch) -> None:
