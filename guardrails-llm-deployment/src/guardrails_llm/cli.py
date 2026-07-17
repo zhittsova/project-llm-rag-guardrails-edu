@@ -29,8 +29,17 @@ from .model_calibration import (
     DEFAULT_JUDGE_CALIBRATION_PREDICTIONS,
     run_local_model_calibration,
 )
+from .model_capture import (
+    DEFAULT_CAPTURE_MANIFEST_OUTPUT,
+    DEFAULT_CLASSIFIER_CAPTURE_OUTPUT,
+    DEFAULT_JUDGE_CAPTURE_OUTPUT,
+    run_model_calibration_capture,
+)
 from .model_config import (
+    DEFAULT_OPENAI_CLASSIFIER_MODEL,
+    DEFAULT_OPENAI_JUDGE_MODEL,
     MissingModelCredentialError,
+    OpenAIModelConfig,
     RemoteModelCallError,
     RemoteModelsNotAllowedError,
     openai_config_summary,
@@ -168,6 +177,56 @@ def main() -> None:
     )
     calibration_parser.add_argument("--output-json", type=Path)
 
+    capture_parser = subparsers.add_parser(
+        "capture-model-calibration",
+        help="Capture gated remote classifier and judge predictions",
+    )
+    capture_parser.add_argument(
+        "--component",
+        choices=["classifier", "judge", "both"],
+        default="both",
+    )
+    capture_parser.add_argument(
+        "--classifier-cases",
+        type=Path,
+        default=DEFAULT_CLASSIFIER_CALIBRATION_CASES,
+    )
+    capture_parser.add_argument(
+        "--judge-cases",
+        type=Path,
+        default=DEFAULT_JUDGE_CALIBRATION_CASES,
+    )
+    capture_parser.add_argument(
+        "--source-cases",
+        type=Path,
+        default=DEFAULT_CALIBRATION_SOURCE_CASES,
+    )
+    capture_parser.add_argument(
+        "--source-results",
+        type=Path,
+        default=DEFAULT_CALIBRATION_SOURCE_RESULTS,
+    )
+    capture_parser.add_argument(
+        "--classifier-output",
+        type=Path,
+        default=DEFAULT_CLASSIFIER_CAPTURE_OUTPUT,
+    )
+    capture_parser.add_argument(
+        "--judge-output",
+        type=Path,
+        default=DEFAULT_JUDGE_CAPTURE_OUTPUT,
+    )
+    capture_parser.add_argument(
+        "--manifest-output",
+        type=Path,
+        default=DEFAULT_CAPTURE_MANIFEST_OUTPUT,
+    )
+    capture_parser.add_argument("--classifier-model")
+    capture_parser.add_argument("--judge-model")
+    capture_parser.add_argument("--limit-cases", type=int)
+    capture_parser.add_argument("--allow-remote-models", action="store_true")
+    capture_parser.add_argument("--env-file", type=Path)
+
     index_parser = subparsers.add_parser("build-index", help="Build a local Chroma vector index")
     index_parser.add_argument("--corpus", dest="command_corpus", type=Path)
     index_parser.add_argument("--index-dir", type=Path, default=default_index_path())
@@ -284,6 +343,37 @@ def main() -> None:
                 encoding="utf-8",
             )
         print(json.dumps(calibration, indent=2))
+        return
+
+    if args.command == "capture-model-calibration":
+        try:
+            manifest = run_model_calibration_capture(
+                component=args.component,
+                config=OpenAIModelConfig(
+                    classifier_model=(
+                        args.classifier_model or DEFAULT_OPENAI_CLASSIFIER_MODEL
+                    ),
+                    judge_model=args.judge_model or DEFAULT_OPENAI_JUDGE_MODEL,
+                    allow_remote_models=args.allow_remote_models,
+                    env_file=args.env_file,
+                ),
+                classifier_cases_path=args.classifier_cases,
+                judge_cases_path=args.judge_cases,
+                source_cases_path=args.source_cases,
+                source_results_path=args.source_results,
+                classifier_output_path=args.classifier_output,
+                judge_output_path=args.judge_output,
+                manifest_output_path=args.manifest_output,
+                limit_cases=args.limit_cases,
+            )
+        except (
+            OSError,
+            ValueError,
+            RemoteModelsNotAllowedError,
+            MissingModelCredentialError,
+        ) as exc:
+            parser.error(str(exc))
+        print(json.dumps(manifest, indent=2))
         return
 
     if args.command == "normalize-course-corpus":
