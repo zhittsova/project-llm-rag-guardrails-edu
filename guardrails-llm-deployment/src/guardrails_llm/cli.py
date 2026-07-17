@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from dataclasses import asdict
 
 from .corpus import default_data_path, validate_corpus
 from .course_corpus import default_course_output_path, default_course_source_path, normalize_course_corpus
@@ -225,7 +226,7 @@ def main() -> None:
                     classifier_model=args.classifier_model,
                 )
                 comparison_results = run_evaluation(comparison_assistant, cases)
-                comparison_summary = profile | summarize(comparison_results)
+                comparison_summary["results"] = [asdict(result) for result in comparison_results]
                 if judge:
                     comparison_summary["judge"] = summarize_judgments(judge_results(cases, comparison_results, judge))
                 comparisons[label] = comparison_summary
