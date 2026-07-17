@@ -226,7 +226,9 @@ def main() -> None:
                     classifier_model=args.classifier_model,
                 )
                 comparison_results = run_evaluation(comparison_assistant, cases)
+                comparison_summary = profile | summarize(comparison_results)
                 comparison_summary["results"] = [asdict(result) for result in comparison_results]
+                
                 if judge:
                     comparison_summary["judge"] = summarize_judgments(judge_results(cases, comparison_results, judge))
                 comparisons[label] = comparison_summary
