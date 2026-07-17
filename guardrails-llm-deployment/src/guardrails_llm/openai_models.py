@@ -114,19 +114,10 @@ class OpenAIGuardClassifier:
                     text=_json_schema_text_config("guard_classification", GUARD_CLASSIFIER_SCHEMA),
                 )
                 payload = _json_response(response, "OpenAI guard classifier")
-            label = str(payload.get("label", "unsafe_request"))
-            confidence = _float_in_range(payload.get("confidence", 1.0), default=1.0)
-            explanation = str(payload.get("explanation", "")).strip()
-            allowed_labels = {
-                "safe",
-                "prompt_injection",
-                "pii",
-                "academic_integrity",
-                "unsafe_request",
-                "unsupported",
-            }
-            if label not in allowed_labels:
-                label = "unsafe_request"
+            _validate_guard_classifier_payload(payload)
+            label = str(payload["label"])
+            confidence = float(payload["confidence"])
+            explanation = str(payload["explanation"]).strip()
             return GuardClassification(label=label, confidence=confidence, explanation=explanation)
         except Exception as exc:
             return GuardClassification(
@@ -162,18 +153,17 @@ class OpenAIJudge:
                     text=_json_schema_text_config("guardrail_judgment", JUDGE_SCHEMA),
                 )
                 payload = _json_response(response, "OpenAI judge")
-            notes = payload.get("notes", [])
-            if not isinstance(notes, list) or not all(isinstance(note, str) for note in notes):
-                notes = ["invalid_judge_notes"]
+            _validate_judge_payload(payload)
+            notes = list(payload["notes"])
             return JudgeResult(
                 case_id=case.case_id,
                 category=case.category,
-                grounded=_bool(payload.get("grounded")),
-                privacy_safe=_bool(payload.get("privacy_safe")),
-                injection_safe=_bool(payload.get("injection_safe")),
-                integrity_safe=_bool(payload.get("integrity_safe")),
-                refusal_appropriate=_bool(payload.get("refusal_appropriate")),
-                score=round(_float_in_range(payload.get("score", 0.0), default=0.0), 3),
+                grounded=payload["grounded"] is True,
+                privacy_safe=payload["privacy_safe"] is True,
+                injection_safe=payload["injection_safe"] is True,
+                integrity_safe=payload["integrity_safe"] is True,
+                refusal_appropriate=payload["refusal_appropriate"] is True,
+                score=round(float(payload["score"]), 3),
                 notes=notes,
             )
         except Exception as exc:
@@ -288,14 +278,52 @@ def _remote_model_error(operation: str, exc: Exception) -> RemoteModelCallError:
     return RemoteModelCallError(f"OpenAI {operation} request failed: {type(exc).__name__}")
 
 
-def _float_in_range(value: object, *, default: float) -> float:
-    if not isinstance(value, int | float):
-        return default
-    return max(0.0, min(1.0, float(value)))
+def _validate_guard_classifier_payload(payload: dict[str, object]) -> None:
+    required = {"label", "confidence", "explanation"}
+    if set(payload) != required:
+        raise ValueError("guard classifier response has invalid fields")
+    allowed_labels = {
+        "safe",
+        "prompt_injection",
+        "pii",
+        "academic_integrity",
+        "unsafe_request",
+        "unsupported",
+    }
+    if payload["label"] not in allowed_labels:
+        raise ValueError("guard classifier response has an invalid label")
+    if not _is_unit_score(payload["confidence"]):
+        raise ValueError("guard classifier response has an invalid confidence")
+    if not isinstance(payload["explanation"], str):
+        raise ValueError("guard classifier response has an invalid explanation")
 
 
-def _bool(value: object) -> bool:
-    return value is True
+def _validate_judge_payload(payload: dict[str, object]) -> None:
+    boolean_fields = {
+        "grounded",
+        "privacy_safe",
+        "injection_safe",
+        "integrity_safe",
+        "refusal_appropriate",
+    }
+    required = boolean_fields | {"score", "notes"}
+    if set(payload) != required:
+        raise ValueError("judge response has invalid fields")
+    if any(not isinstance(payload[field], bool) for field in boolean_fields):
+        raise ValueError("judge response has an invalid boolean field")
+    if not _is_unit_score(payload["score"]):
+        raise ValueError("judge response has an invalid score")
+    notes = payload["notes"]
+    if not isinstance(notes, list) or not all(isinstance(note, str) for note in notes):
+        raise ValueError("judge response has invalid notes")
+
+
+def _is_unit_score(value: object) -> bool:
+    return (
+        isinstance(value, int | float)
+        and not isinstance(value, bool)
+        and 0.0 <= float(value) <= 1.0
+    )
 
 
 def _json_schema_text_config(name: str, schema: dict[str, object]) -> dict[str, object]:
