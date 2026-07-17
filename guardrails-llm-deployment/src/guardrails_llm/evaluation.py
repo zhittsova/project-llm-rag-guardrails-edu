@@ -23,7 +23,6 @@ class EvalCase:
     
 
 
-
 @dataclass(frozen=True)
 class EvalResult:
     case_id: str
@@ -156,7 +155,7 @@ def _observed_behavior(response) -> str:
     if triggers and not response.citations:
         return "block"
     
-    if response.citaions:
+    if response.citations:
         return "answer"
     
     return "abstain"
