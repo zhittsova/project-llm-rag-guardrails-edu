@@ -7,6 +7,8 @@ from typing import Protocol
 
 from .answering import AnswerGenerator
 from .corpus import Chunk, chunk_documents, load_documents
+from .dispositions import ResponseDisposition
+from .embeddings import TextEmbedder
 from .retrieval import LexicalRetriever
 
 
@@ -14,6 +16,7 @@ from .retrieval import LexicalRetriever
 class BaselineRagResponse:
     answer: str
     citations: list[str]
+    disposition: ResponseDisposition
     guard_triggers: list[str] = field(default_factory=list)
     latency_ms: float = 0.0
     retrieved_chunks: list[str] = field(default_factory=list)
@@ -71,6 +74,11 @@ class BaselineRagAssistant:
         return BaselineRagResponse(
             answer=answer,
             citations=citations,
+            disposition=(
+                ResponseDisposition.ANSWER
+                if citations
+                else ResponseDisposition.ABSTAIN
+            ),
             guard_triggers=[],
             latency_ms=(perf_counter() - started_at) * 1000,
             retrieved_chunks=[chunk.chunk_id for chunk, _score in retrieved],
@@ -88,6 +96,7 @@ def build_baseline_assistant(
     allow_remote_models: bool = False,
     env_file: Path | None = None,
     answer_generator: AnswerGenerator | None = None,
+    retrieval_embedder: TextEmbedder | None = None,
 ) -> BaselineRagAssistant:
     if retriever_backend == "lexical":
         documents = load_documents(corpus_path)
@@ -106,6 +115,7 @@ def build_baseline_assistant(
             embedding_model=embedding_model,
             allow_remote_models=allow_remote_models,
             env_file=env_file,
+            embedder=retrieval_embedder,
         )
     else:
         raise ValueError("retriever_backend must be 'lexical', 'langchain', or 'vector'")

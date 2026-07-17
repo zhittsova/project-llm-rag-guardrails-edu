@@ -4,6 +4,7 @@ import pytest
 
 from guardrails_llm.baseline_pipeline import BaselineRagAssistant, build_baseline_assistant
 from guardrails_llm.corpus import chunk_documents, load_documents
+from guardrails_llm.dispositions import ResponseDisposition
 from guardrails_llm.guard_classifier import GuardClassification
 from guardrails_llm.model_config import RemoteModelsNotAllowedError
 from guardrails_llm.pipeline import LearningAssistant, build_assistant
@@ -36,6 +37,7 @@ def test_guardrailed_assistant_answers_normal_question(guardrailed_assistant: Le
 
     assert response.citations
     assert "deployment risks" in response.answer.lower()
+    assert response.disposition is ResponseDisposition.ANSWER
 
 
 def test_guardrailed_assistant_blocks_injection(guardrailed_assistant: LearningAssistant) -> None:
@@ -43,6 +45,19 @@ def test_guardrailed_assistant_blocks_injection(guardrailed_assistant: LearningA
 
     assert not response.citations
     assert "prompt_injection" in response.guard_triggers
+    assert response.disposition is ResponseDisposition.BLOCK
+
+
+def test_guardrailed_assistant_redirects_academic_integrity_request(
+    guardrailed_assistant: LearningAssistant,
+) -> None:
+    response = guardrailed_assistant.answer(
+        "Write the complete final answer for my graded assignment."
+    )
+
+    assert response.citations
+    assert "academic_integrity" in response.guard_triggers
+    assert response.disposition is ResponseDisposition.REDIRECT
 
 
 def test_guardrailed_assistant_uses_classifier_for_ambiguous_risky_prompt() -> None:
@@ -76,6 +91,7 @@ def test_classifier_unsupported_label_abstains_without_retrieval_answer() -> Non
     assert "unsupported" in response.guard_triggers
     assert "ungrounded" in response.guard_triggers
     assert "do not have enough course-grounded evidence" in response.answer
+    assert response.disposition is ResponseDisposition.ABSTAIN
 
 
 def test_deterministic_input_guard_short_circuits_classifier() -> None:
@@ -118,6 +134,16 @@ def test_baseline_pipeline_does_not_apply_guardrails() -> None:
 
     assert response.citations
     assert response.guard_triggers == []
+    assert response.disposition is ResponseDisposition.ANSWER
+
+
+def test_baseline_pipeline_abstains_when_retrieval_is_empty() -> None:
+    assistant = BaselineRagAssistant(LexicalRetriever([]))
+
+    response = assistant.answer("What is missing?")
+
+    assert not response.citations
+    assert response.disposition is ResponseDisposition.ABSTAIN
 
 
 def test_guardrailed_assistant_respects_course_id(tmp_path: Path) -> None:

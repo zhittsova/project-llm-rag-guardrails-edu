@@ -3,9 +3,10 @@ from __future__ import annotations
 import re
 import tomllib
 from dataclasses import dataclass, field
+from functools import cached_property
 from pathlib import Path
 
-from .embeddings import HashingEmbedder, cosine_similarity
+from .embeddings import HashingEmbedder, TextEmbedder, cosine_similarity
 from .guard_text import fuzzy_phrase_matches, guard_text_candidates, normalize_guard_text
 
 
@@ -43,7 +44,7 @@ class SimilarityRule:
     examples: tuple[str, ...]
     threshold: float
 
-    def score(self, text: str, embedder: HashingEmbedder) -> float:
+    def score(self, text: str, embedder: TextEmbedder) -> float:
         if not text.strip() or not self.examples:
             return 0.0
         query_vector = embedder.embed(normalize_guard_text(text))
@@ -52,7 +53,16 @@ class SimilarityRule:
             for example in self.examples
         )
 
-    def matches(self, text: str, embedder: HashingEmbedder) -> bool:
+    def score_vectors(
+        self,
+        query_vector: list[float],
+        example_vectors: tuple[list[float], ...],
+    ) -> float:
+        if not query_vector or not example_vectors:
+            return 0.0
+        return max(cosine_similarity(query_vector, vector) for vector in example_vectors)
+
+    def matches(self, text: str, embedder: TextEmbedder) -> bool:
         return self.score(text, embedder) >= self.threshold
 
 
@@ -85,7 +95,7 @@ class GuardrailPolicy:
     output_block_message: str = DEFAULT_OUTPUT_BLOCK_MESSAGE
     ungrounded_message: str = DEFAULT_UNGROUNDED_MESSAGE
     integrity_safe_message: str = DEFAULT_INTEGRITY_MESSAGE
-    similarity_embedder: HashingEmbedder = field(default_factory=HashingEmbedder)
+    similarity_embedder: TextEmbedder = field(default_factory=HashingEmbedder)
 
     @classmethod
     def default(cls) -> GuardrailPolicy:
@@ -100,15 +110,41 @@ class GuardrailPolicy:
         ]
         triggers.extend(
             rule.trigger
-            for rule in self.input_similarity_rules
-            if rule.matches(text, self.similarity_embedder)
+            for rule, score in self._similarity_scores(text)
+            if score >= rule.threshold
         )
         triggers.extend(rule.trigger for rule in self.input_fuzzy_rules if rule.matches(text))
         return _unique(triggers)
 
     def has_near_similarity_trigger(self, text: str, *, margin: float = 0.08) -> bool:
         return any(
-            rule.threshold - margin <= rule.score(text, self.similarity_embedder) < rule.threshold
+            rule.threshold - margin <= score < rule.threshold
+            for rule, score in self._similarity_scores(text)
+        )
+
+    def _similarity_scores(self, text: str) -> list[tuple[SimilarityRule, float]]:
+        if not text.strip() or not self.input_similarity_rules:
+            return []
+        query_vector = self.similarity_embedder.embed(normalize_guard_text(text))
+        return [
+            (rule, rule.score_vectors(query_vector, example_vectors))
+            for rule, example_vectors in zip(
+                self.input_similarity_rules,
+                self._similarity_example_vectors,
+                strict=True,
+            )
+        ]
+
+    @cached_property
+    def _similarity_example_vectors(self) -> tuple[tuple[list[float], ...], ...]:
+        examples = [
+            normalize_guard_text(example)
+            for rule in self.input_similarity_rules
+            for example in rule.examples
+        ]
+        vectors = iter(self.similarity_embedder.embed_many(examples))
+        return tuple(
+            tuple(next(vectors) for _example in rule.examples)
             for rule in self.input_similarity_rules
         )
 
@@ -134,7 +170,11 @@ def default_policy_path() -> Path:
     return Path(__file__).resolve().parents[2] / "data" / "guardrail_policy.toml"
 
 
-def load_guardrail_policy(path: Path) -> GuardrailPolicy:
+def load_guardrail_policy(
+    path: Path,
+    *,
+    similarity_embedder: TextEmbedder | None = None,
+) -> GuardrailPolicy:
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     extends_default = _as_bool(data.get("extends_default", True), "extends_default")
     base = GuardrailPolicy.default() if extends_default else GuardrailPolicy()
@@ -180,7 +220,7 @@ def load_guardrail_policy(path: Path) -> GuardrailPolicy:
             messages_section.get("integrity_safe", base.integrity_safe_message),
             "messages.integrity_safe",
         ),
-        similarity_embedder=base.similarity_embedder,
+        similarity_embedder=similarity_embedder or base.similarity_embedder,
     )
 
 
