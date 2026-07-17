@@ -564,6 +564,14 @@ def _comparison_scenarios(args, policy):
         output_fuzzy_rules=(),
         context_fuzzy_rules=(),
     )
+    fuzzy_policy = replace(
+        GuardrailPolicy.default(),
+        input_rules=(),
+        input_similarity_rules=(),
+        output_rules=(),
+        context_rules=(),
+    )
+
     scenarios = [
         (
             "baseline",
@@ -595,6 +603,25 @@ def _comparison_scenarios(args, policy):
                 "latency_expected": "low",
                 "robustness_expected": "medium_on_known_patterns",
                 "implementation_effort": "low-medium",
+            },
+        ),
+          (
+            "fuzzy_only_guardrails",
+            "guardrailed",
+            fuzzy_policy,
+            "none",
+            {
+                "technique": "fuzzy rules + metadata retrieval filters",
+                "guardrail_layers": [
+                    "text_normalization",
+                    "fuzzy_input",
+                    "metadata_filter",
+                    "context_fuzzy_sanitization",
+                    "output_fuzzy_check",
+                ],
+                "latency_expected": "low-medium",
+                "robustness_expected": "medium_on_typos_and_near_matches",
+                "implementation_effort": "medium",
             },
         ),
         (
