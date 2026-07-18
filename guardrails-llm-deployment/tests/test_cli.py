@@ -111,6 +111,7 @@ def test_compare_guardrails_writes_json_artifact(tmp_path: Path, monkeypatch) ->
         "default_guardrails",
         "hybrid_policy_guardrails",
     ]
+    assert data["baseline"]["confidence_intervals"]["row"]["sampling_units"] == 2
     for label in (
         "similarity_plus_shared_controls",
         "hybrid_policy_guardrails",

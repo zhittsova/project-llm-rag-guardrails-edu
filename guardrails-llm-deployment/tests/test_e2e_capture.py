@@ -224,3 +224,6 @@ def test_e2e_capture_evaluation_keeps_failures_visible(tmp_path: Path, monkeypat
     assert report["qwen_classifier_only"]["capture_failures"] == 1
     assert report["qwen_classifier_only"]["quality_gates"]["all_passed"] is False
     assert report["complete_inhouse_hybrid"]["capture_failures"] == 0
+    intervals = report["complete_inhouse_hybrid"]["confidence_intervals"]
+    assert intervals["row"]["sampling_units"] == 2
+    assert intervals["family"]["sampling_units"] <= 2

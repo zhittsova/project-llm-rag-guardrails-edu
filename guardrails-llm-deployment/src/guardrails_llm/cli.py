@@ -7,6 +7,7 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from time import perf_counter
 
+from .confidence_intervals import bootstrap_confidence_intervals
 from .corpus import default_data_path, validate_corpus
 from .bge_evaluation import run_bge_common_split_evaluation
 from .course_corpus import default_course_output_path, default_course_source_path, normalize_course_corpus
@@ -999,6 +1000,9 @@ def main() -> None:
                     asdict(result) for result in comparison_results
                 ]
                 comparison_summary = profile | summarize(comparison_results)
+                comparison_summary["confidence_intervals"] = (
+                    bootstrap_confidence_intervals(comparison_results)
+                )
                 comparison_summary["eval_split"] = args.case_split
                 preloads = {}
                 if retrieval_preload:

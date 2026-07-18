@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 
+from .confidence_intervals import bootstrap_confidence_intervals
 from .embeddings import create_embedder
 from .evaluation import EvalCase, EvalResult, load_eval_cases, run_evaluation, summarize
 from .dispositions import ResponseDisposition
@@ -235,6 +236,11 @@ def evaluate_calibration_e2e_capture(
             "missing_cases": missing,
             "metrics_on_successful_cases": summary,
             "quality_gates": _quality_gates(summary, failures=failures, missing=missing),
+            "confidence_intervals": (
+                bootstrap_confidence_intervals(successful)
+                if successful
+                else None
+            ),
         }
     return report
 
