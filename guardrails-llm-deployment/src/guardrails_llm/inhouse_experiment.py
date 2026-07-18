@@ -105,6 +105,7 @@ def run_v2_classifier_capture(
     classifier=None,
     limit_cases: int | None = None,
     max_concurrency: int = 1,
+    retry_failures: bool = False,
     captured_at: str | None = None,
 ) -> dict[str, object]:
     if limit_cases is not None and limit_cases < 0:
@@ -157,7 +158,7 @@ def run_v2_classifier_capture(
     if output_path.exists() and existing_manifest is None:
         raise ValueError("prediction output exists without its experiment manifest")
 
-    predictions = _load_prediction_rows(output_path)
+    predictions, attempt_counts, ever_failed = _load_prediction_history(output_path)
     selected_ids = {case.case_id for case in cases}
     unknown = set(predictions) - selected_ids
     if unknown:
@@ -174,11 +175,18 @@ def run_v2_classifier_capture(
         started_at=(existing_manifest or {}).get("started_at", started),
         predictions=predictions,
         cases=cases,
+        attempt_counts=attempt_counts,
+        ever_failed=ever_failed,
     )
     _write_manifest(manifest_path, manifest)
 
     resumed_cases = len(predictions)
-    pending = [case for case in cases if case.case_id not in predictions]
+    pending = [
+        case
+        for case in cases
+        if case.case_id not in predictions
+        or (retry_failures and predictions[case.case_id].error is not None)
+    ]
     with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
         for start in range(0, len(pending), max_concurrency):
             batch = pending[start : start + max_concurrency]
@@ -195,12 +203,17 @@ def run_v2_classifier_capture(
                 prediction = future.result()
                 _append_jsonl(output_path, asdict(prediction))
                 predictions[prediction.case_id] = prediction
+                attempt_counts[prediction.case_id] += 1
+                if prediction.error is not None:
+                    ever_failed.add(prediction.case_id)
                 manifest = _manifest_payload(
                     configuration,
                     fingerprint=fingerprint,
                     started_at=manifest["started_at"],
                     predictions=predictions,
                     cases=cases,
+                    attempt_counts=attempt_counts,
+                    ever_failed=ever_failed,
                 )
                 _write_manifest(manifest_path, manifest)
     manifest["resumed_cases"] = resumed_cases
@@ -477,6 +490,8 @@ def _manifest_payload(
     started_at: object,
     predictions: dict[str, ClassifierPrediction],
     cases: list[EvalCase],
+    attempt_counts: Counter[str],
+    ever_failed: set[str],
 ) -> dict[str, object]:
     completed = len(predictions)
     return configuration | {
@@ -486,6 +501,12 @@ def _manifest_payload(
         "status": "complete" if completed == len(cases) else "partial",
         "completed_cases": completed,
         "failed_cases": sum(prediction.error is not None for prediction in predictions.values()),
+        "prediction_attempts": sum(attempt_counts.values()),
+        "retried_cases": sum(count > 1 for count in attempt_counts.values()),
+        "recovered_cases": sum(
+            case_id in ever_failed and prediction.error is None
+            for case_id, prediction in predictions.items()
+        ),
         "completed_split_counts": dict(
             sorted(
                 Counter(
@@ -499,18 +520,28 @@ def _manifest_payload(
 
 
 def _load_prediction_rows(path: Path) -> dict[str, ClassifierPrediction]:
+    predictions, _attempt_counts, _ever_failed = _load_prediction_history(path)
+    return predictions
+
+
+def _load_prediction_history(
+    path: Path,
+) -> tuple[dict[str, ClassifierPrediction], Counter[str], set[str]]:
     if not path.exists():
-        return {}
+        return {}, Counter(), set()
     rows: dict[str, ClassifierPrediction] = {}
+    attempt_counts: Counter[str] = Counter()
+    ever_failed: set[str] = set()
     for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         try:
             prediction = ClassifierPrediction(**json.loads(line))
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
             raise ValueError(f"invalid prediction at {path}:{line_number}") from exc
-        if prediction.case_id in rows:
-            raise ValueError(f"duplicate prediction for {prediction.case_id}")
         rows[prediction.case_id] = prediction
-    return rows
+        attempt_counts[prediction.case_id] += 1
+        if prediction.error is not None:
+            ever_failed.add(prediction.case_id)
+    return rows, attempt_counts, ever_failed
 
 
 def _load_existing_manifest(path: Path) -> dict[str, object] | None:

@@ -308,6 +308,7 @@ def main() -> None:
     v2_classifier_parser.add_argument("--classifier-model")
     v2_classifier_parser.add_argument("--limit-cases", type=int)
     v2_classifier_parser.add_argument("--max-concurrency", type=int, default=1)
+    v2_classifier_parser.add_argument("--retry-failures", action="store_true")
     v2_classifier_parser.add_argument("--allow-remote-models", action="store_true")
     v2_classifier_parser.add_argument("--env-file", type=Path)
 
@@ -719,6 +720,7 @@ def main() -> None:
                 manifest_path=args.manifest,
                 limit_cases=args.limit_cases,
                 max_concurrency=args.max_concurrency,
+                retry_failures=args.retry_failures,
             )
         except (
             OSError,

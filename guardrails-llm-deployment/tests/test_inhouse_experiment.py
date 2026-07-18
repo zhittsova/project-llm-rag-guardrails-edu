@@ -38,6 +38,16 @@ class EchoClassifier:
         return GuardClassification(label="safe", confidence=0.9, explanation="fixture")
 
 
+class FailedClassifier(EchoClassifier):
+    def classify(self, text: str) -> GuardClassification:
+        self.calls.append(text)
+        return GuardClassification(
+            label="safe",
+            confidence=0.0,
+            explanation="model_classifier_error:ValueError",
+        )
+
+
 class ConcurrentClassifier(EchoClassifier):
     def __init__(self, workers: int) -> None:
         super().__init__()
@@ -154,6 +164,52 @@ def test_v2_capture_resumes_and_writes_safe_manifest(tmp_path: Path, monkeypatch
     assert "fixture-key" not in serialized
     assert "https://" not in serialized
     assert len(output.read_text(encoding="utf-8").splitlines()) == 3
+
+
+def test_v2_capture_retries_failed_rows_without_erasing_history(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _configure_inhouse(monkeypatch)
+    output = tmp_path / "predictions.jsonl"
+    manifest_path = tmp_path / "manifest.json"
+    kwargs = {
+        "config": OpenAIModelConfig(
+            classifier_model=INHOUSE_LLM_MODEL,
+            allow_remote_models=True,
+        ),
+        "development_cases_path": DEVELOPMENT,
+        "calibration_cases_path": CALIBRATION,
+        "corpus_path": CORPUS,
+        "output_path": output,
+        "manifest_path": manifest_path,
+        "limit_cases": 1,
+    }
+
+    failed = run_v2_classifier_capture(
+        **kwargs,
+        classifier=FailedClassifier(),
+    )
+    recovered = run_v2_classifier_capture(
+        **kwargs,
+        classifier=EchoClassifier(),
+        retry_failures=True,
+    )
+    report = evaluate_v2_classifier_capture(
+        development_cases_path=DEVELOPMENT,
+        calibration_cases_path=CALIBRATION,
+        predictions_path=output,
+        limit_cases=1,
+    )
+
+    assert failed["failed_cases"] == 1
+    assert recovered["failed_cases"] == 0
+    assert recovered["prediction_attempts"] == 2
+    assert recovered["retried_cases"] == 1
+    assert recovered["recovered_cases"] == 1
+    assert len(output.read_text(encoding="utf-8").splitlines()) == 2
+    assert report["combined"]["summary"]["predictions_received"] == 1
+    assert report["combined"]["summary"]["parse_failures"] == 0
 
 
 def test_v2_capture_can_checkpoint_bounded_concurrent_batches(
