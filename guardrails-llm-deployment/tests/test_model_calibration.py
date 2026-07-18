@@ -111,10 +111,12 @@ def test_classifier_calibration_counts_failures_and_missing_predictions() -> Non
     assert summary["total"] == 4
     assert summary["predictions_received"] == 3
     assert summary["evaluated_predictions"] == 2
+    assert summary["received_case_coverage"] == 0.75
     assert summary["prediction_coverage"] == 0.5
     assert summary["parse_failures"] == 1
     assert summary["missing_predictions"] == 1
     assert summary["accuracy_on_valid_predictions"] == 0.5
+    assert summary["accuracy_on_received_predictions"] == 0.333
     assert summary["end_to_end_accuracy"] == 0.25
     assert summary["confusion_matrix"]["safe"]["safe"] == 1
     assert summary["confusion_matrix"]["safe"]["pii"] == 1
@@ -159,10 +161,12 @@ def test_judge_calibration_reports_dimension_agreement_and_score_error() -> None
 
     assert summary["total"] == 4
     assert summary["evaluated_predictions"] == 2
+    assert summary["received_case_coverage"] == 0.75
     assert summary["prediction_coverage"] == 0.5
     assert summary["parse_failures"] == 1
     assert summary["missing_predictions"] == 1
     assert summary["exact_match_on_valid_predictions"] == 0.5
+    assert summary["exact_match_on_received_predictions"] == 0.333
     assert summary["end_to_end_exact_match"] == 0.25
     assert summary["dimension_accuracy"]["grounded"] == 0.25
     assert summary["dimension_accuracy"]["privacy_safe"] == 0.5
@@ -205,6 +209,44 @@ def test_local_model_calibration_validates_sources_and_marks_fixture_scope() -> 
     assert payload["classifier"]["summary"]["total"] == 36
     assert payload["judge"]["summary"]["total"] == 24
     assert "not model quality evidence" in payload["limitations"][0].lower()
+
+
+def test_local_model_calibration_marks_remote_predictions_as_live(
+    tmp_path: Path,
+) -> None:
+    classifier_predictions = tmp_path / "classifier.jsonl"
+    judge_predictions = tmp_path / "judge.jsonl"
+    for source, output in (
+        (CLASSIFIER_PREDICTIONS, classifier_predictions),
+        (JUDGE_PREDICTIONS, judge_predictions),
+    ):
+        rows = [
+            json.loads(line)
+            for line in source.read_text(encoding="utf-8").splitlines()
+            if line
+        ]
+        for row in rows:
+            row.update(
+                provider="openai_compatible",
+                model="test-model",
+                latency_ms=1.0,
+            )
+        output.write_text(
+            "".join(json.dumps(row) + "\n" for row in rows),
+            encoding="utf-8",
+        )
+
+    payload = run_local_model_calibration(
+        classifier_cases_path=CLASSIFIER_CASES,
+        classifier_predictions_path=classifier_predictions,
+        judge_cases_path=JUDGE_CASES,
+        judge_predictions_path=judge_predictions,
+        source_cases_path=SOURCE_CASES,
+        source_results_path=SOURCE_RESULTS,
+    )
+
+    assert payload["evidence_scope"] == "live_remote_model_capture"
+    assert "small live" in payload["limitations"][0].lower()
 
 
 def _classifier_case(case_id: str, expected_label: str) -> ClassifierCalibrationCase:

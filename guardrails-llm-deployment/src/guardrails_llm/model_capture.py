@@ -15,6 +15,7 @@ from .model_calibration import (
     DEFAULT_CALIBRATION_SOURCE_RESULTS,
     DEFAULT_CLASSIFIER_CALIBRATION_CASES,
     DEFAULT_JUDGE_CALIBRATION_CASES,
+    ClassifierCalibrationCase,
     ClassifierPrediction,
     JudgeCalibrationCase,
     JudgePrediction,
@@ -42,6 +43,7 @@ DEFAULT_CAPTURE_MANIFEST_OUTPUT = (
     PROJECT_ROOT / "reports" / "model_calibration_capture_manifest.json"
 )
 CAPTURE_COMPONENTS = frozenset({"classifier", "judge", "both"})
+CAPTURE_SELECTION_STRATEGIES = frozenset({"head", "stratified"})
 
 
 def run_model_calibration_capture(
@@ -56,6 +58,7 @@ def run_model_calibration_capture(
     judge_output_path: Path = DEFAULT_JUDGE_CAPTURE_OUTPUT,
     manifest_output_path: Path = DEFAULT_CAPTURE_MANIFEST_OUTPUT,
     limit_cases: int | None = None,
+    selection_strategy: str = "stratified",
     classifier=None,
     judge=None,
     clock: Callable[[], float] = perf_counter,
@@ -65,6 +68,8 @@ def run_model_calibration_capture(
         raise ValueError("component must be 'classifier', 'judge', or 'both'")
     if limit_cases is not None and limit_cases < 0:
         raise ValueError("limit_cases must be zero or greater")
+    if selection_strategy not in CAPTURE_SELECTION_STRATEGIES:
+        raise ValueError("selection_strategy must be 'head' or 'stratified'")
 
     ensure_remote_models_allowed(config)
     ensure_openai_api_key(config)
@@ -78,13 +83,18 @@ def run_model_calibration_capture(
         "provider": provider,
         "endpoint_category": endpoint_category,
         "limit_cases": limit_cases,
+        "selection_strategy": selection_strategy,
     }
 
     classifier_cases = []
     if component in {"classifier", "both"}:
         classifier_cases = load_classifier_calibration_cases(classifier_cases_path)
         validate_classifier_calibration_sources(classifier_cases, source_cases)
-        classifier_cases = _limit(classifier_cases, limit_cases)
+        classifier_cases = select_classifier_calibration_cases(
+            classifier_cases,
+            limit=limit_cases,
+            strategy=selection_strategy,
+        )
 
     judge_cases = []
     source_results: dict[str, list[dict[str, object]]] = {}
@@ -96,7 +106,11 @@ def run_model_calibration_capture(
             source_cases,
             source_results,
         )
-        judge_cases = _limit(judge_cases, limit_cases)
+        judge_cases = select_judge_calibration_cases(
+            judge_cases,
+            limit=limit_cases,
+            strategy=selection_strategy,
+        )
 
     if classifier is None and component in {"classifier", "both"}:
         from .openai_models import OpenAIGuardClassifier
@@ -333,8 +347,64 @@ def _provider_metadata(config: OpenAIModelConfig) -> tuple[str, str]:
     return "openai", "official_openai"
 
 
-def _limit(items: list, limit: int | None) -> list:
-    return items if limit is None else items[:limit]
+def select_classifier_calibration_cases(
+    cases: list[ClassifierCalibrationCase],
+    *,
+    limit: int | None,
+    strategy: str,
+) -> list[ClassifierCalibrationCase]:
+    return _select_calibration_cases(
+        cases,
+        limit=limit,
+        strategy=strategy,
+        group_key=lambda case: case.expected_label,
+    )
+
+
+def select_judge_calibration_cases(
+    cases: list[JudgeCalibrationCase],
+    *,
+    limit: int | None,
+    strategy: str,
+) -> list[JudgeCalibrationCase]:
+    return _select_calibration_cases(
+        cases,
+        limit=limit,
+        strategy=strategy,
+        group_key=lambda case: (
+            f"{case.expected_behavior.value}:"
+            f"{case.actual_behavior is case.expected_behavior}"
+        ),
+    )
+
+
+def _select_calibration_cases(
+    cases: list,
+    *,
+    limit: int | None,
+    strategy: str,
+    group_key,
+) -> list:
+    if strategy not in CAPTURE_SELECTION_STRATEGIES:
+        raise ValueError("selection_strategy must be 'head' or 'stratified'")
+    if limit is None:
+        return cases
+    if limit == 0:
+        return []
+    if strategy == "head":
+        return cases[:limit]
+
+    buckets: dict[str, list] = {}
+    for case in cases:
+        buckets.setdefault(group_key(case), []).append(case)
+    selected = []
+    for index in range(max((len(bucket) for bucket in buckets.values()), default=0)):
+        for bucket in buckets.values():
+            if index < len(bucket):
+                selected.append(bucket[index])
+                if len(selected) == limit:
+                    return selected
+    return selected
 
 
 def _elapsed_ms(started_at: float, finished_at: float) -> float:

@@ -7,8 +7,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from guardrails_llm.cli import _load_comparison_policy, _preload_retrieval_embedder, main
+from guardrails_llm.cli import (
+    _comparison_scenarios,
+    _load_comparison_policy,
+    _preload_retrieval_embedder,
+    main,
+)
+from guardrails_llm.embeddings import HashingEmbedder
 from guardrails_llm.evaluation import load_eval_cases
+from guardrails_llm.guardrail_policy import load_guardrail_policy
 from guardrails_llm.model_config import RemoteModelCallError
 
 
@@ -67,9 +74,70 @@ def test_compare_guardrails_writes_json_artifact(tmp_path: Path, monkeypatch) ->
     assert list(data) == [
         "baseline",
         "normalized_regex_guardrails",
+        "fuzzy_plus_shared_controls",
+        "similarity_plus_shared_controls",
         "default_guardrails",
         "hybrid_policy_guardrails",
     ]
+    for label in (
+        "similarity_plus_shared_controls",
+        "hybrid_policy_guardrails",
+    ):
+        assert data[label]["embedding_preload"]["guard_similarity"]
+        assert data[label]["avg_batch_amortized_latency_ms"] >= 0
+        assert data[label]["latency_scope"] == "pipeline_after_batch_preload"
+
+    for label in (
+        "baseline",
+        "normalized_regex_guardrails",
+        "fuzzy_plus_shared_controls",
+        "default_guardrails",
+    ):
+        assert "embedding_preload" not in data[label]
+
+
+def test_comparison_scenarios_isolate_local_guardrail_techniques() -> None:
+    policy = load_guardrail_policy(
+        ROOT / "data" / "guardrail_policy.toml",
+        similarity_embedder=HashingEmbedder(),
+    )
+    args = SimpleNamespace(guard_classifier="none")
+    scenarios = {
+        label: (scenario_policy, profile)
+        for label, _mode, scenario_policy, _classifier, profile
+        in _comparison_scenarios(args, policy)
+    }
+
+    fuzzy_policy, fuzzy_profile = scenarios["fuzzy_plus_shared_controls"]
+    assert not fuzzy_policy.input_rules
+    assert fuzzy_policy.input_fuzzy_rules
+    assert not fuzzy_policy.input_similarity_rules
+    assert not fuzzy_policy.output_rules
+    assert fuzzy_policy.output_fuzzy_rules
+    assert not fuzzy_policy.context_rules
+    assert fuzzy_policy.context_fuzzy_rules
+
+    similarity_policy, similarity_profile = scenarios[
+        "similarity_plus_shared_controls"
+    ]
+    assert not similarity_policy.input_rules
+    assert not similarity_policy.input_fuzzy_rules
+    assert similarity_policy.input_similarity_rules
+    assert not similarity_policy.output_rules
+    assert not similarity_policy.output_fuzzy_rules
+    assert not similarity_policy.context_rules
+    assert not similarity_policy.context_fuzzy_rules
+
+    for scenario_policy, profile in (
+        (fuzzy_policy, fuzzy_profile),
+        (similarity_policy, similarity_profile),
+    ):
+        assert scenario_policy.allowed_visibility == frozenset({"public"})
+        assert scenario_policy.require_citations is True
+        assert profile["shared_controls"] == [
+            "metadata_filter",
+            "citation_requirement",
+        ]
 
 
 def test_compare_guardrails_writes_detailed_results(tmp_path: Path, monkeypatch) -> None:

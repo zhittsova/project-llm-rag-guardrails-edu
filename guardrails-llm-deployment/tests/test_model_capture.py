@@ -3,10 +3,14 @@ from pathlib import Path
 
 import pytest
 
+from guardrails_llm import model_capture
 from guardrails_llm.guard_classifier import GuardClassification
 from guardrails_llm.judging import JudgeResult
 from guardrails_llm.model_calibration import (
+    CLASSIFIER_LABELS,
+    load_classifier_calibration_cases,
     load_classifier_predictions,
+    load_judge_calibration_cases,
     load_judge_predictions,
 )
 from guardrails_llm.model_capture import run_model_calibration_capture
@@ -71,6 +75,57 @@ class FakeJudge:
             score=1.0,
             notes=["fixture judge"],
         )
+
+
+def test_stratified_classifier_selection_covers_each_label() -> None:
+    cases = load_classifier_calibration_cases(CLASSIFIER_CASES)
+
+    selected = model_capture.select_classifier_calibration_cases(
+        cases,
+        limit=6,
+        strategy="stratified",
+    )
+
+    assert [case.expected_label for case in selected] == list(CLASSIFIER_LABELS)
+
+
+def test_stratified_selection_respects_zero_limit() -> None:
+    cases = load_classifier_calibration_cases(CLASSIFIER_CASES)
+
+    selected = model_capture.select_classifier_calibration_cases(
+        cases,
+        limit=0,
+        strategy="stratified",
+    )
+
+    assert selected == []
+
+
+def test_stratified_judge_selection_covers_matched_and_mismatched_behaviors() -> None:
+    cases = load_judge_calibration_cases(JUDGE_CASES)
+
+    selected = model_capture.select_judge_calibration_cases(
+        cases,
+        limit=8,
+        strategy="stratified",
+    )
+
+    assert [
+        (
+            case.expected_behavior.value,
+            case.actual_behavior is case.expected_behavior,
+        )
+        for case in selected
+    ] == [
+        ("answer", True),
+        ("answer", False),
+        ("block", True),
+        ("block", False),
+        ("abstain", True),
+        ("abstain", False),
+        ("redirect", True),
+        ("redirect", False),
+    ]
 
 
 def test_capture_requires_explicit_remote_approval(tmp_path: Path) -> None:

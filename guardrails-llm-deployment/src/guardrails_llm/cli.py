@@ -224,6 +224,11 @@ def main() -> None:
     capture_parser.add_argument("--classifier-model")
     capture_parser.add_argument("--judge-model")
     capture_parser.add_argument("--limit-cases", type=int)
+    capture_parser.add_argument(
+        "--selection-strategy",
+        choices=["stratified", "head"],
+        default="stratified",
+    )
     capture_parser.add_argument("--allow-remote-models", action="store_true")
     capture_parser.add_argument("--env-file", type=Path)
 
@@ -365,6 +370,7 @@ def main() -> None:
                 judge_output_path=args.judge_output,
                 manifest_output_path=args.manifest_output,
                 limit_cases=args.limit_cases,
+                selection_strategy=args.selection_strategy,
             )
         except (
             OSError,
@@ -491,7 +497,11 @@ def main() -> None:
                 preloads = {}
                 if retrieval_preload:
                     preloads["retrieval"] = retrieval_preload
-                if guard_preload and label in {"hybrid_policy_guardrails", "model_classifier_guardrails"}:
+                if guard_preload and label in {
+                    "similarity_plus_shared_controls",
+                    "hybrid_policy_guardrails",
+                    "model_classifier_guardrails",
+                }:
                     preloads["guard_similarity"] = guard_preload
                 if preloads:
                     preload_ms = sum(float(stats["latency_ms"]) for stats in preloads.values())
@@ -720,6 +730,23 @@ def _comparison_scenarios(args, policy):
         output_fuzzy_rules=(),
         context_fuzzy_rules=(),
     )
+    fuzzy_policy = replace(
+        policy,
+        input_rules=(),
+        input_similarity_rules=(),
+        output_rules=(),
+        context_rules=(),
+    )
+    similarity_policy = replace(
+        policy,
+        input_rules=(),
+        input_fuzzy_rules=(),
+        output_rules=(),
+        output_fuzzy_rules=(),
+        context_rules=(),
+        context_fuzzy_rules=(),
+    )
+    shared_controls = ["metadata_filter", "citation_requirement"]
     scenarios = [
         (
             "baseline",
@@ -732,6 +759,7 @@ def _comparison_scenarios(args, policy):
                 "latency_expected": "lowest",
                 "robustness_expected": "lowest",
                 "implementation_effort": "low",
+                "shared_controls": [],
             },
         ),
         (
@@ -751,6 +779,43 @@ def _comparison_scenarios(args, policy):
                 "latency_expected": "low",
                 "robustness_expected": "medium_on_known_patterns",
                 "implementation_effort": "low-medium",
+                "shared_controls": shared_controls,
+            },
+        ),
+        (
+            "fuzzy_plus_shared_controls",
+            "guardrailed",
+            fuzzy_policy,
+            "none",
+            {
+                "technique": "fuzzy rules with shared metadata and citation controls",
+                "guardrail_layers": [
+                    "text_normalization",
+                    "fuzzy_input",
+                    "context_fuzzy_sanitization",
+                    "output_fuzzy_check",
+                ],
+                "latency_expected": "low-medium",
+                "robustness_expected": "medium_on_typos_and_near_matches",
+                "implementation_effort": "medium",
+                "shared_controls": shared_controls,
+            },
+        ),
+        (
+            "similarity_plus_shared_controls",
+            "guardrailed",
+            similarity_policy,
+            "none",
+            {
+                "technique": (
+                    "embedding similarity rules with shared metadata and "
+                    "citation controls"
+                ),
+                "guardrail_layers": ["embedding_similarity_input"],
+                "latency_expected": "provider-dependent",
+                "robustness_expected": "medium_on_semantic_variants",
+                "implementation_effort": "medium-high",
+                "shared_controls": shared_controls,
             },
         ),
         (
@@ -771,6 +836,7 @@ def _comparison_scenarios(args, policy):
                 "latency_expected": "low-medium",
                 "robustness_expected": "medium-high_on_typos",
                 "implementation_effort": "medium",
+                "shared_controls": shared_controls,
             },
         ),
         (
@@ -793,6 +859,7 @@ def _comparison_scenarios(args, policy):
                 "latency_expected": "low-medium",
                 "robustness_expected": "medium-high",
                 "implementation_effort": "medium-high",
+                "shared_controls": shared_controls,
             },
         ),
     ]
@@ -819,6 +886,7 @@ def _comparison_scenarios(args, policy):
                     "latency_expected": "highest",
                     "robustness_expected": "highest_on_paraphrases",
                     "implementation_effort": "high",
+                    "shared_controls": shared_controls,
                 },
             )
         )

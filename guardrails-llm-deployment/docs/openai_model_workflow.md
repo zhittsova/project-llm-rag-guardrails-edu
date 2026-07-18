@@ -139,26 +139,30 @@ one replay-compatible JSONL file per component plus a manifest containing the
 model, provider category, request count, prediction coverage, and p50/p95
 latency. The manifest never stores the API key or full base URL.
 
-Run the first classifier pilot only after approving these five remote calls:
+Run the balanced classifier pilot only after approving these six remote calls.
+Stratified selection chooses one case from each classifier label:
 
 ```bash
 uv run guardrails-llm capture-model-calibration \
   --component classifier \
   --classifier-model Qwen/Qwen3.6-35B-A3B \
-  --limit-cases 5 \
+  --limit-cases 6 \
+  --selection-strategy stratified \
   --allow-remote-models \
   --classifier-output reports/model_classifier_pilot_predictions.jsonl \
   --manifest-output reports/model_classifier_pilot_manifest.json
 ```
 
 Review parse errors, labels, confidence, latency, and the manifest before
-running the separate five-call judge pilot:
+running the separate eight-call judge pilot. Judge selection covers matched
+and mismatched actual behavior for answer, block, abstain, and redirect:
 
 ```bash
 uv run guardrails-llm capture-model-calibration \
   --component judge \
   --judge-model Qwen/Qwen3.6-35B-A3B \
-  --limit-cases 5 \
+  --limit-cases 8 \
+  --selection-strategy stratified \
   --allow-remote-models \
   --judge-output reports/judge_pilot_predictions.jsonl \
   --manifest-output reports/judge_pilot_manifest.json
