@@ -29,6 +29,7 @@ from .model_config import (
 )
 from .model_profiles import ensure_inhouse_endpoint
 from .openai_models import GUARD_CLASSIFIER_PROMPT_VERSION
+from .retrieval_routing import ACADEMIC_INTEGRITY_RETRIEVAL_QUERY
 from .vector import build_vector_index
 
 
@@ -322,6 +323,7 @@ def prepare_inhouse_bge(
 
     policy = load_guardrail_policy(policy_path, similarity_embedder=cached_embedder)
     retrieval_texts = [case.question for case in development + calibration]
+    retrieval_texts.append(ACADEMIC_INTEGRITY_RETRIEVAL_QUERY)
     guard_texts = [normalize_guard_text(text) for text in retrieval_texts]
     guard_texts.extend(
         normalize_guard_text(example)

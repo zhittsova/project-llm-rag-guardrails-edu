@@ -18,6 +18,7 @@ from guardrails_llm.inhouse_experiment import (
 from guardrails_llm.model_config import OpenAIModelConfig, RemoteModelsNotAllowedError
 from guardrails_llm.model_calibration import ClassifierPrediction
 from guardrails_llm.model_profiles import INHOUSE_LLM_MODEL
+from guardrails_llm.retrieval_routing import ACADEMIC_INTEGRITY_RETRIEVAL_QUERY
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -287,3 +288,6 @@ def test_prepare_inhouse_bge_indexes_only_development_and_calibration(
     assert manifest["index"]["chunks"] > 0
     assert manifest["retrieval_evidence_threshold"] is None
     assert manifest_path.exists()
+    assert ACADEMIC_INTEGRITY_RETRIEVAL_QUERY in {
+        text for batch in embedder.calls for text in batch
+    }
