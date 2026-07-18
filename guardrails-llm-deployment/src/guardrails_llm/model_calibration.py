@@ -454,20 +454,72 @@ def run_local_model_calibration(
 
     validate_classifier_calibration_sources(classifier_cases, source_cases)
     validate_judge_calibration_sources(judge_cases, source_cases, source_results)
+    evidence_scope = _calibration_evidence_scope(
+        classifier_predictions,
+        judge_predictions,
+    )
     return {
-        "evidence_scope": "fixture_replay_only",
+        "evidence_scope": evidence_scope,
         "classifier": evaluate_classifier_calibration(
             classifier_cases,
             classifier_predictions,
         ),
         "judge": evaluate_judge_calibration(judge_cases, judge_predictions),
-        "limitations": [
+        "limitations": _calibration_limitations(evidence_scope),
+    }
+
+
+def _calibration_evidence_scope(
+    classifier_predictions: list[ClassifierPrediction],
+    judge_predictions: list[JudgePrediction],
+) -> str:
+    source_kinds = {
+        _prediction_source_kind(classifier_predictions),
+        _prediction_source_kind(judge_predictions),
+    } - {"empty"}
+    if source_kinds == {"live"}:
+        return "live_remote_model_capture"
+    if source_kinds == {"fixture"}:
+        return "fixture_replay_only"
+    return "mixed_prediction_sources"
+
+
+def _prediction_source_kind(predictions: list[object]) -> str:
+    if not predictions:
+        return "empty"
+    has_live_metadata = [
+        getattr(prediction, "provider", None) is not None
+        and getattr(prediction, "model", None) is not None
+        and getattr(prediction, "latency_ms", None) is not None
+        for prediction in predictions
+    ]
+    if all(has_live_metadata):
+        return "live"
+    if any(has_live_metadata):
+        return "mixed"
+    return "fixture"
+
+
+def _calibration_limitations(evidence_scope: str) -> list[str]:
+    if evidence_scope == "live_remote_model_capture":
+        return [
+            "Small live pilots are model evidence only for the received calibration cases.",
+            "Missing calibration cases remain untested and count against end-to-end metrics.",
+            "Human labels require disagreement review before final reporting.",
+        ]
+    if evidence_scope == "fixture_replay_only":
+        return [
             "Fixture predictions are not model quality evidence; they only "
             "validate calibration plumbing.",
             "Live classifier and judge outputs require a separately approved remote-model run.",
             "Human labels require disagreement review before final reporting.",
-        ],
-    }
+        ]
+    return [
+        "Prediction files contain mixed fixture or remote provenance and must not be "
+        "reported as a single model result.",
+        "Separate fixture and live captures before drawing quality conclusions.",
+        "Human labels require disagreement review before final reporting.",
+    ]
 
 
 def _load_jsonl(path: Path, cls, item_label: str):

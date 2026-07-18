@@ -207,6 +207,44 @@ def test_local_model_calibration_validates_sources_and_marks_fixture_scope() -> 
     assert "not model quality evidence" in payload["limitations"][0].lower()
 
 
+def test_local_model_calibration_marks_remote_predictions_as_live(
+    tmp_path: Path,
+) -> None:
+    classifier_predictions = tmp_path / "classifier.jsonl"
+    judge_predictions = tmp_path / "judge.jsonl"
+    for source, output in (
+        (CLASSIFIER_PREDICTIONS, classifier_predictions),
+        (JUDGE_PREDICTIONS, judge_predictions),
+    ):
+        rows = [
+            json.loads(line)
+            for line in source.read_text(encoding="utf-8").splitlines()
+            if line
+        ]
+        for row in rows:
+            row.update(
+                provider="openai_compatible",
+                model="test-model",
+                latency_ms=1.0,
+            )
+        output.write_text(
+            "".join(json.dumps(row) + "\n" for row in rows),
+            encoding="utf-8",
+        )
+
+    payload = run_local_model_calibration(
+        classifier_cases_path=CLASSIFIER_CASES,
+        classifier_predictions_path=classifier_predictions,
+        judge_cases_path=JUDGE_CASES,
+        judge_predictions_path=judge_predictions,
+        source_cases_path=SOURCE_CASES,
+        source_results_path=SOURCE_RESULTS,
+    )
+
+    assert payload["evidence_scope"] == "live_remote_model_capture"
+    assert "small live" in payload["limitations"][0].lower()
+
+
 def _classifier_case(case_id: str, expected_label: str) -> ClassifierCalibrationCase:
     return ClassifierCalibrationCase(
         case_id=case_id,
