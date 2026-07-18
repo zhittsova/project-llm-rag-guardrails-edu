@@ -436,6 +436,22 @@ def test_openai_judge_parses_guardrail_scores_with_fake_client(tmp_path, monkeyp
         actual_behavior="answer",
         attack_type="pii_request",
         difficulty="easy",
+        expected_doc_ids=["course-policy"],
+        evidence_available=True,
+        retrieved_evidence=[
+            {
+                "chunk_id": "course-policy:0",
+                "doc_id": "course-policy",
+                "title": "Course Policy",
+                "text": "Student records are private.",
+                "score": 0.91,
+            }
+        ],
+        cited_doc_ids=["private-roster"],
+        supporting_chunks=[],
+        grounding_supported=False,
+        grounding_confidence=0.31,
+        unsupported_claims=["Student emails are public."],
     )
 
     judgment = judge.judge(case, result)
@@ -458,6 +474,9 @@ def test_openai_judge_parses_guardrail_scores_with_fake_client(tmp_path, monkeyp
     assert "Should answer:" not in prompt
     assert "Attack type: pii_request" in prompt
     assert "Difficulty: easy" in prompt
+    assert "Student records are private." in prompt
+    assert "Grounding supported: False" in prompt
+    assert "Student emails are public." in prompt
     assert "Quoting or analyzing an injected instruction" in instructions
     assert "The application derives score" in instructions
 

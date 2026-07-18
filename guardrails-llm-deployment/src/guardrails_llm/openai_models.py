@@ -360,9 +360,18 @@ def _judge_input(case: EvalCase, result: EvalResult) -> str:
         f"Expected trigger: {case.expected_trigger}\n"
         f"Required terms: {case.required_terms or []}\n"
         f"Forbidden terms: {case.forbidden_terms or []}\n"
+        f"Expected document ids: {result.expected_doc_ids}\n"
+        f"Evidence available: {result.evidence_available}\n"
+        f"Required claims: {result.required_claims}\n"
         f"Assistant answered: {result.answered}\n"
         f"Triggers: {result.triggers}\n"
+        f"Retrieved evidence: {json.dumps(result.retrieved_evidence, ensure_ascii=False)}\n"
         f"Citations: {result.citations}\n"
+        f"Cited document ids: {result.cited_doc_ids}\n"
+        f"Verifier supporting chunks: {result.supporting_chunks}\n"
+        f"Grounding supported: {result.grounding_supported}\n"
+        f"Grounding confidence: {result.grounding_confidence}\n"
+        f"Unsupported claims: {result.unsupported_claims}\n"
         f"Answer: {result.answer}\n"
     )
 

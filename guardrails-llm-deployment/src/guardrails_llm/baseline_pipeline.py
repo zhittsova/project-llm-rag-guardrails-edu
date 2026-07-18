@@ -16,10 +16,14 @@ from .retrieval import LexicalRetriever
 class BaselineRagResponse:
     answer: str
     citations: list[str]
+    cited_doc_ids: list[str]
     disposition: ResponseDisposition
     guard_triggers: list[str] = field(default_factory=list)
     latency_ms: float = 0.0
     retrieved_chunks: list[str] = field(default_factory=list)
+    retrieved_doc_ids: list[str] = field(default_factory=list)
+    retrieval_scores: dict[str, float] = field(default_factory=dict)
+    retrieved_evidence: list[dict[str, object]] = field(default_factory=list)
 
 
 class BaselineRetriever(Protocol):
@@ -74,6 +78,7 @@ class BaselineRagAssistant:
         return BaselineRagResponse(
             answer=answer,
             citations=citations,
+            cited_doc_ids=[chunk.doc_id for chunk, _score in retrieved],
             disposition=(
                 ResponseDisposition.ANSWER
                 if citations
@@ -82,6 +87,21 @@ class BaselineRagAssistant:
             guard_triggers=[],
             latency_ms=(perf_counter() - started_at) * 1000,
             retrieved_chunks=[chunk.chunk_id for chunk, _score in retrieved],
+            retrieved_doc_ids=[chunk.doc_id for chunk, _score in retrieved],
+            retrieval_scores={
+                chunk.chunk_id: round(float(score), 6)
+                for chunk, score in retrieved
+            },
+            retrieved_evidence=[
+                {
+                    "chunk_id": chunk.chunk_id,
+                    "doc_id": chunk.doc_id,
+                    "title": chunk.title,
+                    "text": chunk.text,
+                    "score": round(float(score), 6),
+                }
+                for chunk, score in retrieved
+            ],
         )
 
 

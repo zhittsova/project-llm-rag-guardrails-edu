@@ -345,3 +345,5 @@ def test_visualization_writes_html_report(tmp_path: Path) -> None:
     assert "What is retrieval augmented generation?" in html
     assert "Retrieved Chunks" in html
     assert "Lecture 1: RAG Basics" in html
+    assert "Grounding Decision" in html
+    assert "Verifier not run" in html

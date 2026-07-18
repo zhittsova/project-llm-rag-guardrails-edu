@@ -105,6 +105,18 @@ def _render_html(
     stages = _stages_for_mode(mode, response.guard_triggers)
     trigger_text = ", ".join(response.guard_triggers) if response.guard_triggers else "none"
     citations = response.citations or ["none"]
+    grounding_status = (
+        "Verifier not run"
+        if response.grounding_supported is None
+        else "Supported"
+        if response.grounding_supported
+        else "Rejected or insufficient"
+    )
+    grounding_confidence = (
+        "not available"
+        if response.grounding_confidence is None
+        else f"{response.grounding_confidence:.3f}"
+    )
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -171,6 +183,8 @@ def _render_html(
     <div><strong>Course ID</strong><br>{escape(course_id)}</div>
     <div><strong>Latency</strong><br>{response.latency_ms:.2f} ms</div>
     <div><strong>Guard triggers</strong><br>{escape(trigger_text)}</div>
+    <div><strong>Disposition</strong><br>{escape(response.disposition.value)}</div>
+    <div><strong>Grounding</strong><br>{escape(grounding_status)}</div>
   </section>
 
   <section>
@@ -187,7 +201,15 @@ def _render_html(
 
   <section>
     <h2>Retrieved Chunks</h2>
-    {_render_chunks(retrieved)}
+    {_render_chunks(retrieved, response.retrieval_scores, response.supporting_chunks)}
+  </section>
+
+  <section>
+    <h2>Grounding Decision</h2>
+    <div><strong>Status:</strong> {escape(grounding_status)}</div>
+    <div><strong>Confidence:</strong> {escape(grounding_confidence)}</div>
+    <div><strong>Supporting chunks:</strong> {_render_values(response.supporting_chunks)}</div>
+    <div><strong>Unsupported claims:</strong> {_render_values(response.unsupported_claims)}</div>
   </section>
 
   <section>
@@ -215,27 +237,47 @@ def _stages_for_mode(mode: str, triggers: list[str]) -> list[str]:
         ]
     return [
         "Run input guard",
-        "Retrieve public chunks for the selected course",
+        "Retrieve chunks using native course and visibility filters",
         "Sanitize retrieved context as untrusted text",
-        "Build an extractive answer or safe refusal",
+        "Apply the configured retrieval evidence threshold",
+        "Generate an answer from the retained evidence",
+        "Verify answer entailment when a verifier is configured",
         "Run output guard",
         f"Return answer with triggers: {', '.join(triggers) if triggers else 'none'}",
     ]
 
 
-def _render_chunks(chunks: list[Chunk]) -> str:
+def _render_chunks(
+    chunks: list[Chunk],
+    scores: dict[str, float],
+    supporting_chunks: list[str],
+) -> str:
     if not chunks:
         return "<p>No chunks were used for the final answer.</p>"
     rendered = []
+    supporting = set(supporting_chunks)
     for chunk in chunks:
+        score = scores.get(chunk.chunk_id)
+        score_text = "not available" if score is None else f"{score:.6f}"
+        support_text = "yes" if chunk.chunk_id in supporting else "no"
         rendered.append(
             f"""<div class="chunk">
   <strong>{escape(chunk.chunk_id)}</strong>
   <div>{escape(chunk.title)} ({escape(chunk.doc_id)})</div>
+  <div>Retrieval score: {escape(score_text)} | Verifier support: {support_text}</div>
   <pre>{escape(_excerpt(chunk.text))}</pre>
 </div>"""
         )
     return "\n".join(rendered)
+
+
+def _render_values(values: list[str]) -> str:
+    if not values:
+        return "none"
+    return "".join(
+        f'<span class="pill">{escape(value)}</span>'
+        for value in values
+    )
 
 
 def _excerpt(text: str, limit: int = 900) -> str:

@@ -21,12 +21,14 @@ from .retrieval import LexicalRetriever
 class AssistantResponse:
     answer: str
     citations: list[str]
+    cited_doc_ids: list[str]
     disposition: ResponseDisposition
     guard_triggers: list[str] = field(default_factory=list)
     latency_ms: float = 0.0
     retrieved_chunks: list[str] = field(default_factory=list)
     retrieved_doc_ids: list[str] = field(default_factory=list)
     retrieval_scores: dict[str, float] = field(default_factory=dict)
+    retrieved_evidence: list[dict[str, object]] = field(default_factory=list)
     supporting_chunks: list[str] = field(default_factory=list)
     grounding_supported: bool | None = None
     grounding_confidence: float | None = None
@@ -134,7 +136,9 @@ class LearningAssistant:
             chunk.chunk_id: round(float(score), 6)
             for chunk, score in retrieved
         }
+        retrieved_evidence = evidence_records(retrieved)
         supporting_chunks: list[str] = []
+        cited_doc_ids: list[str] = []
         grounding_supported: bool | None = None
         grounding_confidence: float | None = None
         unsupported_claims: list[str] = []
@@ -147,8 +151,18 @@ class LearningAssistant:
                 course_id=self._course_id,
                 allowed_visibility=visibility,
             )
+            retrieved = [
+                (sanitize_chunk(chunk, self._guardrail_policy), score)
+                for chunk, score in retrieved
+            ]
+            retrieval_scores = {
+                chunk.chunk_id: round(float(score), 6)
+                for chunk, score in retrieved
+            }
+            retrieved_evidence = evidence_records(retrieved)
             answer = make_integrity_safe(question, self._guardrail_policy)
             citations = [citation_for(chunk) for chunk, _score in retrieved[:1]]
+            cited_doc_ids = [chunk.doc_id for chunk, _score in retrieved[:1]]
             disposition = ResponseDisposition.REDIRECT
         else:
             evidence = select_relevant_evidence(retrieved, self._evidence_min_score)
@@ -163,9 +177,15 @@ class LearningAssistant:
                     [chunk.chunk_id for chunk, _score in retrieved],
                     retrieved_doc_ids=[chunk.doc_id for chunk, _score in retrieved],
                     retrieval_scores=retrieval_scores,
+                    retrieved_evidence=retrieved_evidence,
                     grounding_supported=False,
                 )
             retrieved = evidence
+            retrieval_scores = {
+                chunk.chunk_id: round(float(score), 6)
+                for chunk, score in retrieved
+            }
+            retrieved_evidence = evidence_records(retrieved)
             # Default answer generation is local/extractive. Optional remote
             # generation is gated by --allow-remote-models in the CLI.
             retrieved_chunks = [chunk for chunk, _score in retrieved]
@@ -216,6 +236,7 @@ class LearningAssistant:
                         [chunk.chunk_id for chunk, _score in retrieved],
                         retrieved_doc_ids=[chunk.doc_id for chunk, _score in retrieved],
                         retrieval_scores=retrieval_scores,
+                        retrieved_evidence=retrieved_evidence,
                         supporting_chunks=supporting_chunks,
                         grounding_supported=False,
                         grounding_confidence=grounding_confidence,
@@ -227,8 +248,14 @@ class LearningAssistant:
                     for chunk, _score in retrieved
                     if chunk.chunk_id in supporting_ids
                 ]
+                cited_doc_ids = [
+                    chunk.doc_id
+                    for chunk, _score in retrieved
+                    if chunk.chunk_id in supporting_ids
+                ]
             else:
                 citations = [citation_for(chunk) for chunk, _score in retrieved]
+                cited_doc_ids = [chunk.doc_id for chunk, _score in retrieved]
             disposition = (
                 ResponseDisposition.ANSWER
                 if citations
@@ -255,6 +282,7 @@ class LearningAssistant:
                     [chunk.chunk_id for chunk, _score in retrieved],
                     retrieved_doc_ids=[chunk.doc_id for chunk, _score in retrieved],
                     retrieval_scores=retrieval_scores,
+                    retrieved_evidence=retrieved_evidence,
                     supporting_chunks=supporting_chunks,
                     grounding_supported=grounding_supported,
                     grounding_confidence=grounding_confidence,
@@ -269,7 +297,9 @@ class LearningAssistant:
             started_at,
             [chunk.chunk_id for chunk, _score in retrieved],
             retrieved_doc_ids=[chunk.doc_id for chunk, _score in retrieved],
+            cited_doc_ids=cited_doc_ids,
             retrieval_scores=retrieval_scores,
+            retrieved_evidence=retrieved_evidence,
             supporting_chunks=supporting_chunks,
             grounding_supported=grounding_supported,
             grounding_confidence=grounding_confidence,
@@ -286,7 +316,9 @@ class LearningAssistant:
         retrieved_chunks: list[str],
         *,
         retrieved_doc_ids: list[str] | None = None,
+        cited_doc_ids: list[str] | None = None,
         retrieval_scores: dict[str, float] | None = None,
+        retrieved_evidence: list[dict[str, object]] | None = None,
         supporting_chunks: list[str] | None = None,
         grounding_supported: bool | None = None,
         grounding_confidence: float | None = None,
@@ -295,12 +327,14 @@ class LearningAssistant:
         return AssistantResponse(
             answer=answer,
             citations=citations,
+            cited_doc_ids=cited_doc_ids or [],
             disposition=disposition,
             guard_triggers=sorted(set(triggers)),
             latency_ms=(perf_counter() - started_at) * 1000,
             retrieved_chunks=retrieved_chunks,
             retrieved_doc_ids=retrieved_doc_ids or [],
             retrieval_scores=retrieval_scores or {},
+            retrieved_evidence=retrieved_evidence or [],
             supporting_chunks=supporting_chunks or [],
             grounding_supported=grounding_supported,
             grounding_confidence=grounding_confidence,
@@ -499,6 +533,21 @@ def citation_for(chunk: Chunk) -> str:
     if page:
         details.append(f"page {page}")
     return f"{chunk.title} ({', '.join(details)})"
+
+
+def evidence_records(
+    retrieved: list[tuple[Chunk, float]],
+) -> list[dict[str, object]]:
+    return [
+        {
+            "chunk_id": chunk.chunk_id,
+            "doc_id": chunk.doc_id,
+            "title": chunk.title,
+            "text": chunk.text,
+            "score": round(float(score), 6),
+        }
+        for chunk, score in retrieved
+    ]
 
 
 def sanitize_chunk(chunk: Chunk, policy: GuardrailPolicy) -> Chunk:

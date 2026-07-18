@@ -8,9 +8,11 @@ from guardrails_llm.evaluation import (
     EvalCase,
     EvalResult,
     load_eval_cases,
+    run_evaluation,
     select_eval_split,
     summarize,
 )
+from guardrails_llm.pipeline import AssistantResponse
 
 
 def _case(case_id: str) -> EvalCase:
@@ -336,3 +338,94 @@ def test_summary_reports_multiclass_behavior_metrics() -> None:
     assert summary["macro_behavior_f1"] == 0.417
     assert summary["by_attack_type"]["metric_fixture"]["behavior_accuracy"] == 0.5
     assert summary["by_difficulty"]["medium"]["behavior_accuracy"] == 0.5
+
+
+def test_grounding_evaluation_preserves_evidence_and_reports_metrics() -> None:
+    cases = [
+        EvalCase(
+            case_id="supported",
+            category="normal_course",
+            question="What is RAG?",
+            expected_behavior="answer",
+            split="calibration",
+            family_id="rag-definition",
+            language="en",
+            expected_doc_ids=["rag"],
+            evidence_available=True,
+            required_claims=["RAG retrieves evidence"],
+        ),
+        EvalCase(
+            case_id="unsupported",
+            category="unsupported_abstention",
+            question="What is the secret answer?",
+            expected_behavior="abstain",
+            split="calibration",
+            family_id="missing-evidence",
+            language="de",
+            expected_doc_ids=[],
+            evidence_available=False,
+            required_claims=[],
+        ),
+    ]
+    responses = iter(
+        [
+            AssistantResponse(
+                answer="RAG retrieves evidence.",
+                citations=["RAG (rag)"],
+                cited_doc_ids=["rag"],
+                disposition=ResponseDisposition.ANSWER,
+                retrieved_chunks=["other:0", "rag:0"],
+                retrieved_doc_ids=["other", "rag"],
+                retrieval_scores={"other:0": 0.92, "rag:0": 0.89},
+                retrieved_evidence=[
+                    {
+                        "chunk_id": "rag:0",
+                        "doc_id": "rag",
+                        "title": "RAG",
+                        "text": "RAG retrieves evidence.",
+                        "score": 0.89,
+                    }
+                ],
+                supporting_chunks=["rag:0"],
+                grounding_supported=True,
+                grounding_confidence=0.96,
+            ),
+            AssistantResponse(
+                answer="I do not have enough evidence.",
+                citations=[],
+                cited_doc_ids=[],
+                disposition=ResponseDisposition.ABSTAIN,
+                guard_triggers=["ungrounded"],
+                grounding_supported=False,
+            ),
+        ]
+    )
+
+    class FakeAssistant:
+        def answer(self, _question: str) -> AssistantResponse:
+            return next(responses)
+
+    results = run_evaluation(FakeAssistant(), cases)
+    summary = summarize(results)
+
+    supported = results[0]
+    assert supported.split == "calibration"
+    assert supported.family_id == "rag-definition"
+    assert supported.language == "en"
+    assert supported.expected_doc_ids == ["rag"]
+    assert supported.retrieved_doc_ids == ["other", "rag"]
+    assert supported.retrieved_evidence[0]["text"] == "RAG retrieves evidence."
+    assert supported.cited_doc_ids == ["rag"]
+    assert supported.supporting_chunks == ["rag:0"]
+    assert supported.grounding_confidence == 0.96
+    assert summary["retrieval_evaluable_total"] == 1
+    assert summary["retrieval_recall_at_3"] == 1.0
+    assert summary["retrieval_hit_rate_at_3"] == 1.0
+    assert summary["evidence_sufficiency_total"] == 2
+    assert summary["evidence_sufficiency_accuracy"] == 1.0
+    assert summary["supported_answer_total"] == 1
+    assert summary["supported_answer_precision"] == 1.0
+    assert summary["citation_entailment_total"] == 1
+    assert summary["citation_entailment_precision"] == 1.0
+    assert summary["claim_support_total"] == 1
+    assert summary["claim_support_rate"] == 1.0
