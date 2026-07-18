@@ -48,3 +48,15 @@ def test_bootstrap_reports_deterministic_row_and_family_intervals() -> None:
     for scope in ("row", "family"):
         interval = first[scope]["metrics"]["behavior_accuracy"]
         assert interval["lower"] <= interval["point"] <= interval["upper"]
+
+
+def test_bootstrap_uses_unrounded_metrics_before_interval_calculation() -> None:
+    results = [
+        _result("a", "a", "answer", "answer"),
+        _result("b", "b", "answer", "answer"),
+        _result("c", "c", "answer", "abstain"),
+    ]
+
+    intervals = bootstrap_confidence_intervals(results, samples=50, seed=3)
+
+    assert intervals["row"]["metrics"]["behavior_accuracy"]["point"] == 0.6667

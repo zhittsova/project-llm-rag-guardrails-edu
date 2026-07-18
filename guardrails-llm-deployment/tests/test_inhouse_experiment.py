@@ -184,6 +184,45 @@ def test_v2_capture_can_checkpoint_bounded_concurrent_batches(
     assert len((tmp_path / "predictions.jsonl").read_text().splitlines()) == 4
 
 
+def test_v2_capture_checkpoints_workers_in_completion_order(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _configure_inhouse(monkeypatch)
+    selected = build_balanced_classifier_benchmark(DEVELOPMENT, CALIBRATION)[:2]
+
+    def fake_capture(case, _classifier, *, provider):
+        time.sleep(0.05 if case.case_id == selected[0].case_id else 0.01)
+        return ClassifierPrediction(
+            case_id=case.case_id,
+            predicted_label="safe",
+            confidence=0.9,
+            provider=provider,
+            model=INHOUSE_LLM_MODEL,
+        )
+
+    monkeypatch.setattr("guardrails_llm.inhouse_experiment._capture_one", fake_capture)
+    output = tmp_path / "predictions.jsonl"
+
+    run_v2_classifier_capture(
+        config=OpenAIModelConfig(
+            classifier_model=INHOUSE_LLM_MODEL,
+            allow_remote_models=True,
+        ),
+        development_cases_path=DEVELOPMENT,
+        calibration_cases_path=CALIBRATION,
+        corpus_path=CORPUS,
+        output_path=output,
+        manifest_path=tmp_path / "manifest.json",
+        classifier=EchoClassifier(),
+        limit_cases=2,
+        max_concurrency=2,
+    )
+
+    first_row = json.loads(output.read_text(encoding="utf-8").splitlines()[0])
+    assert first_row["case_id"] == selected[1].case_id
+
+
 def test_v2_capture_rejects_manifest_from_different_selection(
     tmp_path: Path,
     monkeypatch,

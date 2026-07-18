@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import os
+from dataclasses import replace
 from hashlib import blake2b, sha256
 from pathlib import Path
 from typing import Protocol
@@ -231,6 +232,7 @@ def create_embedder(
     env_file: Path | None = None,
     cache_path: Path | None = None,
     cache_read_only: bool = False,
+    model_config: OpenAIModelConfig | None = None,
 ) -> TextEmbedder:
     resolved_model = resolve_embedding_model(provider, model)
     if provider == "hashing":
@@ -238,12 +240,17 @@ def create_embedder(
     elif provider == "openai":
         from .openai_models import OpenAIEmbeddingModel
 
-        embedder = OpenAIEmbeddingModel(
-            OpenAIModelConfig(
+        config = (
+            replace(model_config, embedding_model=resolved_model)
+            if model_config is not None
+            else OpenAIModelConfig(
                 embedding_model=resolved_model,
                 allow_remote_models=allow_remote_models,
                 env_file=env_file,
             )
+        )
+        embedder = OpenAIEmbeddingModel(
+            config
         )
     else:
         raise ValueError("embedding_provider must be 'hashing' or 'openai'")

@@ -4,7 +4,7 @@ import json
 import os
 import tomllib
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -182,15 +182,17 @@ def run_v2_classifier_capture(
     with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
         for start in range(0, len(pending), max_concurrency):
             batch = pending[start : start + max_concurrency]
-            captured = executor.map(
-                lambda case: _capture_one(
+            futures = [
+                executor.submit(
+                    _capture_one,
                     case,
                     classifier,
                     provider="openai_compatible",
-                ),
-                batch,
-            )
-            for prediction in captured:
+                )
+                for case in batch
+            ]
+            for future in as_completed(futures):
+                prediction = future.result()
                 _append_jsonl(output_path, asdict(prediction))
                 predictions[prediction.case_id] = prediction
                 manifest = _manifest_payload(

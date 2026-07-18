@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from guardrails_llm.bge_evaluation import run_bge_common_split_evaluation
+from guardrails_llm.bge_evaluation import _select_threshold, run_bge_common_split_evaluation
 from guardrails_llm.inhouse_experiment import prepare_inhouse_bge
 from guardrails_llm.model_config import OpenAIModelConfig
 
@@ -27,6 +27,15 @@ class FakeBgeEmbedder:
             ]
             for text in texts
         ]
+
+
+def test_threshold_selection_preserves_runtime_score_precision() -> None:
+    lower = 0.6003326
+    upper = 0.600334
+
+    threshold = _select_threshold([lower, upper], [False, True])
+
+    assert threshold == (lower + upper) / 2
 
 
 def test_bge_evaluation_uses_common_dev_and_calibration_splits(

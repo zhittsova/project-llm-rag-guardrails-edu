@@ -6,9 +6,11 @@ import time
 import pytest
 
 from guardrails_llm.e2e_capture import (
+    _build_assistants,
     evaluate_calibration_e2e_capture,
     run_calibration_e2e_capture,
 )
+from guardrails_llm.guardrail_policy import GuardrailPolicy
 from guardrails_llm.model_config import OpenAIModelConfig
 from guardrails_llm.model_profiles import INHOUSE_EMBEDDING_MODEL, INHOUSE_LLM_MODEL
 from guardrails_llm.pipeline import AssistantResponse
@@ -186,6 +188,108 @@ def test_calibration_capture_uses_separate_assistants_for_bounded_concurrency(
     assert active[1] == 2
     assert manifest["max_concurrency"] == 2
     assert manifest["completed_runs"] == 4
+
+
+def test_build_assistants_propagates_remote_request_policy(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config = OpenAIModelConfig(
+        embedding_model=INHOUSE_EMBEDDING_MODEL,
+        answer_model=INHOUSE_LLM_MODEL,
+        classifier_model=INHOUSE_LLM_MODEL,
+        entailment_model=INHOUSE_LLM_MODEL,
+        request_timeout_seconds=12.5,
+        max_transport_retries=0,
+        allow_remote_models=True,
+    )
+    embedder_calls = []
+    assistant_calls = []
+    fake_embedder = object()
+
+    def fake_create_embedder(*_args, **kwargs):
+        embedder_calls.append(kwargs)
+        return fake_embedder
+
+    def fake_build_assistant(*_args, **kwargs):
+        assistant_calls.append(kwargs)
+        return object()
+
+    monkeypatch.setattr("guardrails_llm.e2e_capture.create_embedder", fake_create_embedder)
+    monkeypatch.setattr(
+        "guardrails_llm.e2e_capture.load_guardrail_policy",
+        lambda *_args, **_kwargs: GuardrailPolicy.default(),
+    )
+    monkeypatch.setattr("guardrails_llm.e2e_capture.build_assistant", fake_build_assistant)
+
+    _build_assistants(
+        config=config,
+        corpus_path=CORPUS,
+        policy_path=POLICY,
+        index_dir=tmp_path / "index",
+        cache_path=tmp_path / "cache.jsonl",
+        evidence_min_score=0.42,
+        entailment_min_confidence=0.8,
+        course_id="python-intro",
+    )
+
+    assert embedder_calls[0]["model_config"] is config
+    assert len(assistant_calls) == 2
+    assert all(call["model_config"] is config for call in assistant_calls)
+
+
+def test_e2e_capture_checkpoints_workers_in_completion_order(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _env(monkeypatch)
+    selected_ids = []
+
+    def fake_build_assistants(**_kwargs):
+        return {
+            "qwen_classifier_only": object(),
+            "complete_inhouse_hybrid": object(),
+        }
+
+    def fake_capture_one_run(work):
+        scenario, case, _assistant = work
+        selected_ids.append(case.case_id)
+        time.sleep(0.05 if len(selected_ids) == 1 else 0.01)
+        return {
+            "schema_version": 1,
+            "scenario": scenario,
+            "case_id": case.case_id,
+            "status": "error",
+            "error": "fixture",
+            "result": None,
+        }
+
+    monkeypatch.setattr(
+        "guardrails_llm.e2e_capture._build_assistants",
+        fake_build_assistants,
+    )
+    monkeypatch.setattr(
+        "guardrails_llm.e2e_capture._capture_one_run",
+        fake_capture_one_run,
+    )
+    output = tmp_path / "e2e.jsonl"
+
+    run_calibration_e2e_capture(
+        config=_config(),
+        calibration_cases_path=CALIBRATION,
+        corpus_path=CORPUS,
+        policy_path=POLICY,
+        index_dir=tmp_path / "unused-index",
+        cache_path=tmp_path / "unused-cache.jsonl",
+        output_path=output,
+        manifest_path=tmp_path / "manifest.json",
+        evidence_min_score=0.42,
+        limit_cases=2,
+        max_concurrency=2,
+    )
+
+    first_row = json.loads(output.read_text(encoding="utf-8").splitlines()[0])
+    assert first_row["case_id"] == selected_ids[1]
 
 
 def test_e2e_capture_evaluation_keeps_failures_visible(tmp_path: Path, monkeypatch) -> None:

@@ -64,10 +64,10 @@ def _bootstrap_scope(
     confidence_level: float,
     sample: Callable[[], list[EvalResult]],
 ) -> dict[str, object]:
-    point_summary = summarize(results)
+    point_summary = summarize(results, round_metrics=False)
     values = {name: [] for name in _METRICS}
     for _sample_index in range(samples):
-        sample_summary = summarize(sample())
+        sample_summary = summarize(sample(), round_metrics=False)
         for name, extractor in _METRICS.items():
             value = extractor(sample_summary)
             if value is not None:

@@ -14,6 +14,7 @@ from .guard_classifier import GuardClassifier, should_use_model_classifier
 from .guardrail_policy import GuardrailPolicy
 from .guards import input_guard, make_integrity_safe, output_guard, sanitize_untrusted_context
 from .grounding import EntailmentVerifier, select_relevant_evidence
+from .model_config import OpenAIModelConfig
 from .retrieval import LexicalRetriever
 from .retrieval_routing import route_retrieval_query
 
@@ -392,12 +393,14 @@ def build_assistant(
     entailment_model: str | None = None,
     entailment_min_confidence: float = 0.80,
     retrieval_embedder: TextEmbedder | None = None,
+    model_config: OpenAIModelConfig | None = None,
 ) -> BaselineRagAssistant | LearningAssistant:
     answer_generator = _build_answer_generator(
         generator,
         answer_model=answer_model,
         allow_remote_models=allow_remote_models,
         env_file=env_file,
+        model_config=model_config,
     )
     if mode == "baseline":
         return build_baseline_assistant(
@@ -421,12 +424,14 @@ def build_assistant(
         classifier_model=classifier_model,
         allow_remote_models=allow_remote_models,
         env_file=env_file,
+        model_config=model_config,
     )
     verifier = _build_entailment_verifier(
         entailment_verifier,
         entailment_model=entailment_model,
         allow_remote_models=allow_remote_models,
         env_file=env_file,
+        model_config=model_config,
     )
     if retriever_backend == "lexical":
         documents = load_documents(corpus_path)
@@ -471,6 +476,7 @@ def _build_answer_generator(
     answer_model: str | None = None,
     allow_remote_models: bool = False,
     env_file: Path | None = None,
+    model_config: OpenAIModelConfig | None = None,
 ) -> AnswerGenerator | None:
     if generator == "extractive":
         return None
@@ -478,13 +484,19 @@ def _build_answer_generator(
         from .model_config import DEFAULT_OPENAI_ANSWER_MODEL, OpenAIModelConfig
         from .openai_models import OpenAIAnswerGenerator
 
-        return OpenAIAnswerGenerator(
-            OpenAIModelConfig(
+        config = (
+            replace(
+                model_config,
+                answer_model=answer_model or model_config.answer_model,
+            )
+            if model_config is not None
+            else OpenAIModelConfig(
                 answer_model=answer_model or DEFAULT_OPENAI_ANSWER_MODEL,
                 allow_remote_models=allow_remote_models,
                 env_file=env_file,
             )
         )
+        return OpenAIAnswerGenerator(config)
     raise ValueError("generator must be 'extractive' or 'openai'")
 
 
@@ -494,6 +506,7 @@ def _build_guard_classifier(
     classifier_model: str | None = None,
     allow_remote_models: bool = False,
     env_file: Path | None = None,
+    model_config: OpenAIModelConfig | None = None,
 ) -> GuardClassifier | None:
     if guard_classifier == "none":
         return None
@@ -501,13 +514,19 @@ def _build_guard_classifier(
         from .model_config import DEFAULT_OPENAI_CLASSIFIER_MODEL, OpenAIModelConfig
         from .openai_models import OpenAIGuardClassifier
 
-        return OpenAIGuardClassifier(
-            OpenAIModelConfig(
+        config = (
+            replace(
+                model_config,
+                classifier_model=classifier_model or model_config.classifier_model,
+            )
+            if model_config is not None
+            else OpenAIModelConfig(
                 classifier_model=classifier_model or DEFAULT_OPENAI_CLASSIFIER_MODEL,
                 allow_remote_models=allow_remote_models,
                 env_file=env_file,
             )
         )
+        return OpenAIGuardClassifier(config)
     raise ValueError("guard_classifier must be 'none' or 'openai'")
 
 
@@ -517,6 +536,7 @@ def _build_entailment_verifier(
     entailment_model: str | None = None,
     allow_remote_models: bool = False,
     env_file: Path | None = None,
+    model_config: OpenAIModelConfig | None = None,
 ) -> EntailmentVerifier | None:
     if entailment_verifier == "none":
         return None
@@ -524,8 +544,13 @@ def _build_entailment_verifier(
         from .model_config import DEFAULT_OPENAI_ENTAILMENT_MODEL, OpenAIModelConfig
         from .openai_models import OpenAIEntailmentVerifier
 
-        return OpenAIEntailmentVerifier(
-            OpenAIModelConfig(
+        config = (
+            replace(
+                model_config,
+                entailment_model=entailment_model or model_config.entailment_model,
+            )
+            if model_config is not None
+            else OpenAIModelConfig(
                 entailment_model=(
                     entailment_model or DEFAULT_OPENAI_ENTAILMENT_MODEL
                 ),
@@ -533,6 +558,7 @@ def _build_entailment_verifier(
                 env_file=env_file,
             )
         )
+        return OpenAIEntailmentVerifier(config)
     raise ValueError("entailment_verifier must be 'none' or 'openai'")
 
 

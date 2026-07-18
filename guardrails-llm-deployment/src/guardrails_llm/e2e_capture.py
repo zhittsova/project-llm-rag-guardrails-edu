@@ -4,7 +4,7 @@ import json
 import math
 import os
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -156,8 +156,9 @@ def run_calibration_e2e_capture(
                 (scenario, case, assistant_sets[index][scenario])
                 for index, (scenario, case) in enumerate(batch)
             ]
-            captured = executor.map(_capture_one_run, work)
-            for row in captured:
+            futures = [executor.submit(_capture_one_run, item) for item in work]
+            for future in as_completed(futures):
+                row = future.result()
                 key = (str(row["scenario"]), str(row["case_id"]))
                 _append_row(output_path, row)
                 rows[key] = row
@@ -260,6 +261,7 @@ def _build_assistants(
     embedder = create_embedder(
         "openai",
         model=config.embedding_model,
+        model_config=config,
         allow_remote_models=config.allow_remote_models,
         env_file=config.env_file,
         cache_path=cache_path,
@@ -294,6 +296,7 @@ def _build_assistants(
         "entailment_model": config.entailment_model,
         "entailment_min_confidence": entailment_min_confidence,
         "retrieval_embedder": embedder,
+        "model_config": config,
     }
     return {
         "qwen_classifier_only": build_assistant(

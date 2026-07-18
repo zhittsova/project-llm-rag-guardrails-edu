@@ -179,18 +179,15 @@ def _score_cases(
                     retriever.indexed_chunks if retrieval_attempted else 0
                 ),
                 "retrieval_scores": [
-                    round(float(score), 6) for _chunk, score in runtime_matches
+                    float(score) for _chunk, score in runtime_matches
                 ],
                 "top_retrieval_score": (
-                    round(float(matches[0][1]), 6) if matches else -1.0
+                    float(matches[0][1]) if matches else -1.0
                 ),
                 "guard_similarity_scores": {
-                    rule.trigger: round(
-                        max(
-                            cosine_similarity(query_vector, example_vector)
-                            for example_vector in rule_vectors[rule.trigger]
-                        ),
-                        6,
+                    rule.trigger: max(
+                        cosine_similarity(query_vector, example_vector)
+                        for example_vector in rule_vectors[rule.trigger]
                     )
                     for rule in policy.input_similarity_rules
                 },
@@ -322,7 +319,7 @@ def _select_threshold(scores: list[float], targets: list[bool]) -> float:
                 threshold,
             )
         )
-    return round(max(ranked)[-1], 6)
+    return max(ranked)[-1]
 
 
 def _binary_metrics(
