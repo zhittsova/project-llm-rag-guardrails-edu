@@ -783,6 +783,7 @@ def main() -> None:
                 answer_model=args.answer_model,
                 guard_classifier=args.guard_classifier,
                 classifier_model=args.classifier_model,
+                classifier_strategy=args.classifier_strategy,
                 evidence_min_score=args.evidence_min_score,
                 entailment_verifier=args.entailment_verifier,
                 entailment_model=args.entailment_model,
@@ -836,6 +837,10 @@ def main() -> None:
                     answer_model=args.answer_model,
                     guard_classifier=classifier,
                     classifier_model=args.classifier_model,
+                    classifier_strategy=profile.get(
+                        "classifier_strategy",
+                        "ambiguous",
+                    ),
                     evidence_min_score=args.evidence_min_score,
                     entailment_verifier=args.entailment_verifier,
                     entailment_model=args.entailment_model,
@@ -854,7 +859,7 @@ def main() -> None:
                 if guard_preload and label in {
                     "similarity_plus_shared_controls",
                     "hybrid_policy_guardrails",
-                    "model_classifier_guardrails",
+                    "complete_inhouse_hybrid",
                 }:
                     preloads["guard_similarity"] = guard_preload
                 if preloads:
@@ -905,6 +910,7 @@ def main() -> None:
             answer_model=getattr(args, "answer_model", None),
             guard_classifier=getattr(args, "guard_classifier", "none"),
             classifier_model=getattr(args, "classifier_model", None),
+            classifier_strategy=getattr(args, "classifier_strategy", "ambiguous"),
             evidence_min_score=getattr(args, "evidence_min_score", None),
             entailment_verifier=getattr(args, "entailment_verifier", "none"),
             entailment_model=getattr(args, "entailment_model", None),
@@ -992,6 +998,11 @@ def _add_generation_args(parser: argparse.ArgumentParser) -> None:
 def _add_guard_classifier_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--guard-classifier", choices=["none", "openai"], default="none")
     parser.add_argument("--classifier-model")
+    parser.add_argument(
+        "--classifier-strategy",
+        choices=["ambiguous", "always"],
+        default="ambiguous",
+    )
 
 
 def _add_grounding_args(parser: argparse.ArgumentParser) -> None:
@@ -1160,6 +1171,16 @@ def _comparison_scenarios(args, policy):
         context_rules=(),
         context_fuzzy_rules=(),
     )
+    classifier_only_policy = replace(
+        policy,
+        input_rules=(),
+        input_similarity_rules=(),
+        input_fuzzy_rules=(),
+        output_rules=(),
+        output_fuzzy_rules=(),
+        context_rules=(),
+        context_fuzzy_rules=(),
+    )
     shared_controls = ["metadata_filter", "citation_requirement"]
     scenarios = [
         (
@@ -1278,9 +1299,29 @@ def _comparison_scenarios(args, policy):
         ),
     ]
     if args.guard_classifier != "none":
-        scenarios.append(
+        scenarios.extend(
+            [
             (
-                "model_classifier_guardrails",
+                "qwen_classifier_only",
+                "guardrailed",
+                classifier_only_policy,
+                args.guard_classifier,
+                {
+                    "technique": "Qwen classifier with shared metadata and citation controls",
+                    "guardrail_layers": [
+                        "model_classifier",
+                        "metadata_filter",
+                        "citation_requirement",
+                    ],
+                    "classifier_strategy": "always",
+                    "latency_expected": "high",
+                    "robustness_expected": "model-dependent",
+                    "implementation_effort": "high",
+                    "shared_controls": shared_controls,
+                },
+            ),
+            (
+                "complete_inhouse_hybrid",
                 "guardrailed",
                 policy,
                 args.guard_classifier,
@@ -1301,8 +1342,10 @@ def _comparison_scenarios(args, policy):
                     "robustness_expected": "highest_on_paraphrases",
                     "implementation_effort": "high",
                     "shared_controls": shared_controls,
+                    "classifier_strategy": "ambiguous",
                 },
-            )
+            ),
+            ]
         )
     return scenarios
 

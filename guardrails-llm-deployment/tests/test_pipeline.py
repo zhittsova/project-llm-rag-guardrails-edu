@@ -171,6 +171,28 @@ def test_deterministic_input_guard_short_circuits_classifier() -> None:
     assert "prompt_injection" in response.guard_triggers
 
 
+def test_always_classifier_strategy_checks_benign_question() -> None:
+    classifier = CountingClassifier("safe")
+    assistant = LearningAssistant(
+        LexicalRetriever([]),
+        mode="guardrailed",
+        guard_classifier=classifier,
+        classifier_strategy="always",
+    )
+
+    assistant.answer("What is a Python list?")
+
+    assert classifier.calls == 1
+
+
+def test_classifier_strategy_rejects_unknown_value() -> None:
+    with pytest.raises(ValueError, match="classifier_strategy"):
+        LearningAssistant(
+            LexicalRetriever([]),
+            classifier_strategy="sometimes",
+        )
+
+
 def test_langchain_retriever_backend_answers_question() -> None:
     assistant = build_assistant(DATA, mode="guardrailed", retriever_backend="langchain")
     response = assistant.answer("What should the guardrail evaluation assignment compare?")

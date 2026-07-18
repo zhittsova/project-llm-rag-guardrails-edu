@@ -59,12 +59,15 @@ class LearningAssistant:
         guardrail_policy: GuardrailPolicy | None = None,
         answer_generator: AnswerGenerator | None = None,
         guard_classifier: GuardClassifier | None = None,
+        classifier_strategy: str = "ambiguous",
         evidence_min_score: float | None = None,
         entailment_verifier: EntailmentVerifier | None = None,
         entailment_min_confidence: float = 0.80,
     ) -> None:
         if mode not in {"baseline", "guardrailed"}:
             raise ValueError("mode must be 'baseline' or 'guardrailed'")
+        if classifier_strategy not in {"ambiguous", "always"}:
+            raise ValueError("classifier_strategy must be 'ambiguous' or 'always'")
         self._retriever = retriever
         self._mode = mode
         self._course_id = course_id
@@ -72,6 +75,7 @@ class LearningAssistant:
         self._guardrail_policy = guardrail_policy or GuardrailPolicy.default()
         self._answer_generator = answer_generator
         self._guard_classifier = guard_classifier
+        self._classifier_strategy = classifier_strategy
         self._evidence_min_score = evidence_min_score
         self._entailment_verifier = entailment_verifier
         self._entailment_min_confidence = entailment_min_confidence
@@ -95,7 +99,19 @@ class LearningAssistant:
                     started_at,
                     [],
                 )
-            if should_use_model_classifier(question, self._guardrail_policy, triggers) and self._guard_classifier:
+            should_classify = (
+                not triggers
+                and self._guard_classifier is not None
+                and (
+                    self._classifier_strategy == "always"
+                    or should_use_model_classifier(
+                        question,
+                        self._guardrail_policy,
+                        triggers,
+                    )
+                )
+            )
+            if should_classify:
                 classification = self._guard_classifier.classify(question)
                 if classification.label != "safe" and classification.confidence >= 0.65:
                     triggers.append(classification.label)
@@ -367,6 +383,7 @@ def build_assistant(
     answer_model: str | None = None,
     guard_classifier: str = "none",
     classifier_model: str | None = None,
+    classifier_strategy: str = "ambiguous",
     evidence_min_score: float | None = None,
     entailment_verifier: str = "none",
     entailment_model: str | None = None,
@@ -438,6 +455,7 @@ def build_assistant(
         guardrail_policy=guardrail_policy,
         answer_generator=answer_generator,
         guard_classifier=classifier,
+        classifier_strategy=classifier_strategy,
         evidence_min_score=evidence_min_score,
         entailment_verifier=verifier,
         entailment_min_confidence=entailment_min_confidence,

@@ -172,6 +172,35 @@ def test_comparison_scenarios_isolate_local_guardrail_techniques() -> None:
         ]
 
 
+def test_comparison_scenarios_include_qwen_only_and_complete_hybrid() -> None:
+    policy = load_guardrail_policy(
+        ROOT / "data" / "guardrail_policy.toml",
+        similarity_embedder=HashingEmbedder(),
+    )
+    args = SimpleNamespace(guard_classifier="openai")
+    scenarios = {
+        label: (scenario_policy, classifier, profile)
+        for label, _mode, scenario_policy, classifier, profile
+        in _comparison_scenarios(args, policy)
+    }
+
+    qwen_policy, qwen_classifier, qwen_profile = scenarios["qwen_classifier_only"]
+    assert qwen_classifier == "openai"
+    assert qwen_profile["classifier_strategy"] == "always"
+    assert not qwen_policy.input_rules
+    assert not qwen_policy.input_fuzzy_rules
+    assert not qwen_policy.input_similarity_rules
+
+    hybrid_policy, hybrid_classifier, hybrid_profile = scenarios[
+        "complete_inhouse_hybrid"
+    ]
+    assert hybrid_classifier == "openai"
+    assert hybrid_profile["classifier_strategy"] == "ambiguous"
+    assert hybrid_policy.input_rules
+    assert hybrid_policy.input_fuzzy_rules
+    assert hybrid_policy.input_similarity_rules
+
+
 def test_compare_guardrails_writes_detailed_results(tmp_path: Path, monkeypatch) -> None:
     summary_output = tmp_path / "comparison.json"
     results_output = tmp_path / "comparison-results.json"
