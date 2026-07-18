@@ -631,7 +631,7 @@ def _comparison_scenarios(args, policy):
         context_fuzzy_rules=(),
     )
     fuzzy_policy = replace(
-        GuardrailPolicy.default(),
+        policy,
         input_rules=(),
         input_similarity_rules=(),
         output_rules=(),

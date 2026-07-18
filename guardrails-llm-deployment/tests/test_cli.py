@@ -67,6 +67,7 @@ def test_compare_guardrails_writes_json_artifact(tmp_path: Path, monkeypatch) ->
     assert list(data) == [
         "baseline",
         "normalized_regex_guardrails",
+        "fuzzy_only_guardrails",
         "default_guardrails",
         "hybrid_policy_guardrails",
     ]
