@@ -75,11 +75,36 @@ def test_bge_evaluation_uses_common_dev_and_calibration_splits(
     assert len(details["bge_m3"]) == 1600
     assert len(details["hashing"]) == 1600
     for technique in summary["techniques"].values():
-        assert technique["retrieval"]["development"]["total"] == 1200
-        assert technique["retrieval"]["calibration"]["total"] == 400
+        assert technique["retrieval"]["development"]["total"] == 900
+        assert technique["retrieval"]["calibration"]["total"] == 300
         assert technique["retrieval"]["selected_threshold"] is not None
+        assert technique["retrieval"]["development"]["document_recall_at_k"] >= 0
+        assert (
+            technique["retrieval"]["development"][
+                "document_recall_within_top_k_chunks"
+            ]
+            >= 0
+        )
         assert set(technique["guard_similarity"]) == {
             "prompt_injection",
             "pii",
             "academic_integrity",
         }
+
+    academic = next(
+        row
+        for row in details["bge_m3"]
+        if row["expected_classifier_label"] == "academic_integrity"
+    )
+    blocked = next(
+        row
+        for row in details["bge_m3"]
+        if row["expected_classifier_label"] == "prompt_injection"
+    )
+    assert academic["retrieval_query"] == (
+        "academic integrity graded work complete submissions hints similar examples"
+    )
+    assert academic["retrieval_attempted"] is True
+    assert blocked["retrieval_attempted"] is False
+    assert blocked["retrieval_query"] is None
+    assert summary["runtime_retriever_min_score"] == 0.05

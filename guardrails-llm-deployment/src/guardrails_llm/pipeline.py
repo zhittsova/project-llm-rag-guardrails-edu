@@ -15,6 +15,7 @@ from .guardrail_policy import GuardrailPolicy
 from .guards import input_guard, make_integrity_safe, output_guard, sanitize_untrusted_context
 from .grounding import EntailmentVerifier, select_relevant_evidence
 from .retrieval import LexicalRetriever
+from .retrieval_routing import route_retrieval_query
 
 
 @dataclass(frozen=True)
@@ -167,7 +168,7 @@ class LearningAssistant:
             # Для cheating-запросов guardrailed режим не дает готовое решение,
             # а достает policy chunk и отвечает в формате помощи/скэффолдинга.
             retrieved = self._retriever.search(
-                "academic integrity graded work complete submissions hints similar examples",
+                route_retrieval_query(question, set(triggers)),
                 course_id=self._course_id,
                 allowed_visibility=visibility,
             )

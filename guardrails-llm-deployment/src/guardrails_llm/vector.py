@@ -15,6 +15,7 @@ from .retrieval import tokenize
 
 COLLECTION_NAME = "course_chunks"
 MANIFEST_NAME = "course_chunks_manifest.json"
+DEFAULT_VECTOR_MIN_SCORE = 0.05
 REQUIRED_METADATA = {"chunk_id", "doc_id", "course_id", "title", "visibility", "source_type"}
 
 
@@ -117,7 +118,7 @@ class VectorRetriever:
         self,
         index_dir: Path,
         *,
-        min_score: float = 0.05,
+        min_score: float = DEFAULT_VECTOR_MIN_SCORE,
         embedding_provider: str = "hashing",
         embedding_model: str | None = None,
         allow_remote_models: bool = False,

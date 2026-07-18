@@ -3,6 +3,7 @@ from __future__ import annotations
 from hashlib import sha256
 from pathlib import Path
 
+from .dispositions import ResponseDisposition
 from .embeddings import HashingEmbedder, TextEmbedder, cosine_similarity, create_embedder
 from .evaluation import EvalCase, load_eval_cases
 from .guard_text import normalize_guard_text
@@ -14,7 +15,8 @@ from .model_config import (
     ensure_remote_models_allowed,
 )
 from .model_profiles import ensure_inhouse_endpoint
-from .vector import VectorRetriever, build_vector_index
+from .retrieval_routing import route_retrieval_query
+from .vector import DEFAULT_VECTOR_MIN_SCORE, VectorRetriever, build_vector_index
 
 
 def run_bge_common_split_evaluation(
@@ -61,14 +63,14 @@ def run_bge_common_split_evaluation(
     retrievers = {
         "bge_m3": VectorRetriever(
             bge_index_dir,
-            min_score=-1.0,
+            min_score=DEFAULT_VECTOR_MIN_SCORE,
             embedding_provider="openai",
             embedding_model=config.embedding_model,
             embedder=bge,
         ),
         "hashing": VectorRetriever(
             hashing_index_dir,
-            min_score=-1.0,
+            min_score=DEFAULT_VECTOR_MIN_SCORE,
             embedding_provider="hashing",
             embedder=hashing,
         ),
@@ -103,6 +105,7 @@ def run_bge_common_split_evaluation(
         "threshold_validation_split": "calibration",
         "holdout_used": False,
         "top_k": top_k,
+        "runtime_retriever_min_score": DEFAULT_VECTOR_MIN_SCORE,
         "corpus_sha256": _file_sha256(corpus_path),
         "split_sha256": {
             "development": _file_sha256(development_cases_path),
@@ -133,24 +136,48 @@ def _score_cases(
     query_vectors = embedder.embed_many(normalized)
     rows = []
     for case, query_vector in zip(cases, query_vectors, strict=True):
-        matches = retriever.search(
-            case.question,
-            course_id=course_id,
-            allowed_visibility=set(policy.allowed_visibility),
-            top_k=top_k,
+        classifier_label = derive_classifier_label(case)
+        retrieval_attempted = (
+            case.resolved_expected_behavior() is not ResponseDisposition.BLOCK
         )
-        retrieved_doc_ids = list(dict.fromkeys(chunk.doc_id for chunk, _score in matches))
+        retrieval_query = (
+            route_retrieval_query(case.question, {classifier_label})
+            if retrieval_attempted
+            else None
+        )
+        matches = (
+            retriever.search(
+                retrieval_query,
+                course_id=course_id,
+                allowed_visibility=set(policy.allowed_visibility),
+                top_k=top_k * 4,
+            )
+            if retrieval_query is not None
+            else []
+        )
+        runtime_matches = matches[:top_k]
+        retrieved_doc_ids = list(
+            dict.fromkeys(chunk.doc_id for chunk, _score in runtime_matches)
+        )
+        ranked_doc_ids = list(dict.fromkeys(chunk.doc_id for chunk, _score in matches))[
+            :top_k
+        ]
         rows.append(
             {
                 "case_id": case.case_id,
                 "split": case.split,
                 "family_id": case.family_id,
                 "language": case.language,
-                "expected_classifier_label": derive_classifier_label(case),
+                "expected_classifier_label": classifier_label,
+                "retrieval_attempted": retrieval_attempted,
+                "retrieval_query": retrieval_query,
                 "evidence_available": case.evidence_available,
                 "expected_doc_ids": list(case.expected_doc_ids or []),
                 "retrieved_doc_ids": retrieved_doc_ids,
-                "retrieval_scores": [round(float(score), 6) for _chunk, score in matches],
+                "ranked_doc_ids": ranked_doc_ids,
+                "retrieval_scores": [
+                    round(float(score), 6) for _chunk, score in runtime_matches
+                ],
                 "top_retrieval_score": (
                     round(float(matches[0][1]), 6) if matches else -1.0
                 ),
@@ -170,8 +197,16 @@ def _score_cases(
 
 
 def _summarize_technique(rows: list[dict[str, object]]) -> dict[str, object]:
-    development = [row for row in rows if row["split"] == "development"]
-    calibration = [row for row in rows if row["split"] == "calibration"]
+    development = [
+        row
+        for row in rows
+        if row["split"] == "development" and row["retrieval_attempted"] is True
+    ]
+    calibration = [
+        row
+        for row in rows
+        if row["split"] == "calibration" and row["retrieval_attempted"] is True
+    ]
     retrieval_threshold = _select_threshold(
         [float(row["top_retrieval_score"]) for row in development],
         [bool(row["evidence_available"]) for row in development],
@@ -218,18 +253,44 @@ def _retrieval_metrics(
         for row in rows
         if row["evidence_available"] is True and row["expected_doc_ids"]
     ]
-    recalls = [
+    chunk_budget_recalls = [
         len(set(row["retrieved_doc_ids"]) & set(row["expected_doc_ids"]))
         / len(set(row["expected_doc_ids"]))
         for row in evaluable
     ]
+    document_recalls = [
+        len(set(row["ranked_doc_ids"]) & set(row["expected_doc_ids"]))
+        / len(set(row["expected_doc_ids"]))
+        for row in evaluable
+    ]
     metrics["retrieval_evaluable_cases"] = len(evaluable)
-    metrics["recall_at_k"] = round(sum(recalls) / len(recalls), 4) if recalls else 0.0
-    metrics["hit_rate_at_k"] = (
-        round(sum(recall > 0 for recall in recalls) / len(recalls), 4)
-        if recalls
+    metrics["document_recall_within_top_k_chunks"] = (
+        round(sum(chunk_budget_recalls) / len(chunk_budget_recalls), 4)
+        if chunk_budget_recalls
         else 0.0
     )
+    metrics["document_hit_rate_within_top_k_chunks"] = (
+        round(
+            sum(recall > 0 for recall in chunk_budget_recalls)
+            / len(chunk_budget_recalls),
+            4,
+        )
+        if chunk_budget_recalls
+        else 0.0
+    )
+    metrics["document_recall_at_k"] = (
+        round(sum(document_recalls) / len(document_recalls), 4)
+        if document_recalls
+        else 0.0
+    )
+    metrics["document_hit_rate_at_k"] = (
+        round(sum(recall > 0 for recall in document_recalls) / len(document_recalls), 4)
+        if document_recalls
+        else 0.0
+    )
+    # Backward-compatible aliases retain the old top-k-chunk interpretation.
+    metrics["recall_at_k"] = metrics["document_recall_within_top_k_chunks"]
+    metrics["hit_rate_at_k"] = metrics["document_hit_rate_within_top_k_chunks"]
     return metrics
 
 
