@@ -287,6 +287,7 @@ def test_prepare_inhouse_bge_indexes_only_development_and_calibration(
     assert manifest["models"]["embedding"] == "BAAI/bge-m3"
     assert manifest["index"]["chunks"] > 0
     assert manifest["retrieval_evidence_threshold"] is None
+    assert manifest["retrieval_routes"] == [ACADEMIC_INTEGRITY_RETRIEVAL_QUERY]
     assert manifest_path.exists()
     assert ACADEMIC_INTEGRITY_RETRIEVAL_QUERY in {
         text for batch in embedder.calls for text in batch

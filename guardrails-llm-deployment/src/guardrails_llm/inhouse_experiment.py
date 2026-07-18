@@ -287,6 +287,7 @@ def prepare_inhouse_bge(
         "policy_sha256": _file_sha256(policy_path),
         "guard_similarity_thresholds": _policy_thresholds(policy_path),
         "retrieval_evidence_threshold": None,
+        "retrieval_routes": [ACADEMIC_INTEGRITY_RETRIEVAL_QUERY],
         "chunking": {"chunk_size": chunk_size, "chunk_overlap": chunk_overlap},
         "split_case_counts": {
             "development": len(development),
