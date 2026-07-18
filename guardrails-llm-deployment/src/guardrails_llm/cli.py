@@ -21,6 +21,7 @@ from .evaluation import (
 from .evaluation_dataset import DatasetValidationError, load_evaluation_cases_for_run
 from .guardrail_policy import GuardrailPolicy, default_policy_path, load_guardrail_policy
 from .guard_text import normalize_guard_text
+from .inhouse_experiment import run_v2_classifier_capture
 from .judging import judge_results, judgments_to_json, summarize_judgments
 from .model_calibration import (
     DEFAULT_CALIBRATION_SOURCE_CASES,
@@ -247,6 +248,58 @@ def main() -> None:
     capture_parser.add_argument("--allow-remote-models", action="store_true")
     capture_parser.add_argument("--env-file", type=Path)
 
+    v2_classifier_parser = subparsers.add_parser(
+        "capture-v2-classifier",
+        help="Capture the resumable 600-case in-house classifier benchmark",
+    )
+    v2_classifier_parser.add_argument(
+        "--profile",
+        choices=MODEL_PROFILES,
+        default="inhouse",
+    )
+    v2_classifier_parser.add_argument(
+        "--development-cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_development.jsonl",
+    )
+    v2_classifier_parser.add_argument(
+        "--calibration-cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_calibration.jsonl",
+    )
+    v2_classifier_parser.add_argument(
+        "--course-corpus",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "data" / "python_course_docs.jsonl",
+    )
+    v2_classifier_parser.add_argument(
+        "--policy",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "data" / "guardrail_policy_bge_m3.toml",
+    )
+    v2_classifier_parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_classifier_v2_predictions.jsonl",
+    )
+    v2_classifier_parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_classifier_v2_manifest.json",
+    )
+    v2_classifier_parser.add_argument("--classifier-model")
+    v2_classifier_parser.add_argument("--limit-cases", type=int)
+    v2_classifier_parser.add_argument("--allow-remote-models", action="store_true")
+    v2_classifier_parser.add_argument("--env-file", type=Path)
+
     index_parser = subparsers.add_parser("build-index", help="Build a local Chroma vector index")
     _add_profile_arg(index_parser)
     index_parser.add_argument("--corpus", dest="command_corpus", type=Path)
@@ -397,6 +450,32 @@ def main() -> None:
                 manifest_output_path=args.manifest_output,
                 limit_cases=args.limit_cases,
                 selection_strategy=args.selection_strategy,
+            )
+        except (
+            OSError,
+            ValueError,
+            RemoteModelsNotAllowedError,
+            MissingModelCredentialError,
+        ) as exc:
+            parser.error(str(exc))
+        print(json.dumps(manifest, indent=2))
+        return
+
+    if args.command == "capture-v2-classifier":
+        try:
+            manifest = run_v2_classifier_capture(
+                config=OpenAIModelConfig(
+                    classifier_model=args.classifier_model or DEFAULT_OPENAI_CLASSIFIER_MODEL,
+                    allow_remote_models=args.allow_remote_models,
+                    env_file=args.env_file,
+                ),
+                development_cases_path=args.development_cases,
+                calibration_cases_path=args.calibration_cases,
+                corpus_path=args.course_corpus,
+                policy_path=args.policy,
+                output_path=args.output,
+                manifest_path=args.manifest,
+                limit_cases=args.limit_cases,
             )
         except (
             OSError,

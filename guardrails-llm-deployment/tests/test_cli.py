@@ -380,6 +380,49 @@ def test_capture_model_calibration_wires_safe_cli_options(
     )
 
 
+def test_capture_v2_classifier_uses_inhouse_profile(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    captured_kwargs = {}
+
+    def fake_capture(**kwargs):
+        captured_kwargs.update(kwargs)
+        return {"status": "complete", "completed_cases": 2}
+
+    monkeypatch.setenv(
+        "OPENAI_BASE_URL",
+        "https://learning-services4.fokus.fraunhofer.de/litellm/v1",
+    )
+    monkeypatch.setattr(
+        "guardrails_llm.cli.run_v2_classifier_capture",
+        fake_capture,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "capture-v2-classifier",
+            "--allow-remote-models",
+            "--limit-cases",
+            "2",
+            "--output",
+            str(tmp_path / "predictions.jsonl"),
+            "--manifest",
+            str(tmp_path / "manifest.json"),
+        ],
+    )
+
+    main()
+
+    assert captured_kwargs["config"].classifier_model == "Qwen/Qwen3.6-35B-A3B"
+    assert captured_kwargs["config"].allow_remote_models is True
+    assert captured_kwargs["limit_cases"] == 2
+    assert json.loads(capsys.readouterr().out)["completed_cases"] == 2
+
+
 def test_query_wires_grounded_evidence_options(monkeypatch, capsys) -> None:
     captured_kwargs: dict[str, object] = {}
 

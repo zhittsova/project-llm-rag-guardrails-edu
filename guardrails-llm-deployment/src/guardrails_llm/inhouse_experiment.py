@@ -1,0 +1,332 @@
+from __future__ import annotations
+
+import json
+import os
+import tomllib
+from collections import Counter
+from dataclasses import asdict
+from datetime import datetime, timezone
+from hashlib import sha256
+from pathlib import Path
+from time import perf_counter
+
+from .evaluation import EvalCase, load_eval_cases
+from .model_calibration import CLASSIFIER_LABELS, ClassifierPrediction
+from .model_config import (
+    OpenAIModelConfig,
+    ensure_openai_api_key,
+    ensure_remote_models_allowed,
+)
+from .model_profiles import ensure_inhouse_endpoint
+from .openai_models import GUARD_CLASSIFIER_PROMPT_VERSION
+
+
+CLASSIFIER_TRIGGER_LABELS = {
+    "prompt_injection": "prompt_injection",
+    "pii": "pii",
+    "academic_integrity": "academic_integrity",
+    "unsafe_request": "unsafe_request",
+    "ungrounded": "unsupported",
+}
+DEFAULT_POLICY_PATH = Path(__file__).resolve().parents[2] / "data" / "guardrail_policy_bge_m3.toml"
+
+
+def derive_classifier_label(case: EvalCase) -> str:
+    if case.expected_trigger is None:
+        return "safe"
+    try:
+        return CLASSIFIER_TRIGGER_LABELS[case.expected_trigger]
+    except KeyError as exc:
+        raise ValueError(
+            f"{case.case_id}: no classifier label mapping for trigger "
+            f"{case.expected_trigger!r}"
+        ) from exc
+
+
+def build_balanced_classifier_benchmark(
+    development_cases_path: Path,
+    calibration_cases_path: Path,
+) -> list[EvalCase]:
+    development = load_eval_cases(development_cases_path)
+    calibration = load_eval_cases(calibration_cases_path)
+    _require_split(development, "development")
+    _require_split(calibration, "calibration")
+
+    selected_by_label: dict[str, list[EvalCase]] = {}
+    for label in CLASSIFIER_LABELS:
+        dev = sorted(
+            (case for case in development if derive_classifier_label(case) == label),
+            key=lambda case: case.case_id,
+        )
+        cal = sorted(
+            (case for case in calibration if derive_classifier_label(case) == label),
+            key=lambda case: case.case_id,
+        )
+        if len(dev) + len(cal) < 100:
+            raise ValueError(f"classifier label {label!r} has fewer than 100 v2 cases")
+        calibration_target = min(25, len(cal))
+        development_target = 100 - calibration_target
+        if len(dev) < development_target:
+            development_target = len(dev)
+            calibration_target = 100 - development_target
+        selected_by_label[label] = dev[:development_target] + cal[:calibration_target]
+
+    benchmark = [
+        selected_by_label[label][index]
+        for index in range(100)
+        for label in CLASSIFIER_LABELS
+    ]
+    if len({case.case_id for case in benchmark}) != 600:
+        raise ValueError("balanced classifier benchmark contains duplicate case IDs")
+    return benchmark
+
+
+def run_v2_classifier_capture(
+    *,
+    config: OpenAIModelConfig,
+    development_cases_path: Path,
+    calibration_cases_path: Path,
+    corpus_path: Path,
+    output_path: Path,
+    manifest_path: Path,
+    policy_path: Path = DEFAULT_POLICY_PATH,
+    classifier=None,
+    limit_cases: int | None = None,
+    captured_at: str | None = None,
+) -> dict[str, object]:
+    if limit_cases is not None and limit_cases < 0:
+        raise ValueError("limit_cases must be zero or greater")
+    ensure_remote_models_allowed(config)
+    ensure_openai_api_key(config)
+    endpoint_host = ensure_inhouse_endpoint(config.env_file)
+
+    cases = build_balanced_classifier_benchmark(
+        development_cases_path,
+        calibration_cases_path,
+    )
+    if limit_cases is not None:
+        cases = cases[:limit_cases]
+    configuration = {
+        "schema_version": 1,
+        "experiment": "v2_balanced_classifier",
+        "profile": "inhouse",
+        "provider": "openai_compatible",
+        "endpoint_host": endpoint_host,
+        "models": {"classifier": config.classifier_model},
+        "prompt_versions": {"classifier": GUARD_CLASSIFIER_PROMPT_VERSION},
+        "thresholds": {
+            "guard_similarity": _policy_thresholds(policy_path),
+            "retrieval_evidence": None,
+        },
+        "corpus_sha256": _file_sha256(corpus_path),
+        "split_sha256": {
+            "development": _file_sha256(development_cases_path),
+            "calibration": _file_sha256(calibration_cases_path),
+        },
+        "policy_sha256": _file_sha256(policy_path),
+        "selection_sha256": _selection_sha256(cases),
+        "selected_cases": len(cases),
+        "split_case_counts": dict(sorted(Counter(case.split for case in cases).items())),
+        "expected_label_counts": dict(
+            sorted(Counter(derive_classifier_label(case) for case in cases).items())
+        ),
+    }
+    fingerprint = _json_sha256(configuration)
+    existing_manifest = _load_existing_manifest(manifest_path)
+    if existing_manifest is not None and existing_manifest.get(
+        "configuration_fingerprint"
+    ) != fingerprint:
+        raise ValueError("existing experiment manifest configuration does not match this run")
+    if output_path.exists() and existing_manifest is None:
+        raise ValueError("prediction output exists without its experiment manifest")
+
+    predictions = _load_prediction_rows(output_path)
+    selected_ids = {case.case_id for case in cases}
+    unknown = set(predictions) - selected_ids
+    if unknown:
+        raise ValueError(f"prediction output contains unknown case IDs: {sorted(unknown)}")
+
+    if classifier is None:
+        from .openai_models import OpenAIGuardClassifier
+
+        classifier = OpenAIGuardClassifier(config)
+    started = captured_at or _utc_now()
+    manifest = _manifest_payload(
+        configuration,
+        fingerprint=fingerprint,
+        started_at=(existing_manifest or {}).get("started_at", started),
+        predictions=predictions,
+        cases=cases,
+    )
+    _write_manifest(manifest_path, manifest)
+
+    resumed_cases = len(predictions)
+    for case in cases:
+        if case.case_id in predictions:
+            continue
+        prediction = _capture_one(case, classifier, provider="openai_compatible")
+        _append_jsonl(output_path, asdict(prediction))
+        predictions[case.case_id] = prediction
+        manifest = _manifest_payload(
+            configuration,
+            fingerprint=fingerprint,
+            started_at=manifest["started_at"],
+            predictions=predictions,
+            cases=cases,
+        )
+        _write_manifest(manifest_path, manifest)
+    manifest["resumed_cases"] = resumed_cases
+    _write_manifest(manifest_path, manifest)
+    return manifest
+
+
+def _capture_one(case: EvalCase, classifier, *, provider: str) -> ClassifierPrediction:
+    started_at = perf_counter()
+    label = None
+    confidence = None
+    explanation = None
+    error = None
+    try:
+        result = classifier.classify(case.question)
+        if result.explanation.startswith("model_classifier_error:"):
+            error = result.explanation
+        else:
+            label = result.label
+            confidence = result.confidence
+            explanation = result.explanation
+    except Exception as exc:
+        error = f"capture_error:{type(exc).__name__}"
+    latency_ms = round((perf_counter() - started_at) * 1000, 3)
+    try:
+        return ClassifierPrediction(
+            case_id=case.case_id,
+            predicted_label=label,
+            confidence=confidence,
+            error=error,
+            explanation=explanation,
+            provider=provider,
+            model=classifier.model_name,
+            latency_ms=latency_ms,
+        )
+    except (TypeError, ValueError) as exc:
+        return ClassifierPrediction(
+            case_id=case.case_id,
+            predicted_label=None,
+            confidence=None,
+            error=f"capture_error:{type(exc).__name__}",
+            provider=provider,
+            model=classifier.model_name,
+            latency_ms=latency_ms,
+        )
+
+
+def _manifest_payload(
+    configuration: dict[str, object],
+    *,
+    fingerprint: str,
+    started_at: object,
+    predictions: dict[str, ClassifierPrediction],
+    cases: list[EvalCase],
+) -> dict[str, object]:
+    completed = len(predictions)
+    return configuration | {
+        "configuration_fingerprint": fingerprint,
+        "started_at": started_at,
+        "updated_at": _utc_now(),
+        "status": "complete" if completed == len(cases) else "partial",
+        "completed_cases": completed,
+        "failed_cases": sum(prediction.error is not None for prediction in predictions.values()),
+        "completed_split_counts": dict(
+            sorted(
+                Counter(
+                    case.split
+                    for case in cases
+                    if case.case_id in predictions
+                ).items()
+            )
+        ),
+    }
+
+
+def _load_prediction_rows(path: Path) -> dict[str, ClassifierPrediction]:
+    if not path.exists():
+        return {}
+    rows: dict[str, ClassifierPrediction] = {}
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        try:
+            prediction = ClassifierPrediction(**json.loads(line))
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            raise ValueError(f"invalid prediction at {path}:{line_number}") from exc
+        if prediction.case_id in rows:
+            raise ValueError(f"duplicate prediction for {prediction.case_id}")
+        rows[prediction.case_id] = prediction
+    return rows
+
+
+def _load_existing_manifest(path: Path) -> dict[str, object] | None:
+    if not path.exists():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("experiment manifest must be a JSON object")
+    return payload
+
+
+def _append_jsonl(path: Path, payload: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, separators=(",", ":")) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _write_manifest(path: Path, payload: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(path)
+
+
+def _require_split(cases: list[EvalCase], expected: str) -> None:
+    wrong = [case.case_id for case in cases if case.split != expected]
+    if wrong:
+        raise ValueError(f"{expected} dataset contains cases with a different split")
+
+
+def _policy_thresholds(path: Path) -> dict[str, float]:
+    payload = tomllib.loads(path.read_text(encoding="utf-8"))
+    rules = payload.get("input", {}).get("similarity_rules", [])
+    return {
+        str(rule["trigger"]): float(rule["threshold"])
+        for rule in rules
+    }
+
+
+def _file_sha256(path: Path) -> str:
+    digest = sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _selection_sha256(cases: list[EvalCase]) -> str:
+    return _json_sha256(
+        [
+            {
+                "case_id": case.case_id,
+                "split": case.split,
+                "expected_label": derive_classifier_label(case),
+            }
+            for case in cases
+        ]
+    )
+
+
+def _json_sha256(payload: object) -> str:
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return sha256(encoded).hexdigest()
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()

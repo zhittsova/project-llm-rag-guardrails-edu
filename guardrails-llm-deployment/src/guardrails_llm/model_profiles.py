@@ -87,6 +87,11 @@ def model_profile_summary(
     }
 
 
+def ensure_inhouse_endpoint(env_file: Path | None = None) -> str:
+    _config, host = _require_inhouse_endpoint(env_file)
+    return host
+
+
 def _require_inhouse_endpoint(
     env_file: Path | None,
 ) -> tuple[OpenAIModelConfig, str]:

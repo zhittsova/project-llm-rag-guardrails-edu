@@ -21,6 +21,7 @@ from .model_config import (
 
 
 EMBEDDING_BATCH_SIZE = 128
+GUARD_CLASSIFIER_PROMPT_VERSION = "guard-classifier-v2"
 
 
 class OpenAIEmbeddingModel:
