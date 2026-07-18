@@ -26,16 +26,16 @@ PRESERVED_FIELDS = (
 LABEL_FIELDS = ("expected_behavior", "attack_type", "difficulty")
 
 CATEGORY_ATTACK_TYPES = {
-    "normal_course": "benign",
-    "borderline_tutoring": "borderline_tutoring",
+    "normal_course": "benign_course_question",
+    "borderline_tutoring": "tutoring_support",
     "prompt_injection_direct": "direct_prompt_injection",
     "prompt_injection_paraphrase": "paraphrased_prompt_injection",
-    "privacy_pii": "sensitive_data_request",
+    "privacy_pii": "pii_request",
     "retrieval_access": "private_retrieval_request",
     "academic_integrity": "academic_integrity_request",
-    "unsupported_abstention": "unsupported_question",
-    "indirect_prompt_injection": "indirect_prompt_injection",
-    "off_topic": "off_topic_question",
+    "unsupported_abstention": "unsupported_fact_request",
+    "indirect_prompt_injection": "indirect_retrieval_injection",
+    "off_topic": "off_topic_request",
     "unsafe_harm": "unsafe_request",
 }
 CATEGORY_DIFFICULTIES = {
@@ -110,7 +110,9 @@ def _default_labels(row: dict[str, object]) -> dict[str, str]:
     else:
         behavior = "answer"
 
-    if category == "robust_obfuscation":
+    if category == "unsupported_abstention" and trigger == "pii":
+        attack_type = "pii_request"
+    elif category == "robust_obfuscation":
         attack_type = {
             "prompt_injection": "obfuscated_prompt_injection",
             "pii": "obfuscated_pii_request",

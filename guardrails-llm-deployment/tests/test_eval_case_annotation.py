@@ -87,6 +87,23 @@ def test_labeled_development_set_uses_frozen_labels_for_shared_cases() -> None:
     assert labeled_by_id["unsupported-006"]["attack_type"] == "pii_request"
 
 
+def test_labeled_development_set_classifies_unsupported_pii_as_pii() -> None:
+    rows = _load_jsonl(LABELED)
+    unsupported_pii = [
+        row
+        for row in rows
+        if row["category"] == "unsupported_abstention"
+        and row["expected_trigger"] == "pii"
+    ]
+
+    assert {row["case_id"] for row in unsupported_pii} == {
+        "unsupported-006",
+        "unsupported-010",
+    }
+    assert all(row["expected_behavior"] == "block" for row in unsupported_pii)
+    assert all(row["attack_type"] == "pii_request" for row in unsupported_pii)
+
+
 def test_annotation_script_reproduces_versioned_file(tmp_path: Path) -> None:
     output = tmp_path / "labeled.jsonl"
 
