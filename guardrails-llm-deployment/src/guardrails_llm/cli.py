@@ -20,6 +20,15 @@ from .evaluation import (
 from .guardrail_policy import GuardrailPolicy, default_policy_path, load_guardrail_policy
 from .guard_text import normalize_guard_text
 from .judging import judge_results, judgments_to_json, summarize_judgments
+from .model_calibration import (
+    DEFAULT_CALIBRATION_SOURCE_CASES,
+    DEFAULT_CALIBRATION_SOURCE_RESULTS,
+    DEFAULT_CLASSIFIER_CALIBRATION_CASES,
+    DEFAULT_CLASSIFIER_CALIBRATION_PREDICTIONS,
+    DEFAULT_JUDGE_CALIBRATION_CASES,
+    DEFAULT_JUDGE_CALIBRATION_PREDICTIONS,
+    run_local_model_calibration,
+)
 from .model_config import (
     MissingModelCredentialError,
     RemoteModelCallError,
@@ -123,6 +132,42 @@ def main() -> None:
     retrieval_benchmark_parser.add_argument("--output-json", type=Path)
     retrieval_benchmark_parser.add_argument("--output-results-json", type=Path)
 
+    calibration_parser = subparsers.add_parser(
+        "evaluate-model-calibration",
+        help="Replay local classifier and judge predictions against human labels",
+    )
+    calibration_parser.add_argument(
+        "--classifier-cases",
+        type=Path,
+        default=DEFAULT_CLASSIFIER_CALIBRATION_CASES,
+    )
+    calibration_parser.add_argument(
+        "--classifier-predictions",
+        type=Path,
+        default=DEFAULT_CLASSIFIER_CALIBRATION_PREDICTIONS,
+    )
+    calibration_parser.add_argument(
+        "--judge-cases",
+        type=Path,
+        default=DEFAULT_JUDGE_CALIBRATION_CASES,
+    )
+    calibration_parser.add_argument(
+        "--judge-predictions",
+        type=Path,
+        default=DEFAULT_JUDGE_CALIBRATION_PREDICTIONS,
+    )
+    calibration_parser.add_argument(
+        "--source-cases",
+        type=Path,
+        default=DEFAULT_CALIBRATION_SOURCE_CASES,
+    )
+    calibration_parser.add_argument(
+        "--source-results",
+        type=Path,
+        default=DEFAULT_CALIBRATION_SOURCE_RESULTS,
+    )
+    calibration_parser.add_argument("--output-json", type=Path)
+
     index_parser = subparsers.add_parser("build-index", help="Build a local Chroma vector index")
     index_parser.add_argument("--corpus", dest="command_corpus", type=Path)
     index_parser.add_argument("--index-dir", type=Path, default=default_index_path())
@@ -218,6 +263,27 @@ def main() -> None:
                 encoding="utf-8",
             )
         print(json.dumps(summaries, indent=2))
+        return
+
+    if args.command == "evaluate-model-calibration":
+        try:
+            calibration = run_local_model_calibration(
+                classifier_cases_path=args.classifier_cases,
+                classifier_predictions_path=args.classifier_predictions,
+                judge_cases_path=args.judge_cases,
+                judge_predictions_path=args.judge_predictions,
+                source_cases_path=args.source_cases,
+                source_results_path=args.source_results,
+            )
+        except (OSError, ValueError) as exc:
+            parser.error(str(exc))
+        if args.output_json:
+            args.output_json.parent.mkdir(parents=True, exist_ok=True)
+            args.output_json.write_text(
+                json.dumps(calibration, indent=2),
+                encoding="utf-8",
+            )
+        print(json.dumps(calibration, indent=2))
         return
 
     if args.command == "normalize-course-corpus":
