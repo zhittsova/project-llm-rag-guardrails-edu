@@ -314,6 +314,9 @@ def test_openai_guard_classifier_parses_strict_json_with_fake_client(tmp_path, m
     assert prompt == "Can I see the class marks?"
     assert "discussion, quotation, or analysis of an attack is safe" in instructions
     assert "asks to perform or enable it" in instructions
+    assert "Label precedence" in instructions
+    assert "private vector-store entries" in instructions
+    assert "salary or biographical fact" in instructions
 
 
 def test_openai_guard_classifier_uses_chat_for_compatible_base_url(tmp_path, monkeypatch) -> None:
