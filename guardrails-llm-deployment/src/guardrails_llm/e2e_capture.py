@@ -83,6 +83,7 @@ def run_calibration_e2e_capture(
             "entailment": config.entailment_model,
         },
         "request_policy": openai_request_policy(config),
+        "embedding_cache_mode": "read_only",
         "prompt_versions": {
             "answer": ANSWER_PROMPT_VERSION,
             "classifier": GUARD_CLASSIFIER_PROMPT_VERSION,
@@ -262,6 +263,7 @@ def _build_assistants(
         allow_remote_models=config.allow_remote_models,
         env_file=config.env_file,
         cache_path=cache_path,
+        cache_read_only=True,
     )
     hybrid_policy = load_guardrail_policy(policy_path, similarity_embedder=embedder)
     classifier_only_policy = replace(

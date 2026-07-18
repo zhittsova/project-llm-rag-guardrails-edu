@@ -60,6 +60,7 @@ class PersistentCachedEmbedder:
         cache_path: Path,
         *,
         batch_size: int = 128,
+        read_only: bool = False,
     ) -> None:
         if batch_size <= 0:
             raise ValueError("embedding cache batch_size must be greater than zero")
@@ -67,6 +68,7 @@ class PersistentCachedEmbedder:
         self._delegate = delegate
         self._cache_path = cache_path
         self._batch_size = batch_size
+        self._read_only = read_only
         self._cache: dict[str, list[float]] = {}
         self._cache_hits = 0
         self._cache_misses = 0
@@ -97,6 +99,10 @@ class PersistentCachedEmbedder:
         missing = [text for text in unique if keys[text] not in self._cache]
         self._cache_hits += sum(keys[text] in self._cache for text in texts)
         self._cache_misses += len(missing)
+        if self._read_only and missing:
+            raise ValueError(
+                f"read-only embedding cache is missing {len(missing)} text(s)"
+            )
 
         for start in range(0, len(missing), self._batch_size):
             batch = missing[start : start + self._batch_size]
@@ -224,6 +230,7 @@ def create_embedder(
     allow_remote_models: bool = False,
     env_file: Path | None = None,
     cache_path: Path | None = None,
+    cache_read_only: bool = False,
 ) -> TextEmbedder:
     resolved_model = resolve_embedding_model(provider, model)
     if provider == "hashing":
@@ -241,5 +248,9 @@ def create_embedder(
     else:
         raise ValueError("embedding_provider must be 'hashing' or 'openai'")
     if cache_path is not None:
-        return PersistentCachedEmbedder(embedder, cache_path)
+        return PersistentCachedEmbedder(
+            embedder,
+            cache_path,
+            read_only=cache_read_only,
+        )
     return embedder

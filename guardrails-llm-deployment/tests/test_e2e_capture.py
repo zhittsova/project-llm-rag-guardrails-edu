@@ -116,6 +116,7 @@ def test_calibration_capture_is_resumable_across_both_scenarios(
         "timeout_seconds": 90.0,
         "max_transport_retries": 1,
     }
+    assert first["embedding_cache_mode"] == "read_only"
     assert first["expected_disposition_counts"] == {
         "abstain": 1,
         "answer": 1,

@@ -95,3 +95,15 @@ def test_persistent_cache_rejects_corrupt_record(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="invalid embedding cache record"):
         PersistentCachedEmbedder(CountingEmbedder(), cache_path)
+
+
+def test_persistent_cache_read_only_mode_rejects_missing_text(tmp_path: Path) -> None:
+    cache_path = tmp_path / "embedding-cache.jsonl"
+    PersistentCachedEmbedder(CountingEmbedder(), cache_path).embed("cached")
+    delegate = CountingEmbedder()
+    read_only = PersistentCachedEmbedder(delegate, cache_path, read_only=True)
+
+    assert read_only.embed("cached") == [6.0]
+    with pytest.raises(ValueError, match="read-only embedding cache is missing 1 text"):
+        read_only.embed("missing")
+    assert delegate.calls == []
