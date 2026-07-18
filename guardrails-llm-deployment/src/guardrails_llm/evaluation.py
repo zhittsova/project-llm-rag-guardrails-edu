@@ -12,6 +12,14 @@ from .pipeline import LearningAssistant
 
 
 DIFFICULTIES = frozenset({"easy", "medium", "hard"})
+EVAL_SPLITS = frozenset({"development", "calibration", "holdout"})
+COVERAGE_ROLES = frozenset(
+    {"positive_direct", "positive_variant", "benign_near_miss", "boundary_control"}
+)
+EVAL_LANGUAGES = frozenset({"en", "de"})
+ANNOTATION_STATUSES = frozenset(
+    {"generated", "pending_double_review", "single_reviewed", "double_reviewed", "adjudicated"}
+)
 ATTACK_TYPE_RE = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*")
 BLOCKING_TRIGGERS = frozenset({"prompt_injection", "pii", "unsafe_request"})
 
@@ -28,6 +36,17 @@ class EvalCase:
     expected_behavior: ResponseDisposition | None = None
     attack_type: str | None = None
     difficulty: str | None = None
+    split: str | None = None
+    family_id: str | None = None
+    coverage_role: str | None = None
+    language: str | None = None
+    parent_case_id: str | None = None
+    provenance: str | None = None
+    expected_doc_ids: list[str] | None = None
+    evidence_available: bool | None = None
+    required_claims: list[str] | None = None
+    annotation_status: str | None = None
+    adjudicated_label: ResponseDisposition | None = None
 
     def __post_init__(self) -> None:
         if self.should_answer is not None and not isinstance(self.should_answer, bool):
@@ -50,8 +69,32 @@ class EvalCase:
             raise ValueError(
                 f"{self.case_id}: attack_type must be a lowercase snake-case label"
             )
+        if self.adjudicated_label is not None:
+            try:
+                adjudicated = ResponseDisposition(self.adjudicated_label)
+            except ValueError as exc:
+                raise ValueError(
+                    f"{self.case_id}: adjudicated_label must be answer, block, abstain, or redirect"
+                ) from exc
+            object.__setattr__(self, "adjudicated_label", adjudicated)
+        if self.split is not None and self.split not in EVAL_SPLITS:
+            raise ValueError(f"{self.case_id}: split must be development, calibration, or holdout")
+        if self.coverage_role is not None and self.coverage_role not in COVERAGE_ROLES:
+            raise ValueError(f"{self.case_id}: invalid coverage_role")
+        if self.language is not None and self.language not in EVAL_LANGUAGES:
+            raise ValueError(f"{self.case_id}: language must be en or de")
+        if self.annotation_status is not None and self.annotation_status not in ANNOTATION_STATUSES:
+            raise ValueError(f"{self.case_id}: invalid annotation_status")
+        if self.annotation_status == "adjudicated" and self.adjudicated_label is None:
+            raise ValueError(f"{self.case_id}: adjudicated status requires adjudicated_label")
+        if self.evidence_available is not None and not isinstance(self.evidence_available, bool):
+            raise ValueError(f"{self.case_id}: evidence_available must be a boolean")
+        _validate_optional_string_list(self.case_id, "expected_doc_ids", self.expected_doc_ids)
+        _validate_optional_string_list(self.case_id, "required_claims", self.required_claims)
 
     def resolved_expected_behavior(self) -> ResponseDisposition:
+        if self.adjudicated_label is not None:
+            return self.adjudicated_label
         if self.expected_behavior is not None:
             return self.expected_behavior
         if self.should_answer and self.expected_trigger == "academic_integrity":
@@ -61,6 +104,18 @@ class EvalCase:
         if self.expected_trigger == "ungrounded":
             return ResponseDisposition.ABSTAIN
         return ResponseDisposition.BLOCK
+
+
+def _validate_optional_string_list(
+    case_id: str,
+    field_name: str,
+    value: list[str] | None,
+) -> None:
+    if value is not None and (
+        not isinstance(value, list)
+        or not all(isinstance(item, str) and item.strip() for item in value)
+    ):
+        raise ValueError(f"{case_id}: {field_name} must be a list of non-empty strings")
 
 
 @dataclass(frozen=True)
