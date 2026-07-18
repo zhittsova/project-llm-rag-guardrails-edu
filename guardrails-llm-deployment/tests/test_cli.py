@@ -79,6 +79,21 @@ def test_compare_guardrails_writes_json_artifact(tmp_path: Path, monkeypatch) ->
         "default_guardrails",
         "hybrid_policy_guardrails",
     ]
+    for label in (
+        "similarity_plus_shared_controls",
+        "hybrid_policy_guardrails",
+    ):
+        assert data[label]["embedding_preload"]["guard_similarity"]
+        assert data[label]["avg_batch_amortized_latency_ms"] >= 0
+        assert data[label]["latency_scope"] == "pipeline_after_batch_preload"
+
+    for label in (
+        "baseline",
+        "normalized_regex_guardrails",
+        "fuzzy_plus_shared_controls",
+        "default_guardrails",
+    ):
+        assert "embedding_preload" not in data[label]
 
 
 def test_comparison_scenarios_isolate_local_guardrail_techniques() -> None:

@@ -491,7 +491,11 @@ def main() -> None:
                 preloads = {}
                 if retrieval_preload:
                     preloads["retrieval"] = retrieval_preload
-                if guard_preload and label in {"hybrid_policy_guardrails", "model_classifier_guardrails"}:
+                if guard_preload and label in {
+                    "similarity_plus_shared_controls",
+                    "hybrid_policy_guardrails",
+                    "model_classifier_guardrails",
+                }:
                     preloads["guard_similarity"] = guard_preload
                 if preloads:
                     preload_ms = sum(float(stats["latency_ms"]) for stats in preloads.values())
