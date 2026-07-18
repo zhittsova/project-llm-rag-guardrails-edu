@@ -1,4 +1,6 @@
 import json
+import threading
+import time
 from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
@@ -33,6 +35,25 @@ class EchoClassifier:
     def classify(self, text: str) -> GuardClassification:
         self.calls.append(text)
         return GuardClassification(label="safe", confidence=0.9, explanation="fixture")
+
+
+class ConcurrentClassifier(EchoClassifier):
+    def __init__(self, workers: int) -> None:
+        super().__init__()
+        self._barrier = threading.Barrier(workers)
+        self._lock = threading.Lock()
+        self._active = 0
+        self.max_active = 0
+
+    def classify(self, text: str) -> GuardClassification:
+        with self._lock:
+            self._active += 1
+            self.max_active = max(self.max_active, self._active)
+        self._barrier.wait(timeout=2)
+        time.sleep(0.01)
+        with self._lock:
+            self._active -= 1
+        return super().classify(text)
 
 
 class FakeBgeEmbedder:
@@ -128,6 +149,34 @@ def test_v2_capture_resumes_and_writes_safe_manifest(tmp_path: Path, monkeypatch
     assert "fixture-key" not in serialized
     assert "https://" not in serialized
     assert len(output.read_text(encoding="utf-8").splitlines()) == 3
+
+
+def test_v2_capture_can_checkpoint_bounded_concurrent_batches(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _configure_inhouse(monkeypatch)
+    classifier = ConcurrentClassifier(workers=4)
+
+    manifest = run_v2_classifier_capture(
+        config=OpenAIModelConfig(
+            classifier_model=INHOUSE_LLM_MODEL,
+            allow_remote_models=True,
+        ),
+        development_cases_path=DEVELOPMENT,
+        calibration_cases_path=CALIBRATION,
+        corpus_path=CORPUS,
+        output_path=tmp_path / "predictions.jsonl",
+        manifest_path=tmp_path / "manifest.json",
+        classifier=classifier,
+        limit_cases=4,
+        max_concurrency=4,
+    )
+
+    assert classifier.max_active == 4
+    assert manifest["max_concurrency"] == 4
+    assert manifest["completed_cases"] == 4
+    assert len((tmp_path / "predictions.jsonl").read_text().splitlines()) == 4
 
 
 def test_v2_capture_rejects_manifest_from_different_selection(

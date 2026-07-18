@@ -4,6 +4,7 @@ import json
 import os
 import tomllib
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -101,10 +102,13 @@ def run_v2_classifier_capture(
     policy_path: Path = DEFAULT_POLICY_PATH,
     classifier=None,
     limit_cases: int | None = None,
+    max_concurrency: int = 1,
     captured_at: str | None = None,
 ) -> dict[str, object]:
     if limit_cases is not None and limit_cases < 0:
         raise ValueError("limit_cases must be zero or greater")
+    if max_concurrency <= 0:
+        raise ValueError("max_concurrency must be greater than zero")
     ensure_remote_models_allowed(config)
     ensure_openai_api_key(config)
     endpoint_host = ensure_inhouse_endpoint(config.env_file)
@@ -135,6 +139,7 @@ def run_v2_classifier_capture(
         "policy_sha256": _file_sha256(policy_path),
         "selection_sha256": _selection_sha256(cases),
         "selected_cases": len(cases),
+        "max_concurrency": max_concurrency,
         "split_case_counts": dict(sorted(Counter(case.split for case in cases).items())),
         "expected_label_counts": dict(
             sorted(Counter(derive_classifier_label(case) for case in cases).items())
@@ -170,20 +175,29 @@ def run_v2_classifier_capture(
     _write_manifest(manifest_path, manifest)
 
     resumed_cases = len(predictions)
-    for case in cases:
-        if case.case_id in predictions:
-            continue
-        prediction = _capture_one(case, classifier, provider="openai_compatible")
-        _append_jsonl(output_path, asdict(prediction))
-        predictions[case.case_id] = prediction
-        manifest = _manifest_payload(
-            configuration,
-            fingerprint=fingerprint,
-            started_at=manifest["started_at"],
-            predictions=predictions,
-            cases=cases,
-        )
-        _write_manifest(manifest_path, manifest)
+    pending = [case for case in cases if case.case_id not in predictions]
+    with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
+        for start in range(0, len(pending), max_concurrency):
+            batch = pending[start : start + max_concurrency]
+            captured = executor.map(
+                lambda case: _capture_one(
+                    case,
+                    classifier,
+                    provider="openai_compatible",
+                ),
+                batch,
+            )
+            for prediction in captured:
+                _append_jsonl(output_path, asdict(prediction))
+                predictions[prediction.case_id] = prediction
+                manifest = _manifest_payload(
+                    configuration,
+                    fingerprint=fingerprint,
+                    started_at=manifest["started_at"],
+                    predictions=predictions,
+                    cases=cases,
+                )
+                _write_manifest(manifest_path, manifest)
     manifest["resumed_cases"] = resumed_cases
     _write_manifest(manifest_path, manifest)
     return manifest

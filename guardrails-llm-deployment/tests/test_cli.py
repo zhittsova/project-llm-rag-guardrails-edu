@@ -437,6 +437,8 @@ def test_capture_v2_classifier_uses_inhouse_profile(
             "--allow-remote-models",
             "--limit-cases",
             "2",
+            "--max-concurrency",
+            "4",
             "--output",
             str(tmp_path / "predictions.jsonl"),
             "--manifest",
@@ -449,6 +451,7 @@ def test_capture_v2_classifier_uses_inhouse_profile(
     assert captured_kwargs["config"].classifier_model == "Qwen/Qwen3.6-35B-A3B"
     assert captured_kwargs["config"].allow_remote_models is True
     assert captured_kwargs["limit_cases"] == 2
+    assert captured_kwargs["max_concurrency"] == 4
     assert json.loads(capsys.readouterr().out)["completed_cases"] == 2
 
 
