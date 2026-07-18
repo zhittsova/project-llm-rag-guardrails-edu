@@ -117,6 +117,7 @@ def _render_html(
         if response.grounding_confidence is None
         else f"{response.grounding_confidence:.3f}"
     )
+    grounding_error = response.grounding_error or "none"
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -208,6 +209,7 @@ def _render_html(
     <h2>Grounding Decision</h2>
     <div><strong>Status:</strong> {escape(grounding_status)}</div>
     <div><strong>Confidence:</strong> {escape(grounding_confidence)}</div>
+    <div><strong>Verification error:</strong> {escape(grounding_error)}</div>
     <div><strong>Supporting chunks:</strong> {_render_values(response.supporting_chunks)}</div>
     <div><strong>Unsupported claims:</strong> {_render_values(response.unsupported_claims)}</div>
   </section>

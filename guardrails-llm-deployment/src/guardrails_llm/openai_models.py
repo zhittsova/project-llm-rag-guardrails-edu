@@ -371,6 +371,7 @@ def _judge_input(case: EvalCase, result: EvalResult) -> str:
         f"Verifier supporting chunks: {result.supporting_chunks}\n"
         f"Grounding supported: {result.grounding_supported}\n"
         f"Grounding confidence: {result.grounding_confidence}\n"
+        f"Grounding error: {result.grounding_error}\n"
         f"Unsupported claims: {result.unsupported_claims}\n"
         f"Answer: {result.answer}\n"
     )

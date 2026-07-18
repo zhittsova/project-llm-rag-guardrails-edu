@@ -397,6 +397,7 @@ def test_grounding_evaluation_preserves_evidence_and_reports_metrics() -> None:
                 disposition=ResponseDisposition.ABSTAIN,
                 guard_triggers=["ungrounded"],
                 grounding_supported=False,
+                grounding_error="entailment_verifier_error:TimeoutError",
             ),
         ]
     )
@@ -429,3 +430,4 @@ def test_grounding_evaluation_preserves_evidence_and_reports_metrics() -> None:
     assert summary["citation_entailment_precision"] == 1.0
     assert summary["claim_support_total"] == 1
     assert summary["claim_support_rate"] == 1.0
+    assert results[1].grounding_error == "entailment_verifier_error:TimeoutError"

@@ -147,6 +147,7 @@ class EvalResult:
     supporting_chunks: list[str] = field(default_factory=list)
     grounding_supported: bool | None = None
     grounding_confidence: float | None = None
+    grounding_error: str | None = None
     unsupported_claims: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -269,6 +270,7 @@ def run_evaluation(assistant: LearningAssistant, cases: list[EvalCase]) -> list[
                     "grounding_confidence",
                     None,
                 ),
+                grounding_error=getattr(response, "grounding_error", None),
                 unsupported_claims=list(
                     getattr(response, "unsupported_claims", [])
                 ),

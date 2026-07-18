@@ -59,13 +59,14 @@ class FixedVerifier:
         confidence: float = 0.95,
         unsupported_claims: list[str] | None = None,
         error: Exception | None = None,
+        result_error: str | None = None,
     ) -> None:
         self.result = SimpleNamespace(
             supported=supported,
             supporting_chunk_ids=supporting_chunk_ids,
             unsupported_claims=unsupported_claims or [],
             confidence=confidence,
-            error=None,
+            error=result_error,
         )
         self.error = error
         self.calls = 0
@@ -305,6 +306,11 @@ def test_entailment_keeps_only_citations_for_supporting_chunks() -> None:
             supporting_chunk_ids=["rag:0"],
             error=RuntimeError("provider unavailable"),
         ),
+        FixedVerifier(
+            supported=False,
+            supporting_chunk_ids=[],
+            result_error="entailment_verifier_error:RuntimeError",
+        ),
     ],
 )
 def test_entailment_failure_abstains_without_citations(verifier: FixedVerifier) -> None:
@@ -324,6 +330,10 @@ def test_entailment_failure_abstains_without_citations(verifier: FixedVerifier) 
     assert response.citations == []
     assert "ungrounded" in response.guard_triggers
     assert response.retrieved_chunks == ["rag:0"]
+    if verifier.error:
+        assert response.grounding_error == "verification_error:RuntimeError"
+    if verifier.result.error:
+        assert response.grounding_error == verifier.result.error
 
 
 def test_visualization_writes_html_report(tmp_path: Path) -> None:

@@ -32,6 +32,7 @@ class AssistantResponse:
     supporting_chunks: list[str] = field(default_factory=list)
     grounding_supported: bool | None = None
     grounding_confidence: float | None = None
+    grounding_error: str | None = None
     unsupported_claims: list[str] = field(default_factory=list)
 
 
@@ -141,6 +142,7 @@ class LearningAssistant:
         cited_doc_ids: list[str] = []
         grounding_supported: bool | None = None
         grounding_confidence: float | None = None
+        grounding_error: str | None = None
         unsupported_claims: list[str] = []
 
         if "academic_integrity" in triggers:
@@ -202,13 +204,14 @@ class LearningAssistant:
                     )
                 except Exception as exc:
                     verification = None
-                    unsupported_claims = [f"verification_error:{type(exc).__name__}"]
+                    grounding_error = f"verification_error:{type(exc).__name__}"
 
                 retrieved_ids = {chunk.chunk_id for chunk in retrieved_chunks}
                 if verification is not None:
                     supporting_chunks = list(dict.fromkeys(verification.supporting_chunk_ids))
                     grounding_supported = verification.supported
                     grounding_confidence = verification.confidence
+                    grounding_error = getattr(verification, "error", None)
                     unsupported_claims = list(verification.unsupported_claims)
                     invalid_support_ids = set(supporting_chunks) - retrieved_ids
                     verification_failed = bool(getattr(verification, "error", None))
@@ -240,6 +243,7 @@ class LearningAssistant:
                         supporting_chunks=supporting_chunks,
                         grounding_supported=False,
                         grounding_confidence=grounding_confidence,
+                        grounding_error=grounding_error,
                         unsupported_claims=unsupported_claims,
                     )
                 supporting_ids = set(supporting_chunks)
@@ -286,6 +290,7 @@ class LearningAssistant:
                     supporting_chunks=supporting_chunks,
                     grounding_supported=grounding_supported,
                     grounding_confidence=grounding_confidence,
+                    grounding_error=grounding_error,
                     unsupported_claims=unsupported_claims,
                 )
 
@@ -303,6 +308,7 @@ class LearningAssistant:
             supporting_chunks=supporting_chunks,
             grounding_supported=grounding_supported,
             grounding_confidence=grounding_confidence,
+            grounding_error=grounding_error,
             unsupported_claims=unsupported_claims,
         )
 
@@ -322,6 +328,7 @@ class LearningAssistant:
         supporting_chunks: list[str] | None = None,
         grounding_supported: bool | None = None,
         grounding_confidence: float | None = None,
+        grounding_error: str | None = None,
         unsupported_claims: list[str] | None = None,
     ) -> AssistantResponse:
         return AssistantResponse(
@@ -338,6 +345,7 @@ class LearningAssistant:
             supporting_chunks=supporting_chunks or [],
             grounding_supported=grounding_supported,
             grounding_confidence=grounding_confidence,
+            grounding_error=grounding_error,
             unsupported_claims=unsupported_claims or [],
         )
 
