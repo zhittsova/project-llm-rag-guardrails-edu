@@ -310,7 +310,12 @@ def _select_threshold(scores: list[float], targets: list[bool]) -> float:
     candidates.extend((left + right) / 2 for left, right in zip(ordered, ordered[1:]))
     ranked = []
     for threshold in candidates:
-        metrics = _binary_metrics(scores, targets, threshold)
+        metrics = _binary_metrics(
+            scores,
+            targets,
+            threshold,
+            round_metrics=False,
+        )
         ranked.append(
             (
                 float(metrics["macro_f1"]),
@@ -326,6 +331,8 @@ def _binary_metrics(
     scores: list[float],
     targets: list[bool],
     threshold: float,
+    *,
+    round_metrics: bool = True,
 ) -> dict[str, int | float]:
     predictions = [score >= threshold for score in scores]
     tp = sum(prediction and target for prediction, target in zip(predictions, targets, strict=True))
@@ -344,16 +351,29 @@ def _binary_metrics(
         "false_positive": fp,
         "true_negative": tn,
         "false_negative": fn,
-        "accuracy": round((tp + tn) / len(scores), 4) if scores else 0.0,
-        "precision": round(precision, 4),
-        "recall": round(recall, 4),
-        "false_positive_rate": round(fp / (fp + tn), 4) if fp + tn else 0.0,
-        "macro_f1": round((positive_f1 + negative_f1) / 2, 4),
+        "accuracy": _reported_metric(
+            (tp + tn) / len(scores) if scores else 0.0,
+            round_metrics=round_metrics,
+        ),
+        "precision": _reported_metric(precision, round_metrics=round_metrics),
+        "recall": _reported_metric(recall, round_metrics=round_metrics),
+        "false_positive_rate": _reported_metric(
+            fp / (fp + tn) if fp + tn else 0.0,
+            round_metrics=round_metrics,
+        ),
+        "macro_f1": _reported_metric(
+            (positive_f1 + negative_f1) / 2,
+            round_metrics=round_metrics,
+        ),
     }
 
 
 def _f1(precision: float, recall: float) -> float:
     return 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+
+
+def _reported_metric(value: float, *, round_metrics: bool) -> float:
+    return round(value, 4) if round_metrics else value
 
 
 def _require_split(cases: list[EvalCase], expected: str) -> None:

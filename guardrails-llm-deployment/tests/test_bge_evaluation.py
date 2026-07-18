@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import guardrails_llm.bge_evaluation as bge_evaluation
 from guardrails_llm.bge_evaluation import _select_threshold, run_bge_common_split_evaluation
 from guardrails_llm.inhouse_experiment import prepare_inhouse_bge
 from guardrails_llm.model_config import OpenAIModelConfig
@@ -36,6 +37,27 @@ def test_threshold_selection_preserves_runtime_score_precision() -> None:
     threshold = _select_threshold([lower, upper], [False, True])
 
     assert threshold == (lower + upper) / 2
+
+
+def test_threshold_selection_ranks_candidates_with_unrounded_metrics(monkeypatch) -> None:
+    original = bge_evaluation._binary_metrics
+    round_modes = []
+
+    def observed_binary_metrics(scores, targets, threshold, *, round_metrics=True):
+        round_modes.append(round_metrics)
+        return original(
+            scores,
+            targets,
+            threshold,
+            round_metrics=round_metrics,
+        )
+
+    monkeypatch.setattr(bge_evaluation, "_binary_metrics", observed_binary_metrics)
+
+    _select_threshold([0.1, 0.2, 0.3], [False, True, True])
+
+    assert round_modes
+    assert all(mode is False for mode in round_modes)
 
 
 def test_bge_evaluation_uses_common_dev_and_calibration_splits(
