@@ -389,6 +389,8 @@ def _select_calibration_cases(
         raise ValueError("selection_strategy must be 'head' or 'stratified'")
     if limit is None:
         return cases
+    if limit == 0:
+        return []
     if strategy == "head":
         return cases[:limit]
 

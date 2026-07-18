@@ -89,6 +89,18 @@ def test_stratified_classifier_selection_covers_each_label() -> None:
     assert [case.expected_label for case in selected] == list(CLASSIFIER_LABELS)
 
 
+def test_stratified_selection_respects_zero_limit() -> None:
+    cases = load_classifier_calibration_cases(CLASSIFIER_CASES)
+
+    selected = model_capture.select_classifier_calibration_cases(
+        cases,
+        limit=0,
+        strategy="stratified",
+    )
+
+    assert selected == []
+
+
 def test_stratified_judge_selection_covers_matched_and_mismatched_behaviors() -> None:
     cases = load_judge_calibration_cases(JUDGE_CASES)
 
