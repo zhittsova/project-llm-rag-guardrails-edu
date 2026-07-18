@@ -514,15 +514,33 @@ def _grounding_summary(
         for result in supported_answers
     )
 
-    entailed_citations = [
+    expected_document_citations = [
         (doc_id, set(result.expected_doc_ids))
         for result in results
         if result.grounding_supported is True and result.expected_doc_ids
         for doc_id in result.cited_doc_ids
     ]
-    correct_entailed_citations = sum(
+    expected_document_citations_correct = sum(
         doc_id in expected_doc_ids
-        for doc_id, expected_doc_ids in entailed_citations
+        for doc_id, expected_doc_ids in expected_document_citations
+    )
+
+    verifier_approved_citations = []
+    for result in results:
+        if result.grounding_supported is not True:
+            continue
+        supporting_chunk_ids = set(result.supporting_chunks)
+        supporting_doc_ids = {
+            str(record["doc_id"])
+            for record in result.retrieved_evidence
+            if record.get("chunk_id") in supporting_chunk_ids and record.get("doc_id")
+        }
+        verifier_approved_citations.extend(
+            (doc_id, supporting_doc_ids) for doc_id in result.cited_doc_ids
+        )
+    verifier_approved_citations_correct = sum(
+        doc_id in supporting_doc_ids
+        for doc_id, supporting_doc_ids in verifier_approved_citations
     )
 
     claim_support_evaluable = [
@@ -561,18 +579,26 @@ def _grounding_summary(
             len(supported_answers),
             round_metrics=round_metrics,
         ),
-        "citation_entailment_total": len(entailed_citations),
-        "citation_entailment_precision": _rate(
-            correct_entailed_citations,
-            len(entailed_citations),
+        "expected_document_citation_total": len(expected_document_citations),
+        "expected_document_citation_precision": _rate(
+            expected_document_citations_correct,
+            len(expected_document_citations),
             round_metrics=round_metrics,
         ),
+        "citation_entailment_total": len(verifier_approved_citations),
+        "citation_entailment_precision": _rate(
+            verifier_approved_citations_correct,
+            len(verifier_approved_citations),
+            round_metrics=round_metrics,
+        ),
+        "citation_entailment_scope": "model_verifier_conditioned",
         "claim_support_total": len(claim_support_evaluable),
         "claim_support_rate": _rate(
             supported_claim_answers,
             len(claim_support_evaluable),
             round_metrics=round_metrics,
         ),
+        "claim_support_scope": "model_verifier_conditioned",
     }
 
 
