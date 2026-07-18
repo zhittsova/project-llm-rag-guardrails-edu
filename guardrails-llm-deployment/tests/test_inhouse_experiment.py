@@ -371,6 +371,44 @@ def test_v2_classifier_evaluation_preserves_raw_reports_and_gates_operational_ca
     assert report["quality_gates"]["safe_false_positive_rate"] == 0.0
 
 
+def test_v2_classifier_promotion_requires_valid_responses_across_all_600_cases(
+    tmp_path: Path,
+) -> None:
+    predictions = tmp_path / "predictions.jsonl"
+    cases = build_balanced_classifier_benchmark(DEVELOPMENT, CALIBRATION)
+    rows = []
+    for index, case in enumerate(cases):
+        prediction = (
+            ClassifierPrediction(
+                case_id=case.case_id,
+                predicted_label=None,
+                confidence=None,
+                error="model_classifier_error:ValueError",
+            )
+            if index == 0
+            else ClassifierPrediction(
+                case_id=case.case_id,
+                predicted_label=derive_classifier_label(case),
+                confidence=0.99,
+            )
+        )
+        rows.append(json.dumps(asdict(prediction)))
+    predictions.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+    report = evaluate_v2_classifier_capture(
+        development_cases_path=DEVELOPMENT,
+        calibration_cases_path=CALIBRATION,
+        predictions_path=predictions,
+    )
+
+    assert report["operational"]["calibration"]["summary"]["macro_f1"] == 1.0
+    assert report["quality_gates"]["metric_scope"] == "operational_calibration"
+    assert report["quality_gates"]["validity_scope"] == "operational_all_600"
+    assert report["quality_gates"]["structured_response_validity"] == 0.9983
+    assert report["quality_gates"]["structured_response_validity_passed"] is False
+    assert report["quality_gates"]["all_passed"] is False
+
+
 def test_prepare_inhouse_bge_indexes_only_development_and_calibration(
     tmp_path: Path,
     monkeypatch,

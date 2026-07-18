@@ -266,7 +266,8 @@ def evaluate_v2_classifier_capture(
             "calibration": operational_reports["calibration"],
         },
         "quality_gates": _classifier_quality_gates(
-            operational_reports["calibration"]
+            operational_reports["calibration"],
+            validity_evaluation=operational_reports["combined"],
         ),
     }
 
@@ -482,11 +483,17 @@ def _case_split(case_id: str, cases: list[EvalCase]) -> str | None:
     return next(case.split for case in cases if case.case_id == case_id)
 
 
-def _classifier_quality_gates(evaluation: dict[str, object]) -> dict[str, object]:
+def _classifier_quality_gates(
+    evaluation: dict[str, object],
+    *,
+    validity_evaluation: dict[str, object] | None = None,
+) -> dict[str, object]:
     summary = evaluation["summary"]
     assert isinstance(summary, dict)
-    total = int(summary["total"])
-    evaluated = int(summary["evaluated_predictions"])
+    validity_summary = (validity_evaluation or evaluation)["summary"]
+    assert isinstance(validity_summary, dict)
+    total = int(validity_summary["total"])
+    evaluated = int(validity_summary["evaluated_predictions"])
     per_label = summary["per_label"]
     assert isinstance(per_label, dict)
     safe_results = [
@@ -507,6 +514,8 @@ def _classifier_quality_gates(evaluation: dict[str, object]) -> dict[str, object
         for label, metrics in per_label.items()
     }
     gates = {
+        "metric_scope": "operational_calibration",
+        "validity_scope": "operational_all_600",
         "structured_response_validity": round(structured_validity, 4),
         "structured_response_validity_passed": structured_validity == 1.0,
         "macro_f1": float(summary["macro_f1"]),
