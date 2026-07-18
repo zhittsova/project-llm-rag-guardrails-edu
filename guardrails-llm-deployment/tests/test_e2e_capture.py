@@ -323,6 +323,7 @@ def test_e2e_capture_evaluation_keeps_failures_visible(tmp_path: Path, monkeypat
     report = evaluate_calibration_e2e_capture(
         calibration_cases_path=CALIBRATION,
         output_path=output,
+        manifest_path=manifest,
         limit_cases=2,
     )
 
@@ -332,3 +333,139 @@ def test_e2e_capture_evaluation_keeps_failures_visible(tmp_path: Path, monkeypat
     intervals = report["complete_inhouse_hybrid"]["confidence_intervals"]
     assert intervals["row"]["sampling_units"] == 2
     assert intervals["family"]["sampling_units"] <= 2
+
+
+def test_e2e_evaluation_rejects_manifest_with_invalid_fingerprint(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _env(monkeypatch)
+    output = tmp_path / "e2e.jsonl"
+    manifest = tmp_path / "manifest.json"
+    run_calibration_e2e_capture(
+        config=_config(),
+        calibration_cases_path=CALIBRATION,
+        corpus_path=CORPUS,
+        policy_path=POLICY,
+        index_dir=tmp_path / "unused-index",
+        cache_path=tmp_path / "unused-cache.jsonl",
+        output_path=output,
+        manifest_path=manifest,
+        evidence_min_score=0.42,
+        limit_cases=2,
+        assistants={
+            "qwen_classifier_only": FakeAssistant(),
+            "complete_inhouse_hybrid": FakeAssistant(),
+        },
+    )
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    payload["configuration_fingerprint"] = "forged"
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="configuration fingerprint"):
+        evaluate_calibration_e2e_capture(
+            calibration_cases_path=CALIBRATION,
+            output_path=output,
+            manifest_path=manifest,
+            limit_cases=2,
+        )
+
+
+def test_e2e_evaluation_rejects_rows_outside_manifest_selection(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _env(monkeypatch)
+    output = tmp_path / "e2e.jsonl"
+    manifest = tmp_path / "manifest.json"
+    run_calibration_e2e_capture(
+        config=_config(),
+        calibration_cases_path=CALIBRATION,
+        corpus_path=CORPUS,
+        policy_path=POLICY,
+        index_dir=tmp_path / "unused-index",
+        cache_path=tmp_path / "unused-cache.jsonl",
+        output_path=output,
+        manifest_path=manifest,
+        evidence_min_score=0.42,
+        limit_cases=2,
+        assistants={
+            "qwen_classifier_only": FakeAssistant(),
+            "complete_inhouse_hybrid": FakeAssistant(),
+        },
+    )
+    stale = json.loads(output.read_text(encoding="utf-8").splitlines()[0])
+    stale["case_id"] = "calibration-stale-case"
+    with output.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(stale) + "\n")
+
+    with pytest.raises(ValueError, match="outside the selected cases"):
+        evaluate_calibration_e2e_capture(
+            calibration_cases_path=CALIBRATION,
+            output_path=output,
+            manifest_path=manifest,
+            limit_cases=2,
+        )
+
+
+def test_e2e_evaluation_rebuilds_expected_fields_from_selected_cases(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _env(monkeypatch)
+    output = tmp_path / "e2e.jsonl"
+    manifest = tmp_path / "manifest.json"
+    run_calibration_e2e_capture(
+        config=_config(),
+        calibration_cases_path=CALIBRATION,
+        corpus_path=CORPUS,
+        policy_path=POLICY,
+        index_dir=tmp_path / "unused-index",
+        cache_path=tmp_path / "unused-cache.jsonl",
+        output_path=output,
+        manifest_path=manifest,
+        evidence_min_score=0.42,
+        limit_cases=2,
+        assistants={
+            "qwen_classifier_only": FakeAssistant(),
+            "complete_inhouse_hybrid": FakeAssistant(),
+        },
+    )
+    baseline = evaluate_calibration_e2e_capture(
+        calibration_cases_path=CALIBRATION,
+        output_path=output,
+        manifest_path=manifest,
+        limit_cases=2,
+    )
+    rows = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+    successful = next(row for row in rows if row["status"] == "success")
+    successful["result"].update(
+        {
+            "case_id": "forged-case-id",
+            "category": "forged-category",
+            "should_answer": True,
+            "passed": True,
+            "expected_behavior": "answer",
+            "attack_type": "forged_attack",
+            "difficulty": "hard",
+            "split": "holdout",
+            "family_id": "forged-family",
+            "language": "de",
+            "expected_doc_ids": ["forged-document"],
+            "evidence_available": True,
+            "required_claims": ["forged claim"],
+        }
+    )
+    output.write_text(
+        "".join(json.dumps(row) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+
+    replayed = evaluate_calibration_e2e_capture(
+        calibration_cases_path=CALIBRATION,
+        output_path=output,
+        manifest_path=manifest,
+        limit_cases=2,
+    )
+
+    assert replayed == baseline

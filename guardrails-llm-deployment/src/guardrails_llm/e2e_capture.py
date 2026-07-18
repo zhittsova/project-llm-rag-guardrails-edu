@@ -31,6 +31,30 @@ from .pipeline import build_assistant
 
 
 E2E_SCENARIOS = ("qwen_classifier_only", "complete_inhouse_hybrid")
+_CAPTURE_CONFIGURATION_KEYS = (
+    "schema_version",
+    "experiment",
+    "profile",
+    "provider",
+    "endpoint_host",
+    "scenarios",
+    "models",
+    "request_policy",
+    "embedding_cache_mode",
+    "prompt_versions",
+    "thresholds",
+    "corpus_sha256",
+    "calibration_split_sha256",
+    "policy_sha256",
+    "selection_sha256",
+    "selected_cases",
+    "selected_case_ids",
+    "selected_run_keys",
+    "max_concurrency",
+    "expected_disposition_counts",
+    "expected_runs",
+    "holdout_used",
+)
 
 
 def run_calibration_e2e_capture(
@@ -98,6 +122,8 @@ def run_calibration_e2e_capture(
         "policy_sha256": _file_sha256(policy_path),
         "selection_sha256": _selection_sha256(cases),
         "selected_cases": len(cases),
+        "selected_case_ids": [case.case_id for case in cases],
+        "selected_run_keys": _selected_run_keys(cases),
         "max_concurrency": max_concurrency,
         "expected_disposition_counts": dict(
             sorted(Counter(case.resolved_expected_behavior().value for case in cases).items())
@@ -206,6 +232,7 @@ def evaluate_calibration_e2e_capture(
     *,
     calibration_cases_path: Path,
     output_path: Path,
+    manifest_path: Path | None = None,
     limit_cases: int | None = None,
 ) -> dict[str, object]:
     cases = load_eval_cases(calibration_cases_path)
@@ -215,18 +242,31 @@ def evaluate_calibration_e2e_capture(
         if limit_cases < 0:
             raise ValueError("limit_cases must be zero or greater")
         cases = _select_stratified_cases(cases, limit_cases)
+    manifest = _load_manifest(manifest_path or _default_manifest_path(output_path))
+    if manifest is None:
+        raise ValueError("end-to-end evaluation requires its capture manifest")
+    _validate_capture_manifest(
+        manifest,
+        calibration_cases_path=calibration_cases_path,
+        cases=cases,
+    )
     rows = _load_rows(output_path)
+    expected_keys = {(scenario, case.case_id) for scenario in E2E_SCENARIOS for case in cases}
+    unexpected_keys = set(rows) - expected_keys
+    if unexpected_keys:
+        raise ValueError("end-to-end output contains rows outside the selected cases")
     report = {}
     for scenario in E2E_SCENARIOS:
         scenario_rows = {
-            case_id: row
-            for (row_scenario, case_id), row in rows.items()
-            if row_scenario == scenario
+            case.case_id: rows[(scenario, case.case_id)]
+            for case in cases
+            if (scenario, case.case_id) in rows
         }
         successful = [
-            EvalResult(**row["result"])
-            for row in scenario_rows.values()
-            if row["status"] == "success"
+            _rebuild_eval_result(scenario_rows[case.case_id]["result"], case)
+            for case in cases
+            if case.case_id in scenario_rows
+            and scenario_rows[case.case_id]["status"] == "success"
         ]
         failures = sum(row["status"] == "error" for row in scenario_rows.values())
         missing = len(cases) - len(scenario_rows)
@@ -385,6 +425,73 @@ def _manifest(
     }
 
 
+def _validate_capture_manifest(
+    manifest: dict[str, object],
+    *,
+    calibration_cases_path: Path,
+    cases: list[EvalCase],
+) -> None:
+    if any(key not in manifest for key in _CAPTURE_CONFIGURATION_KEYS):
+        raise ValueError("capture manifest is missing configuration fields")
+    configuration = {
+        key: manifest[key]
+        for key in _CAPTURE_CONFIGURATION_KEYS
+    }
+    if manifest.get("configuration_fingerprint") != _json_sha256(configuration):
+        raise ValueError("capture manifest configuration fingerprint does not match")
+    if manifest["calibration_split_sha256"] != _file_sha256(calibration_cases_path):
+        raise ValueError("capture manifest calibration split hash does not match")
+
+    selected_case_ids = [case.case_id for case in cases]
+    if manifest["selected_case_ids"] != selected_case_ids:
+        raise ValueError("capture manifest selected case IDs do not match")
+    if manifest["selection_sha256"] != _selection_sha256(cases):
+        raise ValueError("capture manifest selected case IDs do not match")
+    if manifest["selected_cases"] != len(cases):
+        raise ValueError("capture manifest selected case count does not match")
+
+    selected_run_keys = _selected_run_keys(cases)
+    if manifest["scenarios"] != list(E2E_SCENARIOS):
+        raise ValueError("capture manifest scenarios do not match")
+    if manifest["selected_run_keys"] != selected_run_keys:
+        raise ValueError("capture manifest selected scenario keys do not match")
+    if manifest["expected_runs"] != len(selected_run_keys):
+        raise ValueError("capture manifest expected run count does not match")
+
+
+def _rebuild_eval_result(payload: object, case: EvalCase) -> EvalResult:
+    if not isinstance(payload, dict):
+        raise ValueError(f"successful capture for {case.case_id} has no result payload")
+    expected_behavior = case.resolved_expected_behavior()
+    result_payload = dict(payload)
+    result_payload.update(
+        {
+            "case_id": case.case_id,
+            "category": case.category,
+            "should_answer": expected_behavior
+            in {ResponseDisposition.ANSWER, ResponseDisposition.REDIRECT},
+            "expected_behavior": expected_behavior,
+            "attack_type": case.attack_type,
+            "difficulty": case.difficulty,
+            "split": case.split,
+            "family_id": case.family_id,
+            "language": case.language,
+            "expected_doc_ids": list(case.expected_doc_ids or []),
+            "evidence_available": case.evidence_available,
+            "required_claims": list(case.required_claims or []),
+        }
+    )
+    result = EvalResult(**result_payload)
+    answer = result.answer.lower()
+    result_payload["passed"] = (
+        result.resolved_actual_behavior() is expected_behavior
+        and (case.expected_trigger is None or case.expected_trigger in result.triggers)
+        and all(term.lower() in answer for term in case.required_terms or [])
+        and not any(term.lower() in answer for term in case.forbidden_terms or [])
+    )
+    return EvalResult(**result_payload)
+
+
 def _load_rows(path: Path) -> dict[tuple[str, str], dict[str, object]]:
     if not path.exists():
         return {}
@@ -435,6 +542,18 @@ def _write_manifest(path: Path, payload: dict[str, object]) -> None:
 
 def _selection_sha256(cases) -> str:
     return _json_sha256([case.case_id for case in cases])
+
+
+def _selected_run_keys(cases: list[EvalCase]) -> list[list[str]]:
+    return [
+        [scenario, case.case_id]
+        for scenario in E2E_SCENARIOS
+        for case in cases
+    ]
+
+
+def _default_manifest_path(output_path: Path) -> Path:
+    return output_path.with_name(f"{output_path.stem}_manifest.json")
 
 
 def _select_stratified_cases(cases, limit: int):
