@@ -371,7 +371,10 @@ def select_judge_calibration_cases(
         cases,
         limit=limit,
         strategy=strategy,
-        group_key=lambda case: case.expected_behavior.value,
+        group_key=lambda case: (
+            f"{case.expected_behavior.value}:"
+            f"{case.actual_behavior is case.expected_behavior}"
+        ),
     )
 
 

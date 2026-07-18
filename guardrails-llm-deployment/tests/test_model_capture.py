@@ -89,20 +89,30 @@ def test_stratified_classifier_selection_covers_each_label() -> None:
     assert [case.expected_label for case in selected] == list(CLASSIFIER_LABELS)
 
 
-def test_stratified_judge_selection_covers_each_expected_behavior() -> None:
+def test_stratified_judge_selection_covers_matched_and_mismatched_behaviors() -> None:
     cases = load_judge_calibration_cases(JUDGE_CASES)
 
     selected = model_capture.select_judge_calibration_cases(
         cases,
-        limit=4,
+        limit=8,
         strategy="stratified",
     )
 
-    assert [case.expected_behavior.value for case in selected] == [
-        "answer",
-        "block",
-        "abstain",
-        "redirect",
+    assert [
+        (
+            case.expected_behavior.value,
+            case.actual_behavior is case.expected_behavior,
+        )
+        for case in selected
+    ] == [
+        ("answer", True),
+        ("answer", False),
+        ("block", True),
+        ("block", False),
+        ("abstain", True),
+        ("abstain", False),
+        ("redirect", True),
+        ("redirect", False),
     ]
 
 
