@@ -43,7 +43,7 @@
     },
     "holdout": {
       "path": "eval_cases_milestone3_v2_holdout.jsonl",
-      "sha256": "f19834f5804e7b8237ac5c572bd61d50b40e5862563202657babda8090e3a6d0"
+      "sha256": "ccc7683507ce45cb360d58816d1e269e155b279cb481c68d56ca1c6a2bb28b14"
     },
     "annotations": {
       "path": "eval_cases_milestone3_v2_holdout_annotations.jsonl",
