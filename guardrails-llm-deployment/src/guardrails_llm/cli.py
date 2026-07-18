@@ -23,6 +23,7 @@ from .guardrail_policy import GuardrailPolicy, default_policy_path, load_guardra
 from .guard_text import normalize_guard_text
 from .inhouse_experiment import (
     evaluate_v2_classifier_capture,
+    prepare_inhouse_bge,
     run_v2_classifier_capture,
 )
 from .judging import judge_results, judgments_to_json, summarize_judgments
@@ -331,6 +332,58 @@ def main() -> None:
     v2_classifier_eval_parser.add_argument("--limit-cases", type=int)
     v2_classifier_eval_parser.add_argument("--output-json", type=Path)
 
+    bge_prepare_parser = subparsers.add_parser(
+        "prepare-inhouse-bge",
+        help="Cache v2 BGE embeddings and build the real-course Chroma index",
+    )
+    bge_prepare_parser.add_argument(
+        "--profile",
+        choices=["inhouse"],
+        default="inhouse",
+    )
+    bge_prepare_parser.add_argument(
+        "--development-cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_development.jsonl",
+    )
+    bge_prepare_parser.add_argument(
+        "--calibration-cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_calibration.jsonl",
+    )
+    bge_prepare_parser.add_argument(
+        "--course-corpus",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "data" / "python_course_docs.jsonl",
+    )
+    bge_prepare_parser.add_argument(
+        "--policy",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "data" / "guardrail_policy_bge_m3.toml",
+    )
+    bge_prepare_parser.add_argument(
+        "--index-dir",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "indexes" / "python-course-bge-m3",
+    )
+    bge_prepare_parser.add_argument("--chunk-size", type=int, default=650)
+    bge_prepare_parser.add_argument("--chunk-overlap", type=int, default=80)
+    bge_prepare_parser.add_argument("--embedding-model")
+    bge_prepare_parser.add_argument("--embedding-cache", type=Path)
+    bge_prepare_parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_bge_preparation_manifest.json",
+    )
+    bge_prepare_parser.add_argument("--allow-remote-models", action="store_true")
+    bge_prepare_parser.add_argument("--env-file", type=Path)
+
     index_parser = subparsers.add_parser("build-index", help="Build a local Chroma vector index")
     _add_profile_arg(index_parser)
     index_parser.add_argument("--corpus", dest="command_corpus", type=Path)
@@ -535,6 +588,36 @@ def main() -> None:
                 encoding="utf-8",
             )
         print(json.dumps(report, indent=2))
+        return
+
+    if args.command == "prepare-inhouse-bge":
+        try:
+            manifest = prepare_inhouse_bge(
+                config=OpenAIModelConfig(
+                    embedding_model=args.embedding_model,
+                    allow_remote_models=args.allow_remote_models,
+                    env_file=args.env_file,
+                ),
+                development_cases_path=args.development_cases,
+                calibration_cases_path=args.calibration_cases,
+                corpus_path=args.course_corpus,
+                policy_path=args.policy,
+                index_dir=args.index_dir,
+                cache_path=args.embedding_cache,
+                manifest_path=args.manifest,
+                chunk_size=args.chunk_size,
+                chunk_overlap=args.chunk_overlap,
+            )
+        except (
+            OSError,
+            ValueError,
+            VectorIndexError,
+            RemoteModelsNotAllowedError,
+            MissingModelCredentialError,
+            RemoteModelCallError,
+        ) as exc:
+            parser.error(str(exc))
+        print(json.dumps(manifest, indent=2))
         return
 
     if args.command == "normalize-course-corpus":

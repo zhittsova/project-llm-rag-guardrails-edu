@@ -10,6 +10,7 @@ from guardrails_llm.inhouse_experiment import (
     build_balanced_classifier_benchmark,
     derive_classifier_label,
     evaluate_v2_classifier_capture,
+    prepare_inhouse_bge,
     run_v2_classifier_capture,
 )
 from guardrails_llm.model_config import OpenAIModelConfig, RemoteModelsNotAllowedError
@@ -32,6 +33,20 @@ class EchoClassifier:
     def classify(self, text: str) -> GuardClassification:
         self.calls.append(text)
         return GuardClassification(label="safe", confidence=0.9, explanation="fixture")
+
+
+class FakeBgeEmbedder:
+    model_name = "BAAI/bge-m3"
+
+    def __init__(self) -> None:
+        self.calls: list[list[str]] = []
+
+    def embed(self, text: str) -> list[float]:
+        return self.embed_many([text])[0]
+
+    def embed_many(self, texts: list[str]) -> list[list[float]]:
+        self.calls.append(texts)
+        return [[float(bool(text)), float(len(text) % 7)] for text in texts]
 
 
 def _configure_inhouse(monkeypatch) -> None:
@@ -185,3 +200,37 @@ def test_v2_classifier_evaluation_reports_splits_and_quality_gates(tmp_path: Pat
     assert report["calibration"]["summary"]["total"] == 150
     assert report["quality_gates"]["all_passed"] is True
     assert report["quality_gates"]["safe_false_positive_rate"] == 0.0
+
+
+def test_prepare_inhouse_bge_indexes_only_development_and_calibration(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _configure_inhouse(monkeypatch)
+    manifest_path = tmp_path / "bge-manifest.json"
+    embedder = FakeBgeEmbedder()
+
+    manifest = prepare_inhouse_bge(
+        config=OpenAIModelConfig(
+            embedding_model="BAAI/bge-m3",
+            allow_remote_models=True,
+        ),
+        development_cases_path=DEVELOPMENT,
+        calibration_cases_path=CALIBRATION,
+        corpus_path=CORPUS,
+        policy_path=ROOT / "data" / "guardrail_policy_bge_m3.toml",
+        index_dir=tmp_path / "chroma",
+        cache_path=tmp_path / "cache.jsonl",
+        manifest_path=manifest_path,
+        embedder=embedder,
+    )
+
+    assert manifest["split_case_counts"] == {
+        "development": 1200,
+        "calibration": 400,
+    }
+    assert "holdout" not in manifest["split_sha256"]
+    assert manifest["models"]["embedding"] == "BAAI/bge-m3"
+    assert manifest["index"]["chunks"] > 0
+    assert manifest["retrieval_evidence_threshold"] is None
+    assert manifest_path.exists()

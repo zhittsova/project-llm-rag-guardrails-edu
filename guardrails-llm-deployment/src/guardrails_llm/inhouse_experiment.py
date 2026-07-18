@@ -10,7 +10,10 @@ from hashlib import sha256
 from pathlib import Path
 from time import perf_counter
 
+from .embeddings import CachedEmbedder, create_embedder
 from .evaluation import EvalCase, load_eval_cases
+from .guard_text import normalize_guard_text
+from .guardrail_policy import load_guardrail_policy
 from .model_calibration import (
     CLASSIFIER_LABELS,
     ClassifierCalibrationCase,
@@ -24,6 +27,7 @@ from .model_config import (
 )
 from .model_profiles import ensure_inhouse_endpoint
 from .openai_models import GUARD_CLASSIFIER_PROMPT_VERSION
+from .vector import build_vector_index
 
 
 CLASSIFIER_TRIGGER_LABELS = {
@@ -226,6 +230,114 @@ def evaluate_v2_classifier_capture(
         "calibration": split_reports["calibration"],
         "quality_gates": _classifier_quality_gates(combined),
     }
+
+
+def prepare_inhouse_bge(
+    *,
+    config: OpenAIModelConfig,
+    development_cases_path: Path,
+    calibration_cases_path: Path,
+    corpus_path: Path,
+    policy_path: Path,
+    index_dir: Path,
+    cache_path: Path,
+    manifest_path: Path,
+    chunk_size: int = 650,
+    chunk_overlap: int = 80,
+    embedder=None,
+) -> dict[str, object]:
+    ensure_remote_models_allowed(config)
+    ensure_openai_api_key(config)
+    endpoint_host = ensure_inhouse_endpoint(config.env_file)
+    development = load_eval_cases(development_cases_path)
+    calibration = load_eval_cases(calibration_cases_path)
+    _require_split(development, "development")
+    _require_split(calibration, "calibration")
+
+    configuration = {
+        "schema_version": 1,
+        "experiment": "inhouse_bge_preparation",
+        "profile": "inhouse",
+        "provider": "openai_compatible",
+        "endpoint_host": endpoint_host,
+        "models": {"embedding": config.embedding_model},
+        "corpus_sha256": _file_sha256(corpus_path),
+        "split_sha256": {
+            "development": _file_sha256(development_cases_path),
+            "calibration": _file_sha256(calibration_cases_path),
+        },
+        "policy_sha256": _file_sha256(policy_path),
+        "guard_similarity_thresholds": _policy_thresholds(policy_path),
+        "retrieval_evidence_threshold": None,
+        "chunking": {"chunk_size": chunk_size, "chunk_overlap": chunk_overlap},
+        "split_case_counts": {
+            "development": len(development),
+            "calibration": len(calibration),
+        },
+    }
+    fingerprint = _json_sha256(configuration)
+    existing = _load_existing_manifest(manifest_path)
+    if existing is not None and existing.get("configuration_fingerprint") != fingerprint:
+        raise ValueError("existing BGE manifest configuration does not match this run")
+
+    if embedder is None:
+        cached_embedder = create_embedder(
+            "openai",
+            model=config.embedding_model,
+            allow_remote_models=config.allow_remote_models,
+            env_file=config.env_file,
+            cache_path=cache_path,
+        )
+    else:
+        if embedder.model_name != config.embedding_model:
+            raise ValueError("injected embedder model does not match the configured model")
+        cached_embedder = CachedEmbedder(embedder)
+    calls_before = getattr(cached_embedder, "api_call_count", None)
+    index_stats = build_vector_index(
+        corpus_path,
+        index_dir,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        embedding_provider="openai",
+        embedding_model=config.embedding_model,
+        embedder=cached_embedder,
+    )
+
+    policy = load_guardrail_policy(policy_path, similarity_embedder=cached_embedder)
+    retrieval_texts = [case.question for case in development + calibration]
+    guard_texts = [normalize_guard_text(text) for text in retrieval_texts]
+    guard_texts.extend(
+        normalize_guard_text(example)
+        for rule in policy.input_similarity_rules
+        for example in rule.examples
+    )
+    cached_embedder.embed_many(retrieval_texts)
+    cached_embedder.embed_many(guard_texts)
+    calls_after = getattr(cached_embedder, "api_call_count", None)
+    api_calls = None
+    if calls_before is not None and calls_after is not None:
+        api_calls = calls_after - calls_before
+
+    manifest = configuration | {
+        "configuration_fingerprint": fingerprint,
+        "status": "prepared",
+        "updated_at": _utc_now(),
+        "embedding_cache": {
+            "file": cache_path.name,
+            "cached_texts": getattr(cached_embedder, "cached_texts", None),
+            "cache_hits": getattr(cached_embedder, "cache_hits", None),
+            "cache_misses": getattr(cached_embedder, "cache_misses", None),
+            "provider_calls_this_run": api_calls,
+        },
+        "index": {
+            "collection": index_stats.collection,
+            "documents": index_stats.documents,
+            "chunks": index_stats.chunks,
+            "directory": index_dir.name,
+        },
+    }
+    _write_manifest(manifest_path, manifest)
+    return manifest
 
 
 def _capture_one(case: EvalCase, classifier, *, provider: str) -> ClassifierPrediction:

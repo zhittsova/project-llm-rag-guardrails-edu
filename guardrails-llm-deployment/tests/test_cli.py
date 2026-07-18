@@ -454,6 +454,44 @@ def test_evaluate_v2_classifier_is_local(tmp_path: Path, monkeypatch, capsys) ->
     assert json.loads(capsys.readouterr().out)["quality_gates"]["all_passed"] is False
 
 
+def test_prepare_inhouse_bge_wires_profile_without_calling_api(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    captured_kwargs = {}
+
+    def fake_prepare(**kwargs):
+        captured_kwargs.update(kwargs)
+        return {"status": "prepared", "index": {"chunks": 10}}
+
+    monkeypatch.setenv(
+        "OPENAI_BASE_URL",
+        "https://learning-services4.fokus.fraunhofer.de/litellm/v1",
+    )
+    monkeypatch.setattr("guardrails_llm.cli.prepare_inhouse_bge", fake_prepare)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "prepare-inhouse-bge",
+            "--allow-remote-models",
+            "--index-dir",
+            str(tmp_path / "chroma"),
+            "--manifest",
+            str(tmp_path / "manifest.json"),
+        ],
+    )
+
+    main()
+
+    assert captured_kwargs["config"].embedding_model == "BAAI/bge-m3"
+    assert captured_kwargs["cache_path"].name == "bge-m3.jsonl"
+    assert captured_kwargs["config"].allow_remote_models is True
+    assert json.loads(capsys.readouterr().out)["status"] == "prepared"
+
+
 def test_query_wires_grounded_evidence_options(monkeypatch, capsys) -> None:
     captured_kwargs: dict[str, object] = {}
 
