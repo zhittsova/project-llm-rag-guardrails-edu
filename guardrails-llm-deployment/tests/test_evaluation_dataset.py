@@ -99,6 +99,17 @@ def test_generated_evidence_references_real_python_course_documents() -> None:
             assert set(case.expected_doc_ids or []) <= corpus_doc_ids
 
 
+def test_validator_rejects_unknown_expected_document_id() -> None:
+    cases_by_split = _cases_by_split()
+    original = cases_by_split["development"][0]
+    cases_by_split["development"][0] = EvalCase(
+        **{**original.__dict__, "expected_doc_ids": ["missing-document"]}
+    )
+
+    with pytest.raises(DatasetValidationError, match="unknown expected_doc_id"):
+        validate_evaluation_dataset(cases_by_split, known_doc_ids={"lec01"})
+
+
 def test_generated_dataset_has_no_duplicate_questions_or_case_ids() -> None:
     cases = [case for split in _cases_by_split().values() for case in split]
 

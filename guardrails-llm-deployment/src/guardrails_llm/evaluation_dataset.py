@@ -106,6 +106,7 @@ def validate_evaluation_dataset(
     cases_by_split: dict[str, list[EvalCase]],
     *,
     require_reviewed_holdout: bool = False,
+    known_doc_ids: set[str] | None = None,
 ) -> dict[str, object]:
     counts = {split: len(cases_by_split.get(split, [])) for split in EXPECTED_SPLIT_COUNTS}
     if counts != EXPECTED_SPLIT_COUNTS:
@@ -115,7 +116,7 @@ def validate_evaluation_dataset(
     _validate_unique(all_cases)
     _validate_parent_isolation(cases_by_split)
     _validate_coverage(cases_by_split)
-    _validate_evidence_contract(all_cases)
+    _validate_evidence_contract(all_cases, known_doc_ids=known_doc_ids)
 
     dispositions = Counter(case.resolved_expected_behavior() for case in all_cases)
     if dispositions != Counter(EXPECTED_DISPOSITION_COUNTS):
@@ -156,7 +157,9 @@ def write_evaluation_dataset(
         split: [EvalCase(**row) for row in rows]
         for split, rows in generated.items()
     }
-    summary = validate_evaluation_dataset(cases_by_split)
+    corpus_path = output_dir / "python_course_docs.jsonl"
+    known_doc_ids = _load_corpus_doc_ids(corpus_path) if corpus_path.exists() else None
+    summary = validate_evaluation_dataset(cases_by_split, known_doc_ids=known_doc_ids)
 
     hashes: dict[str, str] = {}
     for split, rows in generated.items():
@@ -351,6 +354,7 @@ def load_and_validate_evaluation_dataset(
     input_dir: Path,
     *,
     require_reviewed_holdout: bool = False,
+    corpus_path: Path | None = None,
 ) -> dict[str, object]:
     manifest_path = input_dir / DATASET_FILENAMES["manifest"]
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -365,7 +369,16 @@ def load_and_validate_evaluation_dataset(
             EvalCase(**row) for row in _read_jsonl(path)
         ]
 
-    dataset_summary = validate_evaluation_dataset(cases_by_split)
+    resolved_corpus_path = corpus_path or input_dir / "python_course_docs.jsonl"
+    known_doc_ids = (
+        _load_corpus_doc_ids(resolved_corpus_path)
+        if resolved_corpus_path.exists()
+        else None
+    )
+    dataset_summary = validate_evaluation_dataset(
+        cases_by_split,
+        known_doc_ids=known_doc_ids,
+    )
     annotations = _read_jsonl(input_dir / DATASET_FILENAMES["annotations"])
     _, annotation_summary = apply_holdout_annotations(cases_by_split["holdout"], annotations)
     if require_reviewed_holdout and not annotation_summary["ready_for_final_holdout"]:
@@ -382,6 +395,14 @@ def _read_jsonl(path: Path) -> list[dict[str, object]]:
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
+
+
+def _load_corpus_doc_ids(path: Path) -> set[str]:
+    return {
+        str(row["doc_id"])
+        for row in _read_jsonl(path)
+        if isinstance(row.get("doc_id"), str) and str(row["doc_id"]).strip()
+    }
 
 
 def _optional_nonempty_string(value: object) -> str | None:
@@ -797,12 +818,22 @@ def _validate_coverage(cases_by_split: dict[str, list[EvalCase]]) -> None:
                 )
 
 
-def _validate_evidence_contract(cases: list[EvalCase]) -> None:
+def _validate_evidence_contract(
+    cases: list[EvalCase],
+    *,
+    known_doc_ids: set[str] | None = None,
+) -> None:
     for case in cases:
         disposition = case.resolved_expected_behavior()
         if disposition in {ResponseDisposition.ANSWER, ResponseDisposition.REDIRECT}:
             if case.evidence_available is not True or not case.expected_doc_ids:
                 raise DatasetValidationError(f"{case.case_id}: expected evidence metadata")
+            if known_doc_ids is not None:
+                unknown = sorted(set(case.expected_doc_ids) - known_doc_ids)
+                if unknown:
+                    raise DatasetValidationError(
+                        f"{case.case_id}: unknown expected_doc_id {unknown[0]}"
+                    )
         elif case.evidence_available is not False or case.expected_doc_ids:
             raise DatasetValidationError(f"{case.case_id}: unexpected evidence metadata")
 

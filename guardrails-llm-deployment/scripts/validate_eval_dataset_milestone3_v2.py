@@ -19,10 +19,16 @@ def main() -> None:
         action="store_true",
         help="Fail unless every frozen holdout case has two labels and an adjudication.",
     )
+    parser.add_argument(
+        "--corpus",
+        type=Path,
+        help="Corpus JSONL used to validate expected_doc_ids.",
+    )
     args = parser.parse_args()
     summary = load_and_validate_evaluation_dataset(
         args.data_dir,
         require_reviewed_holdout=args.require_reviewed_holdout,
+        corpus_path=args.corpus,
     )
     print(json.dumps(summary, indent=2))
 
