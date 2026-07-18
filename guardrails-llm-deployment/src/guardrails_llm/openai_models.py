@@ -22,11 +22,11 @@ from .model_config import (
 
 EMBEDDING_BATCH_SIZE = 128
 ANSWER_PROMPT_VERSION = "rag-answer-v1"
-GUARD_CLASSIFIER_PROMPT_VERSION = "guard-classifier-v3.1"
+GUARD_CLASSIFIER_PROMPT_VERSION = "guard-classifier-v3.2"
 GUARD_CLASSIFIER_MAX_ATTEMPTS = 2
-JUDGE_PROMPT_VERSION = "guardrail-judge-v2.1"
+JUDGE_PROMPT_VERSION = "guardrail-judge-v2.2"
 JUDGE_MAX_ATTEMPTS = 2
-ENTAILMENT_PROMPT_VERSION = "answer-entailment-v1.1"
+ENTAILMENT_PROMPT_VERSION = "answer-entailment-v1.2"
 ENTAILMENT_MAX_ATTEMPTS = 2
 
 
