@@ -637,6 +637,15 @@ def _comparison_scenarios(args, policy):
         output_rules=(),
         context_rules=(),
     )
+    embedding_policy = replace(
+    policy,
+    input_rules=(),
+    input_fuzzy_rules=(),
+    output_rules=(),
+    output_fuzzy_rules=(),
+    context_rules=(),
+    context_fuzzy_rules=(),
+    )
 
     scenarios = [
         (
@@ -688,6 +697,22 @@ def _comparison_scenarios(args, policy):
                 "latency_expected": "low-medium",
                 "robustness_expected": "medium_on_typos_and_near_matches",
                 "implementation_effort": "medium",
+            },
+        ),
+         (
+            "embedding_only_guardrails",
+            "guardrailed",
+            embedding_policy,
+            "none",
+            {
+                "technique": "embedding similarity rules + metadata retrieval filters",
+                "guardrail_layers": [
+                    "embedding_similarity_input",
+                    "metadata_filter",
+                ],
+                "latency_expected": "low-medium",
+                "robustness_expected": "medium_on_semantic_variants",
+                "implementation_effort": "medium-high",
             },
         ),
         (
