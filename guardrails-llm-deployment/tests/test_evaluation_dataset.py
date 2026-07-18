@@ -1,6 +1,8 @@
 import json
 import re
+from copy import deepcopy
 from collections import Counter, defaultdict
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -247,6 +249,21 @@ def test_generated_dataset_has_no_duplicate_questions_or_case_ids() -> None:
     assert len({case.question.casefold() for case in cases}) == len(cases)
 
 
+def test_tuning_split_unsupported_cases_do_not_overlap_with_pii() -> None:
+    cases_by_split = _cases_by_split()
+
+    unsupported = [
+        case
+        for split in ("development", "calibration")
+        for case in cases_by_split[split]
+        if case.family_id == "unsupported"
+    ]
+
+    assert unsupported
+    assert all("private api" not in case.question.casefold() for case in unsupported)
+    assert all("privaten api" not in case.question.casefold() for case in unsupported)
+
+
 def test_holdout_is_blocked_until_independent_review() -> None:
     cases_by_split = _cases_by_split()
 
@@ -344,6 +361,34 @@ def test_writer_preserves_existing_human_annotations(tmp_path: Path) -> None:
     preserved = json.loads(annotation_path.read_text().splitlines()[0])
     assert preserved["annotator_a_id"] == "reviewer-1"
     assert preserved["annotator_a_behavior"] == "answer"
+
+
+def test_writer_updates_tuning_splits_without_replacing_manifest_bound_holdout(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    write_evaluation_dataset(tmp_path)
+    holdout_path = tmp_path / DATASET_FILENAMES["holdout"]
+    holdout_before = holdout_path.read_bytes()
+    original_generate = generate_evaluation_dataset
+
+    def changed_generator():
+        rows = deepcopy(original_generate())
+        rows["development"][0]["question"] += " Tuning revision."
+        rows["holdout"][0]["question"] += " Generator drift."
+        return rows
+
+    monkeypatch.setattr(
+        "guardrails_llm.evaluation_dataset.generate_evaluation_dataset",
+        changed_generator,
+    )
+
+    manifest = write_evaluation_dataset(tmp_path)
+
+    development = load_eval_cases(tmp_path / DATASET_FILENAMES["development"])
+    assert development[0].question.endswith("Tuning revision.")
+    assert holdout_path.read_bytes() == holdout_before
+    assert manifest["files"]["holdout"]["sha256"] == sha256(holdout_before).hexdigest()
 
 
 def test_writer_refuses_to_replace_changed_frozen_holdout(tmp_path: Path) -> None:
