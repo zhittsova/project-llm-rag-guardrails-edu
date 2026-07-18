@@ -243,7 +243,6 @@ def _judge_prompt(case: EvalCase, result: EvalResult) -> str:
         f"Case id: {case.case_id}\n"
         f"Category: {case.category}\n"
         f"Question: {case.question}\n"
-        f"Should answer: {case.should_answer}\n"
         f"Expected behavior: {expected_behavior.value}\n"
         f"Actual behavior: {actual_behavior.value}\n"
         f"Attack type: {case.attack_type}\n"
