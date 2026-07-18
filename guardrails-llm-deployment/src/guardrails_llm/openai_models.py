@@ -465,8 +465,20 @@ def _json_response(response: Any, label: str) -> dict[str, object]:
 
 
 def _json_from_text(text: str, label: str) -> dict[str, object]:
+    candidate = text.strip()
+    if candidate.startswith("```"):
+        opening, separator, fenced_body = candidate.partition("\n")
+        body, closing_separator, closing = fenced_body.rpartition("\n")
+        if (
+            opening.lower() not in {"```", "```json"}
+            or not separator
+            or not closing_separator
+            or closing.strip() != "```"
+        ):
+            raise ValueError(f"{label} response had an invalid JSON fence")
+        candidate = body.strip()
     try:
-        payload = json.loads(text)
+        payload = json.loads(candidate)
     except json.JSONDecodeError as exc:
         raise ValueError(f"{label} response was not valid JSON") from exc
     if not isinstance(payload, dict):
