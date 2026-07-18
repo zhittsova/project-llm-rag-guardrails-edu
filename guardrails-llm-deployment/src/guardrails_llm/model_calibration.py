@@ -76,6 +76,10 @@ class ClassifierPrediction:
     predicted_label: str | None
     confidence: float | None
     error: str | None = None
+    explanation: str | None = None
+    provider: str | None = None
+    model: str | None = None
+    latency_ms: float | None = None
 
     def __post_init__(self) -> None:
         _require_non_empty_strings(self, ("case_id",))
@@ -86,13 +90,14 @@ class ClassifierPrediction:
                 raise ValueError(
                     f"{self.case_id}: failed prediction must not contain a label or confidence"
                 )
-            return
-        if self.predicted_label not in CLASSIFIER_LABELS:
-            raise ValueError(
-                f"{self.case_id}: predicted_label must be one of "
-                f"{', '.join(CLASSIFIER_LABELS)}"
-            )
-        _validate_score(self.case_id, "confidence", self.confidence)
+        else:
+            if self.predicted_label not in CLASSIFIER_LABELS:
+                raise ValueError(
+                    f"{self.case_id}: predicted_label must be one of "
+                    f"{', '.join(CLASSIFIER_LABELS)}"
+                )
+            _validate_score(self.case_id, "confidence", self.confidence)
+        _validate_prediction_metadata(self)
 
 
 @dataclass(frozen=True)
@@ -148,6 +153,10 @@ class JudgePrediction:
     refusal_appropriate: bool | None
     score: float | None
     error: str | None = None
+    notes: list[str] | None = None
+    provider: str | None = None
+    model: str | None = None
+    latency_ms: float | None = None
 
     def __post_init__(self) -> None:
         _require_non_empty_strings(self, ("case_id",))
@@ -159,11 +168,17 @@ class JudgePrediction:
                 raise ValueError(
                     f"{self.case_id}: failed prediction must not contain judge values"
                 )
-            return
-        for dimension, value in zip(JUDGE_DIMENSIONS, values, strict=True):
-            if not isinstance(value, bool):
-                raise ValueError(f"{self.case_id}: {dimension} must be true or false")
-        _validate_score(self.case_id, "score", self.score)
+        else:
+            for dimension, value in zip(JUDGE_DIMENSIONS, values, strict=True):
+                if not isinstance(value, bool):
+                    raise ValueError(f"{self.case_id}: {dimension} must be true or false")
+            _validate_score(self.case_id, "score", self.score)
+        if self.notes is not None and (
+            not isinstance(self.notes, list)
+            or not all(isinstance(note, str) for note in self.notes)
+        ):
+            raise ValueError(f"{self.case_id}: notes must be a list of strings")
+        _validate_prediction_metadata(self)
 
 
 def load_classifier_calibration_cases(path: Path) -> list[ClassifierCalibrationCase]:
@@ -518,6 +533,24 @@ def _validate_score(case_id: str, field_name: str, value: object) -> None:
         raise ValueError(f"{case_id}: {field_name} must be a number from 0 to 1")
     if not 0.0 <= float(value) <= 1.0:
         raise ValueError(f"{case_id}: {field_name} must be between 0 and 1")
+
+
+def _validate_prediction_metadata(prediction: object) -> None:
+    case_id = str(getattr(prediction, "case_id"))
+    for field_name in ("provider", "model"):
+        value = getattr(prediction, field_name)
+        if value is not None and (not isinstance(value, str) or not value.strip()):
+            raise ValueError(f"{case_id}: {field_name} must be a non-empty string")
+    explanation = getattr(prediction, "explanation", None)
+    if explanation is not None and not isinstance(explanation, str):
+        raise ValueError(f"{case_id}: explanation must be a string")
+    latency_ms = getattr(prediction, "latency_ms")
+    if latency_ms is not None and (
+        not isinstance(latency_ms, int | float)
+        or isinstance(latency_ms, bool)
+        or latency_ms < 0
+    ):
+        raise ValueError(f"{case_id}: latency_ms must be a non-negative number")
 
 
 def _rate(numerator: int, denominator: int) -> float:

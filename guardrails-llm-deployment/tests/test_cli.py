@@ -198,6 +198,88 @@ def test_evaluate_model_calibration_writes_local_fixture_report(
     assert payload["judge"]["summary"]["total"] == 24
 
 
+def test_capture_model_calibration_requires_remote_allowance(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "capture-model-calibration",
+            "--component",
+            "classifier",
+            "--classifier-output",
+            str(tmp_path / "classifier.jsonl"),
+            "--manifest-output",
+            str(tmp_path / "manifest.json"),
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert "Remote model calls are disabled" in captured.err
+    assert "Traceback" not in captured.err
+    assert not list(tmp_path.iterdir())
+
+
+def test_capture_model_calibration_wires_safe_cli_options(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    captured_kwargs = {}
+
+    def fake_capture(**kwargs):
+        captured_kwargs.update(kwargs)
+        return {"evidence_scope": "live_remote_model_capture"}
+
+    monkeypatch.setattr(
+        "guardrails_llm.cli.run_model_calibration_capture",
+        fake_capture,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "capture-model-calibration",
+            "--component",
+            "both",
+            "--limit-cases",
+            "5",
+            "--classifier-model",
+            "classifier-model",
+            "--judge-model",
+            "judge-model",
+            "--allow-remote-models",
+            "--classifier-output",
+            str(tmp_path / "classifier.jsonl"),
+            "--judge-output",
+            str(tmp_path / "judge.jsonl"),
+            "--manifest-output",
+            str(tmp_path / "manifest.json"),
+        ],
+    )
+
+    main()
+
+    assert captured_kwargs["component"] == "both"
+    assert captured_kwargs["limit_cases"] == 5
+    assert captured_kwargs["config"].allow_remote_models is True
+    assert captured_kwargs["config"].classifier_model == "classifier-model"
+    assert captured_kwargs["config"].judge_model == "judge-model"
+    assert json.loads(capsys.readouterr().out)["evidence_scope"] == (
+        "live_remote_model_capture"
+    )
+
+
 def test_compare_guardrails_records_validation_split(tmp_path: Path, monkeypatch) -> None:
     output = tmp_path / "comparison.json"
     monkeypatch.setattr(

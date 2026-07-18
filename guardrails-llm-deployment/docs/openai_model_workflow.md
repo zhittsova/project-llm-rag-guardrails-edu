@@ -132,6 +132,52 @@ uv run guardrails-llm build-index \
 The vector index writes a manifest with the embedding provider/model. A query
 will fail if the requested embedding provider does not match the index manifest.
 
+## Model calibration capture
+
+The calibration harness separates remote capture from local scoring. It writes
+one replay-compatible JSONL file per component plus a manifest containing the
+model, provider category, request count, prediction coverage, and p50/p95
+latency. The manifest never stores the API key or full base URL.
+
+Run the first classifier pilot only after approving these five remote calls:
+
+```bash
+uv run guardrails-llm capture-model-calibration \
+  --component classifier \
+  --classifier-model Qwen/Qwen3.6-35B-A3B \
+  --limit-cases 5 \
+  --allow-remote-models \
+  --classifier-output reports/model_classifier_pilot_predictions.jsonl \
+  --manifest-output reports/model_classifier_pilot_manifest.json
+```
+
+Review parse errors, labels, confidence, latency, and the manifest before
+running the separate five-call judge pilot:
+
+```bash
+uv run guardrails-llm capture-model-calibration \
+  --component judge \
+  --judge-model Qwen/Qwen3.6-35B-A3B \
+  --limit-cases 5 \
+  --allow-remote-models \
+  --judge-output reports/judge_pilot_predictions.jsonl \
+  --manifest-output reports/judge_pilot_manifest.json
+```
+
+The captured files can then be scored locally without another API call:
+
+```bash
+uv run guardrails-llm evaluate-model-calibration \
+  --classifier-predictions reports/model_classifier_pilot_predictions.jsonl \
+  --judge-predictions reports/judge_pilot_predictions.jsonl \
+  --output-json reports/model_calibration_pilot_evaluation.json
+```
+
+The replay report counts missing or invalid responses against end-to-end
+quality. A syntactically valid response with an invalid label, score, boolean,
+or field set is also treated as a model error. TLS verification must remain
+enabled; do not work around an untrusted certificate to run the pilot.
+
 ## Guardrail comparison
 
 The comparison command reports baseline, deterministic guardrails, hybrid policy
