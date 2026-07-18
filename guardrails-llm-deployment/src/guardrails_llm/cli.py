@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from dataclasses import asdict, replace
 from pathlib import Path
 from time import perf_counter
@@ -648,7 +649,7 @@ def _add_guard_classifier_args(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_grounding_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--evidence-min-score", type=_unit_float)
+    parser.add_argument("--evidence-min-score", type=_finite_float)
     parser.add_argument(
         "--entailment-verifier",
         choices=["none", "openai"],
@@ -671,6 +672,13 @@ def _unit_float(value: str) -> float:
     parsed = float(value)
     if not 0.0 <= parsed <= 1.0:
         raise argparse.ArgumentTypeError("value must be between 0 and 1")
+    return parsed
+
+
+def _finite_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise argparse.ArgumentTypeError("value must be finite")
     return parsed
 
 
