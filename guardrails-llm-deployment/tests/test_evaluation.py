@@ -231,6 +231,28 @@ def test_explicit_expected_behavior_overrides_legacy_boolean() -> None:
     assert case.resolved_expected_behavior() is ResponseDisposition.ANSWER
 
 
+def test_adjudicated_label_overrides_provisional_expected_behavior() -> None:
+    case = EvalCase(
+        case_id="adjudicated",
+        category="normal_course",
+        question="What is RAG?",
+        expected_behavior="abstain",
+        adjudicated_label="answer",
+        split="holdout",
+        family_id="groundedness",
+        coverage_role="benign_near_miss",
+        language="en",
+        parent_case_id="parent-001",
+        provenance="human_review",
+        expected_doc_ids=["rag-basics"],
+        evidence_available=True,
+        required_claims=["retrieval"],
+        annotation_status="adjudicated",
+    )
+
+    assert case.resolved_expected_behavior() is ResponseDisposition.ANSWER
+
+
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
