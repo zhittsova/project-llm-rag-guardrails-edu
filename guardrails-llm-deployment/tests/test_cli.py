@@ -492,6 +492,50 @@ def test_prepare_inhouse_bge_wires_profile_without_calling_api(
     assert json.loads(capsys.readouterr().out)["status"] == "prepared"
 
 
+def test_calibrate_inhouse_bge_writes_summary_and_details(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    captured_kwargs = {}
+
+    def fake_evaluate(**kwargs):
+        captured_kwargs.update(kwargs)
+        return {"holdout_used": False}, {"bge_m3": [], "hashing": []}
+
+    summary_path = tmp_path / "summary.json"
+    details_path = tmp_path / "details.json"
+    monkeypatch.setenv(
+        "OPENAI_BASE_URL",
+        "https://learning-services4.fokus.fraunhofer.de/litellm/v1",
+    )
+    monkeypatch.setattr(
+        "guardrails_llm.cli.run_bge_common_split_evaluation",
+        fake_evaluate,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "calibrate-inhouse-bge",
+            "--allow-remote-models",
+            "--output-json",
+            str(summary_path),
+            "--output-details-json",
+            str(details_path),
+        ],
+    )
+
+    main()
+
+    assert captured_kwargs["config"].embedding_model == "BAAI/bge-m3"
+    assert captured_kwargs["cache_path"].name == "bge-m3.jsonl"
+    assert json.loads(summary_path.read_text())["holdout_used"] is False
+    assert set(json.loads(details_path.read_text())) == {"bge_m3", "hashing"}
+    assert json.loads(capsys.readouterr().out)["holdout_used"] is False
+
+
 def test_query_wires_grounded_evidence_options(monkeypatch, capsys) -> None:
     captured_kwargs: dict[str, object] = {}
 

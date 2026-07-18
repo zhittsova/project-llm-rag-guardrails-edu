@@ -8,6 +8,7 @@ from pathlib import Path
 from time import perf_counter
 
 from .corpus import default_data_path, validate_corpus
+from .bge_evaluation import run_bge_common_split_evaluation
 from .course_corpus import default_course_output_path, default_course_source_path, normalize_course_corpus
 from .embeddings import CachedEmbedder, create_embedder
 from .evaluation import (
@@ -384,6 +385,70 @@ def main() -> None:
     bge_prepare_parser.add_argument("--allow-remote-models", action="store_true")
     bge_prepare_parser.add_argument("--env-file", type=Path)
 
+    bge_evaluation_parser = subparsers.add_parser(
+        "calibrate-inhouse-bge",
+        help="Compare BGE and hashing on common development/calibration cases",
+    )
+    bge_evaluation_parser.add_argument(
+        "--profile",
+        choices=["inhouse"],
+        default="inhouse",
+    )
+    bge_evaluation_parser.add_argument(
+        "--development-cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_development.jsonl",
+    )
+    bge_evaluation_parser.add_argument(
+        "--calibration-cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_calibration.jsonl",
+    )
+    bge_evaluation_parser.add_argument(
+        "--course-corpus",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "data" / "python_course_docs.jsonl",
+    )
+    bge_evaluation_parser.add_argument(
+        "--policy",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "data" / "guardrail_policy_bge_m3.toml",
+    )
+    bge_evaluation_parser.add_argument(
+        "--bge-index-dir",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "indexes" / "python-course-bge-m3",
+    )
+    bge_evaluation_parser.add_argument(
+        "--hashing-index-dir",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "indexes" / "python-course-hashing-v2",
+    )
+    bge_evaluation_parser.add_argument("--embedding-model")
+    bge_evaluation_parser.add_argument("--embedding-cache", type=Path)
+    bge_evaluation_parser.add_argument("--course-id", default="python-intro")
+    bge_evaluation_parser.add_argument("--top-k", type=int, default=3)
+    bge_evaluation_parser.add_argument(
+        "--output-json",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_bge_common_split_summary.json",
+    )
+    bge_evaluation_parser.add_argument(
+        "--output-details-json",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_bge_common_split_details.json",
+    )
+    bge_evaluation_parser.add_argument("--allow-remote-models", action="store_true")
+    bge_evaluation_parser.add_argument("--env-file", type=Path)
+
     index_parser = subparsers.add_parser("build-index", help="Build a local Chroma vector index")
     _add_profile_arg(index_parser)
     index_parser.add_argument("--corpus", dest="command_corpus", type=Path)
@@ -618,6 +683,46 @@ def main() -> None:
         ) as exc:
             parser.error(str(exc))
         print(json.dumps(manifest, indent=2))
+        return
+
+    if args.command == "calibrate-inhouse-bge":
+        try:
+            summary, details = run_bge_common_split_evaluation(
+                config=OpenAIModelConfig(
+                    embedding_model=args.embedding_model,
+                    allow_remote_models=args.allow_remote_models,
+                    env_file=args.env_file,
+                ),
+                development_cases_path=args.development_cases,
+                calibration_cases_path=args.calibration_cases,
+                corpus_path=args.course_corpus,
+                policy_path=args.policy,
+                bge_index_dir=args.bge_index_dir,
+                hashing_index_dir=args.hashing_index_dir,
+                cache_path=args.embedding_cache,
+                course_id=args.course_id,
+                top_k=args.top_k,
+            )
+        except (
+            OSError,
+            ValueError,
+            VectorIndexError,
+            RemoteModelsNotAllowedError,
+            MissingModelCredentialError,
+            RemoteModelCallError,
+        ) as exc:
+            parser.error(str(exc))
+        args.output_json.parent.mkdir(parents=True, exist_ok=True)
+        args.output_json.write_text(
+            json.dumps(summary, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        args.output_details_json.parent.mkdir(parents=True, exist_ok=True)
+        args.output_details_json.write_text(
+            json.dumps(details, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(json.dumps(summary, indent=2))
         return
 
     if args.command == "normalize-course-corpus":
