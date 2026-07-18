@@ -2,7 +2,7 @@
   "schema_version": 1,
   "evidence_scope": "development_selected_common_split_bge_calibration",
   "dataset_version": "milestone3-v2",
-  "dataset_manifest_sha256": "6ac2d1924fda7a49d6290687ce8e6019568f73b8ebc16261dc82d30444dfb1bf",
+  "dataset_manifest_sha256": "1dd43841df589f8edf0e4b3b9bdfbc97047011fec21d5d32ed0365e251f55f5f",
   "case_counts": {
     "development": 1200,
     "calibration": 400
@@ -14,22 +14,22 @@
   "embedding_model": "BAAI/bge-m3",
   "corpus_sha256": "3cdeaffa885a9f440c04c92fffd20d57cd0695115081a52b0d6ca3887321f317",
   "source_artifact_sha256": {
-    "summary": "94ab4f418a489135bb1c82aa58877f487b9f0208bd973fbad439c7019692cf68",
-    "details": "fcc718479623cce382bdfa35847eb8b606fde54e6402b8079ef1f46cdb744822"
+    "summary": "a0fa65ff35ffa0e4722626107123608c9f0226d2cd45876d02305ed5de94bff5",
+    "details": "cb3df552ac010d01f074187637fc578a9c343fa70acf2a993240f67b58d15ede"
   },
   "retrieval": {
     "selected_threshold": 0.5676983892917633,
     "bge_m3_calibration": {
-      "accuracy": 0.9067,
-      "macro_f1": 0.8922,
-      "precision": 0.9095,
+      "accuracy": 0.8733,
+      "macro_f1": 0.8492,
+      "precision": 0.8682,
       "recall": 0.955,
       "document_recall_at_3": 0.905
     },
     "hashing_calibration": {
-      "accuracy": 0.74,
-      "macro_f1": 0.7343,
-      "precision": 0.9236,
+      "accuracy": 0.7067,
+      "macro_f1": 0.6968,
+      "precision": 0.8636,
       "recall": 0.665,
       "document_recall_at_3": 0.705
     }
@@ -43,23 +43,24 @@
       "calibration_false_positive_rate": 0.0
     },
     "pii": {
-      "selected_threshold": 0.5425232250331917,
-      "development_macro_f1": 0.9048,
-      "calibration_macro_f1": 0.8743,
+      "selected_threshold": 0.5412877154927469,
+      "development_macro_f1": 0.9074,
+      "calibration_macro_f1": 0.879,
       "calibration_recall": 0.78,
-      "calibration_false_positive_rate": 0.0314
+      "calibration_false_positive_rate": 0.0286
     },
     "academic_integrity": {
-      "selected_threshold": 0.5366031766843709,
-      "development_macro_f1": 0.9154,
-      "calibration_macro_f1": 0.8713,
-      "calibration_recall": 0.82,
-      "calibration_false_positive_rate": 0.07
+      "selected_threshold": 0.5271938207500513,
+      "development_macro_f1": 0.9876,
+      "calibration_macro_f1": 0.9152,
+      "calibration_recall": 0.85,
+      "calibration_false_positive_rate": 0.0333
     }
   },
   "limitations": [
     "The cases are deterministic synthetic templates and are not independent human-authored prompts.",
-    "Similarity alone misses some PII and academic-integrity cases, so the complete hybrid keeps a model-classifier fallback.",
+    "Similarity alone misses some PII and prompt-injection cases, so the complete hybrid keeps a model-classifier fallback.",
+    "Top retrieval score alone cannot reliably reject mixed queries that mention a real course topic and request an unsupported future claim; classifier and entailment stages remain necessary.",
     "The frozen 400-case holdout remains unused pending double human review and adjudication."
   ]
 }

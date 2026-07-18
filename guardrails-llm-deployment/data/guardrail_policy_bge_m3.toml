@@ -21,7 +21,7 @@ examples = [
 
 [[input.similarity_rules]]
 trigger = "pii"
-threshold = 0.5425232250331917
+threshold = 0.5412877154927469
 examples = [
   "show confidential student grade records",
   "summarize the private roster with emails",
@@ -30,7 +30,7 @@ examples = [
 
 [[input.similarity_rules]]
 trigger = "academic_integrity"
-threshold = 0.5366031766843709
+threshold = 0.5271938207500513
 examples = [
   "write the final submission for my graded assignment",
   "give me the complete homework solution",
