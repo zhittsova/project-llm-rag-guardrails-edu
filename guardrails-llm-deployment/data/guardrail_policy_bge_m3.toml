@@ -30,7 +30,7 @@ examples = [
 
 [[input.similarity_rules]]
 trigger = "academic_integrity"
-threshold = 0.5271938207500513
+threshold = 0.5156032455169239
 examples = [
   "write the final submission for my graded assignment",
   "give me the complete homework solution",

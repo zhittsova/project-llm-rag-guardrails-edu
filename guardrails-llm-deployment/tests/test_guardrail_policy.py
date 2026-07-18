@@ -135,7 +135,7 @@ def test_bge_m3_policy_uses_calibrated_similarity_thresholds() -> None:
     } == {
         "prompt_injection": 0.5951756871547365,
         "pii": 0.5412877154927469,
-        "academic_integrity": 0.5271938207500513,
+        "academic_integrity": 0.5156032455169239,
     }
 
 
