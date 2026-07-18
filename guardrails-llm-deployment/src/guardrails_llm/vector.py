@@ -157,11 +157,15 @@ class VectorRetriever:
 
         # Query проходит через ту же embedding-функцию, что и chunks при
         # build-index. Chroma возвращает ближайшие chunks по cosine distance.
-        results = self._collection.query(
-            query_embeddings=[self._embedder.embed(query)],
-            n_results=count,
-            include=["documents", "metadatas", "distances"],
-        )
+        query_options: dict[str, object] = {
+            "query_embeddings": [self._embedder.embed(query)],
+            "n_results": min(top_k, count),
+            "include": ["documents", "metadatas", "distances"],
+        }
+        where = _chroma_where(course_id, allowed_visibility)
+        if where:
+            query_options["where"] = where
+        results = self._collection.query(**query_options)
         matches: list[tuple[Chunk, float]] = []
         documents = results.get("documents", [[]])[0]
         metadatas = results.get("metadatas", [[]])[0]
@@ -182,6 +186,22 @@ class VectorRetriever:
             if len(matches) == top_k:
                 break
         return matches
+
+
+def _chroma_where(
+    course_id: str | None,
+    allowed_visibility: set[str] | None,
+) -> dict[str, object] | None:
+    filters: list[dict[str, object]] = []
+    if course_id:
+        filters.append({"course_id": {"$eq": course_id}})
+    if allowed_visibility:
+        filters.append({"visibility": {"$in": sorted(allowed_visibility)}})
+    if not filters:
+        return None
+    if len(filters) == 1:
+        return filters[0]
+    return {"$and": filters}
 
 
 def _persistent_client(index_dir: Path) -> chromadb.PersistentClient:

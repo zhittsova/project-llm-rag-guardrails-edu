@@ -13,6 +13,7 @@ from .embeddings import TextEmbedder
 from .guard_classifier import GuardClassifier, should_use_model_classifier
 from .guardrail_policy import GuardrailPolicy
 from .guards import input_guard, make_integrity_safe, output_guard, sanitize_untrusted_context
+from .grounding import EntailmentVerifier, select_relevant_evidence
 from .retrieval import LexicalRetriever
 
 
@@ -20,10 +21,19 @@ from .retrieval import LexicalRetriever
 class AssistantResponse:
     answer: str
     citations: list[str]
+    cited_doc_ids: list[str]
     disposition: ResponseDisposition
     guard_triggers: list[str] = field(default_factory=list)
     latency_ms: float = 0.0
     retrieved_chunks: list[str] = field(default_factory=list)
+    retrieved_doc_ids: list[str] = field(default_factory=list)
+    retrieval_scores: dict[str, float] = field(default_factory=dict)
+    retrieved_evidence: list[dict[str, object]] = field(default_factory=list)
+    supporting_chunks: list[str] = field(default_factory=list)
+    grounding_supported: bool | None = None
+    grounding_confidence: float | None = None
+    grounding_error: str | None = None
+    unsupported_claims: list[str] = field(default_factory=list)
 
 
 class Retriever(Protocol):
@@ -49,6 +59,9 @@ class LearningAssistant:
         guardrail_policy: GuardrailPolicy | None = None,
         answer_generator: AnswerGenerator | None = None,
         guard_classifier: GuardClassifier | None = None,
+        evidence_min_score: float | None = None,
+        entailment_verifier: EntailmentVerifier | None = None,
+        entailment_min_confidence: float = 0.80,
     ) -> None:
         if mode not in {"baseline", "guardrailed"}:
             raise ValueError("mode must be 'baseline' or 'guardrailed'")
@@ -59,6 +72,9 @@ class LearningAssistant:
         self._guardrail_policy = guardrail_policy or GuardrailPolicy.default()
         self._answer_generator = answer_generator
         self._guard_classifier = guard_classifier
+        self._evidence_min_score = evidence_min_score
+        self._entailment_verifier = entailment_verifier
+        self._entailment_min_confidence = entailment_min_confidence
 
     def answer(self, question: str) -> AssistantResponse:
         started_at = perf_counter()
@@ -117,6 +133,18 @@ class LearningAssistant:
             # может содержать indirect prompt injection.
             retrieved = [(sanitize_chunk(chunk, self._guardrail_policy), score) for chunk, score in retrieved]
 
+        retrieval_scores = {
+            chunk.chunk_id: round(float(score), 6)
+            for chunk, score in retrieved
+        }
+        retrieved_evidence = evidence_records(retrieved)
+        supporting_chunks: list[str] = []
+        cited_doc_ids: list[str] = []
+        grounding_supported: bool | None = None
+        grounding_confidence: float | None = None
+        grounding_error: str | None = None
+        unsupported_claims: list[str] = []
+
         if "academic_integrity" in triggers:
             # Для cheating-запросов guardrailed режим не дает готовое решение,
             # а достает policy chunk и отвечает в формате помощи/скэффолдинга.
@@ -125,10 +153,41 @@ class LearningAssistant:
                 course_id=self._course_id,
                 allowed_visibility=visibility,
             )
+            retrieved = [
+                (sanitize_chunk(chunk, self._guardrail_policy), score)
+                for chunk, score in retrieved
+            ]
+            retrieval_scores = {
+                chunk.chunk_id: round(float(score), 6)
+                for chunk, score in retrieved
+            }
+            retrieved_evidence = evidence_records(retrieved)
             answer = make_integrity_safe(question, self._guardrail_policy)
             citations = [citation_for(chunk) for chunk, _score in retrieved[:1]]
+            cited_doc_ids = [chunk.doc_id for chunk, _score in retrieved[:1]]
             disposition = ResponseDisposition.REDIRECT
         else:
+            evidence = select_relevant_evidence(retrieved, self._evidence_min_score)
+            if self._evidence_min_score is not None and not evidence:
+                triggers.append("ungrounded")
+                return self._response(
+                    self._guardrail_policy.ungrounded_message,
+                    [],
+                    ResponseDisposition.ABSTAIN,
+                    triggers,
+                    started_at,
+                    [chunk.chunk_id for chunk, _score in retrieved],
+                    retrieved_doc_ids=[chunk.doc_id for chunk, _score in retrieved],
+                    retrieval_scores=retrieval_scores,
+                    retrieved_evidence=retrieved_evidence,
+                    grounding_supported=False,
+                )
+            retrieved = evidence
+            retrieval_scores = {
+                chunk.chunk_id: round(float(score), 6)
+                for chunk, score in retrieved
+            }
+            retrieved_evidence = evidence_records(retrieved)
             # Default answer generation is local/extractive. Optional remote
             # generation is gated by --allow-remote-models in the CLI.
             retrieved_chunks = [chunk for chunk, _score in retrieved]
@@ -136,7 +195,71 @@ class LearningAssistant:
                 answer = self._answer_generator.generate(question, retrieved_chunks)
             else:
                 answer = synthesize_answer(question, retrieved_chunks)
-            citations = [citation_for(chunk) for chunk, _score in retrieved]
+            if self._entailment_verifier and retrieved_chunks:
+                try:
+                    verification = self._entailment_verifier.verify(
+                        question,
+                        answer,
+                        retrieved_chunks,
+                    )
+                except Exception as exc:
+                    verification = None
+                    grounding_error = f"verification_error:{type(exc).__name__}"
+
+                retrieved_ids = {chunk.chunk_id for chunk in retrieved_chunks}
+                if verification is not None:
+                    supporting_chunks = list(dict.fromkeys(verification.supporting_chunk_ids))
+                    grounding_supported = verification.supported
+                    grounding_confidence = verification.confidence
+                    grounding_error = getattr(verification, "error", None)
+                    unsupported_claims = list(verification.unsupported_claims)
+                    invalid_support_ids = set(supporting_chunks) - retrieved_ids
+                    verification_failed = bool(getattr(verification, "error", None))
+                else:
+                    invalid_support_ids = set()
+                    verification_failed = True
+
+                grounding_ok = (
+                    not verification_failed
+                    and grounding_supported is True
+                    and grounding_confidence is not None
+                    and grounding_confidence >= self._entailment_min_confidence
+                    and not unsupported_claims
+                    and bool(supporting_chunks)
+                    and not invalid_support_ids
+                )
+                if not grounding_ok:
+                    triggers.append("ungrounded")
+                    return self._response(
+                        self._guardrail_policy.ungrounded_message,
+                        [],
+                        ResponseDisposition.ABSTAIN,
+                        triggers,
+                        started_at,
+                        [chunk.chunk_id for chunk, _score in retrieved],
+                        retrieved_doc_ids=[chunk.doc_id for chunk, _score in retrieved],
+                        retrieval_scores=retrieval_scores,
+                        retrieved_evidence=retrieved_evidence,
+                        supporting_chunks=supporting_chunks,
+                        grounding_supported=False,
+                        grounding_confidence=grounding_confidence,
+                        grounding_error=grounding_error,
+                        unsupported_claims=unsupported_claims,
+                    )
+                supporting_ids = set(supporting_chunks)
+                citations = [
+                    citation_for(chunk)
+                    for chunk, _score in retrieved
+                    if chunk.chunk_id in supporting_ids
+                ]
+                cited_doc_ids = [
+                    chunk.doc_id
+                    for chunk, _score in retrieved
+                    if chunk.chunk_id in supporting_ids
+                ]
+            else:
+                citations = [citation_for(chunk) for chunk, _score in retrieved]
+                cited_doc_ids = [chunk.doc_id for chunk, _score in retrieved]
             disposition = (
                 ResponseDisposition.ANSWER
                 if citations
@@ -160,7 +283,15 @@ class LearningAssistant:
                     output_disposition,
                     triggers,
                     started_at,
-                    [],
+                    [chunk.chunk_id for chunk, _score in retrieved],
+                    retrieved_doc_ids=[chunk.doc_id for chunk, _score in retrieved],
+                    retrieval_scores=retrieval_scores,
+                    retrieved_evidence=retrieved_evidence,
+                    supporting_chunks=supporting_chunks,
+                    grounding_supported=grounding_supported,
+                    grounding_confidence=grounding_confidence,
+                    grounding_error=grounding_error,
+                    unsupported_claims=unsupported_claims,
                 )
 
         return self._response(
@@ -170,6 +301,15 @@ class LearningAssistant:
             triggers,
             started_at,
             [chunk.chunk_id for chunk, _score in retrieved],
+            retrieved_doc_ids=[chunk.doc_id for chunk, _score in retrieved],
+            cited_doc_ids=cited_doc_ids,
+            retrieval_scores=retrieval_scores,
+            retrieved_evidence=retrieved_evidence,
+            supporting_chunks=supporting_chunks,
+            grounding_supported=grounding_supported,
+            grounding_confidence=grounding_confidence,
+            grounding_error=grounding_error,
+            unsupported_claims=unsupported_claims,
         )
 
     def _response(
@@ -180,14 +320,33 @@ class LearningAssistant:
         triggers: list[str],
         started_at: float,
         retrieved_chunks: list[str],
+        *,
+        retrieved_doc_ids: list[str] | None = None,
+        cited_doc_ids: list[str] | None = None,
+        retrieval_scores: dict[str, float] | None = None,
+        retrieved_evidence: list[dict[str, object]] | None = None,
+        supporting_chunks: list[str] | None = None,
+        grounding_supported: bool | None = None,
+        grounding_confidence: float | None = None,
+        grounding_error: str | None = None,
+        unsupported_claims: list[str] | None = None,
     ) -> AssistantResponse:
         return AssistantResponse(
             answer=answer,
             citations=citations,
+            cited_doc_ids=cited_doc_ids or [],
             disposition=disposition,
             guard_triggers=sorted(set(triggers)),
             latency_ms=(perf_counter() - started_at) * 1000,
             retrieved_chunks=retrieved_chunks,
+            retrieved_doc_ids=retrieved_doc_ids or [],
+            retrieval_scores=retrieval_scores or {},
+            retrieved_evidence=retrieved_evidence or [],
+            supporting_chunks=supporting_chunks or [],
+            grounding_supported=grounding_supported,
+            grounding_confidence=grounding_confidence,
+            grounding_error=grounding_error,
+            unsupported_claims=unsupported_claims or [],
         )
 
 
@@ -207,6 +366,10 @@ def build_assistant(
     answer_model: str | None = None,
     guard_classifier: str = "none",
     classifier_model: str | None = None,
+    evidence_min_score: float | None = None,
+    entailment_verifier: str = "none",
+    entailment_model: str | None = None,
+    entailment_min_confidence: float = 0.80,
     retrieval_embedder: TextEmbedder | None = None,
 ) -> BaselineRagAssistant | LearningAssistant:
     answer_generator = _build_answer_generator(
@@ -234,6 +397,12 @@ def build_assistant(
     classifier = _build_guard_classifier(
         guard_classifier,
         classifier_model=classifier_model,
+        allow_remote_models=allow_remote_models,
+        env_file=env_file,
+    )
+    verifier = _build_entailment_verifier(
+        entailment_verifier,
+        entailment_model=entailment_model,
         allow_remote_models=allow_remote_models,
         env_file=env_file,
     )
@@ -266,6 +435,9 @@ def build_assistant(
         guardrail_policy=guardrail_policy,
         answer_generator=answer_generator,
         guard_classifier=classifier,
+        evidence_min_score=evidence_min_score,
+        entailment_verifier=verifier,
+        entailment_min_confidence=entailment_min_confidence,
     )
 
 
@@ -315,6 +487,31 @@ def _build_guard_classifier(
     raise ValueError("guard_classifier must be 'none' or 'openai'")
 
 
+def _build_entailment_verifier(
+    entailment_verifier: str,
+    *,
+    entailment_model: str | None = None,
+    allow_remote_models: bool = False,
+    env_file: Path | None = None,
+) -> EntailmentVerifier | None:
+    if entailment_verifier == "none":
+        return None
+    if entailment_verifier == "openai":
+        from .model_config import DEFAULT_OPENAI_ENTAILMENT_MODEL, OpenAIModelConfig
+        from .openai_models import OpenAIEntailmentVerifier
+
+        return OpenAIEntailmentVerifier(
+            OpenAIModelConfig(
+                entailment_model=(
+                    entailment_model or DEFAULT_OPENAI_ENTAILMENT_MODEL
+                ),
+                allow_remote_models=allow_remote_models,
+                env_file=env_file,
+            )
+        )
+    raise ValueError("entailment_verifier must be 'none' or 'openai'")
+
+
 def synthesize_answer(question: str, chunks: list[Chunk]) -> str:
     # Если retrieval ничего не нашел, baseline abstains простой фразой. В
     # guardrailed режиме output_guard превращает это в более строгий отказ.
@@ -344,6 +541,21 @@ def citation_for(chunk: Chunk) -> str:
     if page:
         details.append(f"page {page}")
     return f"{chunk.title} ({', '.join(details)})"
+
+
+def evidence_records(
+    retrieved: list[tuple[Chunk, float]],
+) -> list[dict[str, object]]:
+    return [
+        {
+            "chunk_id": chunk.chunk_id,
+            "doc_id": chunk.doc_id,
+            "title": chunk.title,
+            "text": chunk.text,
+            "score": round(float(score), 6),
+        }
+        for chunk, score in retrieved
+    ]
 
 
 def sanitize_chunk(chunk: Chunk, policy: GuardrailPolicy) -> Chunk:

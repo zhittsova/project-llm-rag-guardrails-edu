@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from guardrails_llm import vector
 from guardrails_llm.pipeline import build_assistant
 from guardrails_llm.vector import (
     VectorIndexConfigurationError,
@@ -32,6 +33,38 @@ class FailingEmbedder:
         raise RuntimeError("embedding provider unavailable")
 
 
+class RecordingCollection:
+    def __init__(self) -> None:
+        self.query_kwargs: dict[str, object] = {}
+
+    def count(self) -> int:
+        return 10
+
+    def query(self, **kwargs):
+        self.query_kwargs = kwargs
+        return {
+            "documents": [["Public course evidence."]],
+            "metadatas": [[{
+                "chunk_id": "public-doc:0",
+                "doc_id": "public-doc",
+                "course_id": "guardrails-101",
+                "title": "Public Doc",
+                "visibility": "public",
+                "source_type": "lecture",
+            }]],
+            "distances": [[0.1]],
+        }
+
+
+class RecordingClient:
+    def __init__(self, collection: RecordingCollection) -> None:
+        self.collection = collection
+
+    def get_collection(self, name: str):
+        assert name == "course_chunks"
+        return self.collection
+
+
 def test_build_vector_index_and_query_with_assistant(tmp_path: Path) -> None:
     index_dir = tmp_path / "chroma"
 
@@ -59,6 +92,35 @@ def test_vector_retriever_filters_private_chunks(tmp_path: Path) -> None:
 
     assert all(chunk.visibility == "public" for chunk, _score in results)
     assert all(chunk.doc_id != "private-roster" for chunk, _score in results)
+
+
+def test_vector_retriever_applies_metadata_filters_inside_chroma_query(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    collection = RecordingCollection()
+    monkeypatch.setattr(
+        vector,
+        "_persistent_client",
+        lambda _index_dir: RecordingClient(collection),
+    )
+    retriever = VectorRetriever(tmp_path / "chroma")
+
+    results = retriever.search(
+        "What is RAG?",
+        course_id="guardrails-101",
+        allowed_visibility={"public"},
+        top_k=3,
+    )
+
+    assert results[0][0].doc_id == "public-doc"
+    assert collection.query_kwargs["n_results"] == 3
+    assert collection.query_kwargs["where"] == {
+        "$and": [
+            {"course_id": {"$eq": "guardrails-101"}},
+            {"visibility": {"$in": ["public"]}},
+        ]
+    }
 
 
 def test_assistant_uses_injected_retrieval_embedder(tmp_path: Path) -> None:

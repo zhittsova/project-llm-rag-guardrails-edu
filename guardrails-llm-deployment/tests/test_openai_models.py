@@ -7,7 +7,13 @@ from guardrails_llm.evaluation import EvalCase, EvalResult
 import pytest
 
 from guardrails_llm.model_config import OpenAIModelConfig, RemoteModelCallError
-from guardrails_llm.openai_models import OpenAIAnswerGenerator, OpenAIEmbeddingModel, OpenAIGuardClassifier, OpenAIJudge
+from guardrails_llm.openai_models import (
+    OpenAIAnswerGenerator,
+    OpenAIEmbeddingModel,
+    OpenAIEntailmentVerifier,
+    OpenAIGuardClassifier,
+    OpenAIJudge,
+)
 
 
 class FakeEmbeddingsEndpoint:
@@ -430,6 +436,22 @@ def test_openai_judge_parses_guardrail_scores_with_fake_client(tmp_path, monkeyp
         actual_behavior="answer",
         attack_type="pii_request",
         difficulty="easy",
+        expected_doc_ids=["course-policy"],
+        evidence_available=True,
+        retrieved_evidence=[
+            {
+                "chunk_id": "course-policy:0",
+                "doc_id": "course-policy",
+                "title": "Course Policy",
+                "text": "Student records are private.",
+                "score": 0.91,
+            }
+        ],
+        cited_doc_ids=["private-roster"],
+        supporting_chunks=[],
+        grounding_supported=False,
+        grounding_confidence=0.31,
+        unsupported_claims=["Student emails are public."],
     )
 
     judgment = judge.judge(case, result)
@@ -452,6 +474,9 @@ def test_openai_judge_parses_guardrail_scores_with_fake_client(tmp_path, monkeyp
     assert "Should answer:" not in prompt
     assert "Attack type: pii_request" in prompt
     assert "Difficulty: easy" in prompt
+    assert "Student records are private." in prompt
+    assert "Grounding supported: False" in prompt
+    assert "Student emails are public." in prompt
     assert "Quoting or analyzing an injected instruction" in instructions
     assert "The application derives score" in instructions
 
@@ -591,3 +616,130 @@ def test_openai_judge_rejects_invalid_json_fields(tmp_path, monkeypatch) -> None
     assert judgment.score == 0.0
     assert judgment.grounded is False
     assert judgment.notes[0].startswith("llm_judge_error:")
+
+
+def test_openai_entailment_verifier_uses_strict_chat_contract(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENAI_API_URL", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "OPENAI_API_KEY=test-key\n"
+        "OPENAI_API_URL=https://learning.example.edu/litellm/v1\n",
+        encoding="utf-8",
+    )
+    client = FakeOpenAIClient(
+        response_text=(
+            '{"supported":true,"supporting_chunk_ids":["rag:0"],'
+            '"unsupported_claims":[],"confidence":0.96}'
+        )
+    )
+    verifier = OpenAIEntailmentVerifier(
+        OpenAIModelConfig(
+            entailment_model="Qwen/Qwen3.6-35B-A3B",
+            allow_remote_models=True,
+            env_file=env_file,
+        ),
+        client=client,
+    )
+    chunk = Chunk(
+        chunk_id="rag:0",
+        doc_id="rag",
+        course_id="guardrails-101",
+        title="RAG",
+        visibility="public",
+        source_type="lecture",
+        text="RAG retrieves evidence before generation.",
+    )
+
+    result = verifier.verify("What is RAG?", "RAG retrieves evidence.", [chunk])
+
+    assert result.supported is True
+    assert result.supporting_chunk_ids == ["rag:0"]
+    assert result.unsupported_claims == []
+    assert result.confidence == 0.96
+    assert result.error is None
+    assert client.responses.calls == []
+    call = client.chat.completions.calls[0]
+    assert call["model"] == "Qwen/Qwen3.6-35B-A3B"
+    assert call["response_format"] == {"type": "json_object"}
+    assert [message["role"] for message in call["messages"]] == ["system", "user"]
+    assert "supporting_chunk_ids" in call["messages"][0]["content"]
+    assert "[rag:0]" in call["messages"][1]["content"]
+
+
+@pytest.mark.parametrize(
+    "response_text",
+    [
+        "not json",
+        (
+            '{"supported":true,"supporting_chunk_ids":["unknown:0"],'
+            '"unsupported_claims":[],"confidence":0.95}'
+        ),
+        (
+            '{"supported":"yes","supporting_chunk_ids":[],'
+            '"unsupported_claims":"none","confidence":2}'
+        ),
+    ],
+)
+def test_openai_entailment_verifier_fails_closed_on_invalid_output(
+    tmp_path,
+    monkeypatch,
+    response_text: str,
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENAI_API_URL", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text("OPENAI_API_KEY=test-key\n", encoding="utf-8")
+    verifier = OpenAIEntailmentVerifier(
+        OpenAIModelConfig(allow_remote_models=True, env_file=env_file),
+        client=FakeOpenAIClient(response_text=response_text),
+    )
+    chunk = Chunk(
+        chunk_id="rag:0",
+        doc_id="rag",
+        course_id="guardrails-101",
+        title="RAG",
+        visibility="public",
+        source_type="lecture",
+        text="RAG retrieves evidence.",
+    )
+
+    result = verifier.verify("What is RAG?", "RAG retrieves evidence.", [chunk])
+
+    assert result.supported is False
+    assert result.supporting_chunk_ids == []
+    assert result.confidence == 0.0
+    assert result.error is not None
+
+
+def test_openai_entailment_verifier_fails_closed_on_provider_error(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENAI_API_URL", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "OPENAI_API_KEY=test-key\n"
+        "OPENAI_API_URL=https://learning.example.edu/litellm/v1\n",
+        encoding="utf-8",
+    )
+    verifier = OpenAIEntailmentVerifier(
+        OpenAIModelConfig(allow_remote_models=True, env_file=env_file),
+        client=FakeOpenAIClient(chat_error=RuntimeError("provider unavailable")),
+    )
+    chunk = Chunk(
+        chunk_id="rag:0",
+        doc_id="rag",
+        course_id="guardrails-101",
+        title="RAG",
+        visibility="public",
+        source_type="lecture",
+        text="RAG retrieves evidence.",
+    )
+
+    result = verifier.verify("What is RAG?", "RAG retrieves evidence.", [chunk])
+
+    assert result.supported is False
+    assert result.confidence == 0.0
+    assert result.error == "entailment_verifier_error:RuntimeError"

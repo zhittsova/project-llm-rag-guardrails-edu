@@ -380,6 +380,52 @@ def test_capture_model_calibration_wires_safe_cli_options(
     )
 
 
+def test_query_wires_grounded_evidence_options(monkeypatch, capsys) -> None:
+    captured_kwargs: dict[str, object] = {}
+
+    class FakeAssistant:
+        def answer(self, question: str):
+            assert question == "What is RAG?"
+            return SimpleNamespace(
+                answer="Grounded answer.",
+                citations=["RAG (rag)"],
+                disposition="answer",
+            )
+
+    def fake_build_assistant(*_args, **kwargs):
+        captured_kwargs.update(kwargs)
+        return FakeAssistant()
+
+    monkeypatch.setattr("guardrails_llm.cli.build_assistant", fake_build_assistant)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "query",
+            "--question",
+            "What is RAG?",
+            "--evidence-min-score",
+            "7.3",
+            "--entailment-verifier",
+            "openai",
+            "--entailment-model",
+            "Qwen/Qwen3.6-35B-A3B",
+            "--entailment-min-confidence",
+            "0.88",
+            "--allow-remote-models",
+        ],
+    )
+
+    main()
+
+    assert captured_kwargs["evidence_min_score"] == 7.3
+    assert captured_kwargs["entailment_verifier"] == "openai"
+    assert captured_kwargs["entailment_model"] == "Qwen/Qwen3.6-35B-A3B"
+    assert captured_kwargs["entailment_min_confidence"] == 0.88
+    assert json.loads(capsys.readouterr().out)["answer"] == "Grounded answer."
+
+
 def test_compare_guardrails_records_validation_split(tmp_path: Path, monkeypatch) -> None:
     output = tmp_path / "comparison.json"
     monkeypatch.setattr(
