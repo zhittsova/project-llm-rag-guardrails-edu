@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -94,11 +95,15 @@ def build_vector_index(
     _write_manifest(
         index_dir,
         {
+            "schema_version": 2,
             "collection": COLLECTION_NAME,
             "embedding_provider": embedding_provider,
             "embedding_model": resolved_model,
             "chunk_size": chunk_size,
             "chunk_overlap": chunk_overlap,
+            "corpus_sha256": _file_sha256(corpus_path),
+            "chunk_count": len(chunks),
+            "chunks_sha256": _chunks_sha256(chunks),
         },
     )
 
@@ -125,9 +130,15 @@ class VectorRetriever:
         env_file: Path | None = None,
         embedding_cache_path: Path | None = None,
         embedder: TextEmbedder | None = None,
+        corpus_path: Path | None = None,
     ) -> None:
         resolved_model = resolve_embedding_model(embedding_provider, embedding_model)
-        _assert_manifest_matches(index_dir, embedding_provider, resolved_model)
+        _assert_manifest_matches(
+            index_dir,
+            embedding_provider,
+            resolved_model,
+            corpus_path=corpus_path,
+        )
         try:
             self._collection = _persistent_client(index_dir).get_collection(COLLECTION_NAME)
         except chromadb.errors.NotFoundError as exc:
@@ -237,7 +248,13 @@ def _read_manifest(index_dir: Path) -> dict[str, object] | None:
     return data
 
 
-def _assert_manifest_matches(index_dir: Path, provider: str, model: str) -> None:
+def _assert_manifest_matches(
+    index_dir: Path,
+    provider: str,
+    model: str,
+    *,
+    corpus_path: Path | None = None,
+) -> None:
     manifest = _read_manifest(index_dir)
     if manifest is None:
         if provider == "hashing" and model == HASHING_EMBEDDING_MODEL:
@@ -254,6 +271,47 @@ def _assert_manifest_matches(index_dir: Path, provider: str, model: str) -> None
             f"but the query requested {provider}/{model}. Rebuild the index or pass matching "
             "embedding options."
         )
+    if corpus_path is not None:
+        indexed_corpus = manifest.get("corpus_sha256")
+        requested_corpus = _file_sha256(corpus_path)
+        if indexed_corpus != requested_corpus:
+            raise VectorIndexConfigurationError(
+                f"Vector index at {index_dir} was built from a different corpus. "
+                "Rebuild the index before querying this corpus."
+            )
+
+
+def _file_sha256(path: Path) -> str:
+    digest = sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _chunks_sha256(chunks: list[Chunk]) -> str:
+    digest = sha256()
+    for chunk in chunks:
+        payload = {
+            "chunk_id": chunk.chunk_id,
+            "doc_id": chunk.doc_id,
+            "course_id": chunk.course_id,
+            "title": chunk.title,
+            "visibility": chunk.visibility,
+            "source_type": chunk.source_type,
+            "text": chunk.text,
+            "metadata": chunk.metadata,
+        }
+        digest.update(
+            json.dumps(
+                payload,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode("utf-8")
+        )
+        digest.update(b"\n")
+    return digest.hexdigest()
 
 
 def _delete_collection_if_present(client: chromadb.PersistentClient, name: str) -> None:

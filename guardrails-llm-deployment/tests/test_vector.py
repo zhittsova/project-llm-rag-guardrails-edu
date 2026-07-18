@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -158,6 +159,31 @@ def test_vector_index_manifest_rejects_embedding_mismatch(tmp_path: Path) -> Non
 
     with pytest.raises(VectorIndexConfigurationError, match="was built with hashing"):
         VectorRetriever(index_dir, embedding_provider="openai")
+
+
+def test_vector_index_manifest_rejects_corpus_mismatch(tmp_path: Path) -> None:
+    index_dir = tmp_path / "chroma"
+    changed_corpus = tmp_path / "changed.jsonl"
+    changed_corpus.write_text(
+        DATA.read_text(encoding="utf-8") + "\n",
+        encoding="utf-8",
+    )
+    build_vector_index(DATA, index_dir)
+
+    with pytest.raises(VectorIndexConfigurationError, match="different corpus"):
+        VectorRetriever(index_dir, corpus_path=changed_corpus)
+
+
+def test_vector_index_manifest_fingerprints_chunk_contents(tmp_path: Path) -> None:
+    index_dir = tmp_path / "chroma"
+
+    stats = build_vector_index(DATA, index_dir)
+    manifest = json.loads(
+        (index_dir / "course_chunks_manifest.json").read_text(encoding="utf-8")
+    )
+
+    assert manifest["chunk_count"] == stats.chunks
+    assert len(manifest["chunks_sha256"]) == 64
 
 
 def test_vector_index_can_record_openai_embedding_provider_with_fake_embedder(tmp_path: Path) -> None:

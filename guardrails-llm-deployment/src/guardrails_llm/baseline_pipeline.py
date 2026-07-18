@@ -138,6 +138,7 @@ def build_baseline_assistant(
             env_file=env_file,
             embedding_cache_path=embedding_cache_path,
             embedder=retrieval_embedder,
+            corpus_path=Path(corpus_path),
         )
     else:
         raise ValueError("retriever_backend must be 'lexical', 'langchain', or 'vector'")
