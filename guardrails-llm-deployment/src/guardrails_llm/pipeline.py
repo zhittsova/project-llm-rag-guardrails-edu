@@ -113,6 +113,8 @@ class LearningAssistant:
             )
             if should_classify:
                 classification = self._guard_classifier.classify(question)
+                if classification.explanation.startswith("model_classifier_error:"):
+                    triggers.append(classification.explanation)
                 if classification.label != "safe" and classification.confidence >= 0.65:
                     triggers.append(classification.label)
                     if classification.label == "unsupported":

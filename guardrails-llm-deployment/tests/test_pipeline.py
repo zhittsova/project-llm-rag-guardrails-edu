@@ -193,6 +193,29 @@ def test_classifier_strategy_rejects_unknown_value() -> None:
         )
 
 
+def test_classifier_model_failure_is_visible_in_response() -> None:
+    class FailedClassifier(CountingClassifier):
+        def classify(self, text: str) -> GuardClassification:
+            self.calls += 1
+            return GuardClassification(
+                label="unsafe_request",
+                confidence=1.0,
+                explanation="model_classifier_error:ValueError",
+            )
+
+    classifier = FailedClassifier("unsafe_request")
+    assistant = LearningAssistant(
+        LexicalRetriever([]),
+        mode="guardrailed",
+        guard_classifier=classifier,
+        classifier_strategy="always",
+    )
+
+    response = assistant.answer("What is a Python list?")
+
+    assert "model_classifier_error:ValueError" in response.guard_triggers
+
+
 def test_langchain_retriever_backend_answers_question() -> None:
     assistant = build_assistant(DATA, mode="guardrailed", retriever_backend="langchain")
     response = assistant.answer("What should the guardrail evaluation assignment compare?")

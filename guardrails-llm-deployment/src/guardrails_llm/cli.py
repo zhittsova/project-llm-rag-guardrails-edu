@@ -10,6 +10,10 @@ from time import perf_counter
 from .corpus import default_data_path, validate_corpus
 from .bge_evaluation import run_bge_common_split_evaluation
 from .course_corpus import default_course_output_path, default_course_source_path, normalize_course_corpus
+from .e2e_capture import (
+    evaluate_calibration_e2e_capture,
+    run_calibration_e2e_capture,
+)
 from .embeddings import CachedEmbedder, create_embedder
 from .evaluation import (
     EvalCase,
@@ -449,6 +453,92 @@ def main() -> None:
     bge_evaluation_parser.add_argument("--allow-remote-models", action="store_true")
     bge_evaluation_parser.add_argument("--env-file", type=Path)
 
+    e2e_capture_parser = subparsers.add_parser(
+        "capture-inhouse-calibration",
+        help="Run resumable Qwen-only and complete-hybrid calibration scenarios",
+    )
+    e2e_capture_parser.add_argument(
+        "--profile",
+        choices=["inhouse"],
+        default="inhouse",
+    )
+    e2e_capture_parser.add_argument(
+        "--cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_calibration.jsonl",
+    )
+    e2e_capture_parser.add_argument(
+        "--course-corpus",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "data" / "python_course_docs.jsonl",
+    )
+    e2e_capture_parser.add_argument(
+        "--policy",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "data" / "guardrail_policy_bge_m3.toml",
+    )
+    e2e_capture_parser.add_argument(
+        "--index-dir",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "indexes" / "python-course-bge-m3",
+    )
+    e2e_capture_parser.add_argument("--embedding-model")
+    e2e_capture_parser.add_argument("--embedding-cache", type=Path)
+    e2e_capture_parser.add_argument("--answer-model")
+    e2e_capture_parser.add_argument("--classifier-model")
+    e2e_capture_parser.add_argument("--entailment-model")
+    e2e_capture_parser.add_argument(
+        "--evidence-min-score",
+        type=_finite_float,
+        required=True,
+    )
+    e2e_capture_parser.add_argument(
+        "--entailment-min-confidence",
+        type=_unit_float,
+        default=0.80,
+    )
+    e2e_capture_parser.add_argument("--course-id", default="python-intro")
+    e2e_capture_parser.add_argument("--limit-cases", type=int)
+    e2e_capture_parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_calibration_e2e.jsonl",
+    )
+    e2e_capture_parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_calibration_e2e_manifest.json",
+    )
+    e2e_capture_parser.add_argument("--allow-remote-models", action="store_true")
+    e2e_capture_parser.add_argument("--env-file", type=Path)
+
+    e2e_eval_parser = subparsers.add_parser(
+        "evaluate-inhouse-calibration",
+        help="Evaluate saved in-house calibration captures locally",
+    )
+    e2e_eval_parser.add_argument(
+        "--cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_calibration.jsonl",
+    )
+    e2e_eval_parser.add_argument(
+        "--capture",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_calibration_e2e.jsonl",
+    )
+    e2e_eval_parser.add_argument("--limit-cases", type=int)
+    e2e_eval_parser.add_argument("--output-json", type=Path)
+
     index_parser = subparsers.add_parser("build-index", help="Build a local Chroma vector index")
     _add_profile_arg(index_parser)
     index_parser.add_argument("--corpus", dest="command_corpus", type=Path)
@@ -723,6 +813,59 @@ def main() -> None:
             encoding="utf-8",
         )
         print(json.dumps(summary, indent=2))
+        return
+
+    if args.command == "capture-inhouse-calibration":
+        try:
+            manifest = run_calibration_e2e_capture(
+                config=OpenAIModelConfig(
+                    embedding_model=args.embedding_model,
+                    answer_model=args.answer_model,
+                    classifier_model=args.classifier_model,
+                    entailment_model=args.entailment_model,
+                    allow_remote_models=args.allow_remote_models,
+                    env_file=args.env_file,
+                ),
+                calibration_cases_path=args.cases,
+                corpus_path=args.course_corpus,
+                policy_path=args.policy,
+                index_dir=args.index_dir,
+                cache_path=args.embedding_cache,
+                output_path=args.output,
+                manifest_path=args.manifest,
+                evidence_min_score=args.evidence_min_score,
+                entailment_min_confidence=args.entailment_min_confidence,
+                course_id=args.course_id,
+                limit_cases=args.limit_cases,
+            )
+        except (
+            OSError,
+            ValueError,
+            VectorIndexError,
+            RemoteModelsNotAllowedError,
+            MissingModelCredentialError,
+            RemoteModelCallError,
+        ) as exc:
+            parser.error(str(exc))
+        print(json.dumps(manifest, indent=2))
+        return
+
+    if args.command == "evaluate-inhouse-calibration":
+        try:
+            report = evaluate_calibration_e2e_capture(
+                calibration_cases_path=args.cases,
+                output_path=args.capture,
+                limit_cases=args.limit_cases,
+            )
+        except (OSError, ValueError) as exc:
+            parser.error(str(exc))
+        if args.output_json:
+            args.output_json.parent.mkdir(parents=True, exist_ok=True)
+            args.output_json.write_text(
+                json.dumps(report, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        print(json.dumps(report, indent=2))
         return
 
     if args.command == "normalize-course-corpus":

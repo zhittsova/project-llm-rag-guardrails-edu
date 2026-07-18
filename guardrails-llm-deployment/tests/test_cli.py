@@ -565,6 +565,54 @@ def test_calibrate_inhouse_bge_writes_summary_and_details(
     assert json.loads(capsys.readouterr().out)["holdout_used"] is False
 
 
+def test_capture_inhouse_calibration_requires_explicit_threshold(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    captured_kwargs = {}
+
+    def fake_capture(**kwargs):
+        captured_kwargs.update(kwargs)
+        return {"status": "complete", "completed_runs": 4}
+
+    monkeypatch.setenv(
+        "OPENAI_BASE_URL",
+        "https://learning-services4.fokus.fraunhofer.de/litellm/v1",
+    )
+    monkeypatch.setattr(
+        "guardrails_llm.cli.run_calibration_e2e_capture",
+        fake_capture,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "capture-inhouse-calibration",
+            "--allow-remote-models",
+            "--evidence-min-score",
+            "0.42",
+            "--limit-cases",
+            "2",
+            "--output",
+            str(tmp_path / "capture.jsonl"),
+            "--manifest",
+            str(tmp_path / "manifest.json"),
+        ],
+    )
+
+    main()
+
+    config = captured_kwargs["config"]
+    assert config.embedding_model == "BAAI/bge-m3"
+    assert config.answer_model == "Qwen/Qwen3.6-35B-A3B"
+    assert config.classifier_model == "Qwen/Qwen3.6-35B-A3B"
+    assert config.entailment_model == "Qwen/Qwen3.6-35B-A3B"
+    assert captured_kwargs["evidence_min_score"] == 0.42
+    assert json.loads(capsys.readouterr().out)["completed_runs"] == 4
+
+
 def test_query_wires_grounded_evidence_options(monkeypatch, capsys) -> None:
     captured_kwargs: dict[str, object] = {}
 

@@ -21,7 +21,9 @@ from .model_config import (
 
 
 EMBEDDING_BATCH_SIZE = 128
+ANSWER_PROMPT_VERSION = "rag-answer-v1"
 GUARD_CLASSIFIER_PROMPT_VERSION = "guard-classifier-v2"
+ENTAILMENT_PROMPT_VERSION = "answer-entailment-v1"
 
 
 class OpenAIEmbeddingModel:
