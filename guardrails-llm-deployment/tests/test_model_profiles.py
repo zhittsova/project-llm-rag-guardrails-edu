@@ -1,4 +1,5 @@
 from argparse import Namespace
+from pathlib import Path
 
 import pytest
 
@@ -14,7 +15,11 @@ from guardrails_llm.model_profiles import (
 def _runtime_args() -> Namespace:
     return Namespace(
         profile="inhouse",
+        command="query",
         env_file=None,
+        command_corpus=None,
+        index_dir=Path("indexes/chroma"),
+        course_id="guardrails-101",
         retriever="lexical",
         embedding_provider="hashing",
         embedding_model=None,
@@ -41,6 +46,9 @@ def test_inhouse_profile_selects_bge_and_qwen(monkeypatch) -> None:
     apply_model_profile(args)
 
     assert args.retriever == "vector"
+    assert args.command_corpus.name == "python_course_docs.jsonl"
+    assert args.index_dir.name == "python-course-bge-m3"
+    assert args.course_id == "python-intro"
     assert args.embedding_provider == "openai"
     assert args.embedding_model == INHOUSE_EMBEDDING_MODEL
     assert args.embedding_cache.name == "bge-m3.jsonl"

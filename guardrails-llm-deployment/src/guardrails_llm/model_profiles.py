@@ -21,6 +21,9 @@ INHOUSE_EMBEDDING_MODEL = "BAAI/bge-m3"
 INHOUSE_LLM_MODEL = "Qwen/Qwen3.6-35B-A3B"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 INHOUSE_EMBEDDING_CACHE = PROJECT_ROOT / "indexes" / "cache" / "bge-m3.jsonl"
+INHOUSE_INDEX_DIR = PROJECT_ROOT / "indexes" / "python-course-bge-m3"
+INHOUSE_CORPUS_PATH = PROJECT_ROOT / "data" / "python_course_docs.jsonl"
+INHOUSE_COURSE_ID = "python-intro"
 
 
 class InHouseEndpointError(RuntimeError):
@@ -36,6 +39,17 @@ def apply_model_profile(args: Namespace) -> None:
 
     _require_inhouse_endpoint(getattr(args, "env_file", None))
     _set_if_present(args, "retriever", "vector")
+    if getattr(args, "command", None) in {
+        "query",
+        "evaluate",
+        "compare-guardrails",
+        "build-index",
+        "visualize",
+    }:
+        _set_if_present(args, "index_dir", INHOUSE_INDEX_DIR)
+        _set_if_present(args, "course_id", INHOUSE_COURSE_ID)
+        if hasattr(args, "command_corpus"):
+            args.command_corpus = INHOUSE_CORPUS_PATH
     _set_if_present(args, "embedding_provider", "openai")
     _set_if_present(args, "embedding_model", INHOUSE_EMBEDDING_MODEL)
     if hasattr(args, "embedding_cache") and args.embedding_cache is None:
@@ -78,6 +92,8 @@ def model_profile_summary(
         "endpoint_env": resolve_openai_base_url_source(config),
         "embedding_provider": "openai_compatible",
         "embedding_model": INHOUSE_EMBEDDING_MODEL,
+        "course_id": INHOUSE_COURSE_ID,
+        "index_directory": INHOUSE_INDEX_DIR.name,
         "answer_model": INHOUSE_LLM_MODEL,
         "classifier_model": INHOUSE_LLM_MODEL,
         "entailment_model": INHOUSE_LLM_MODEL,
