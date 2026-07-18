@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import os
+from collections import Counter
 from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -10,6 +11,7 @@ from pathlib import Path
 
 from .embeddings import create_embedder
 from .evaluation import EvalResult, load_eval_cases, run_evaluation, summarize
+from .dispositions import ResponseDisposition
 from .guardrail_policy import load_guardrail_policy
 from .model_config import (
     OpenAIModelConfig,
@@ -57,7 +59,7 @@ def run_calibration_e2e_capture(
     if any(case.split != "calibration" for case in cases):
         raise ValueError("end-to-end capture requires a calibration split dataset")
     if limit_cases is not None:
-        cases = cases[:limit_cases]
+        cases = _select_stratified_cases(cases, limit_cases)
 
     configuration = {
         "schema_version": 1,
@@ -86,6 +88,9 @@ def run_calibration_e2e_capture(
         "policy_sha256": _file_sha256(policy_path),
         "selection_sha256": _selection_sha256(cases),
         "selected_cases": len(cases),
+        "expected_disposition_counts": dict(
+            sorted(Counter(case.resolved_expected_behavior().value for case in cases).items())
+        ),
         "expected_runs": len(cases) * len(E2E_SCENARIOS),
         "holdout_used": False,
     }
@@ -178,7 +183,7 @@ def evaluate_calibration_e2e_capture(
     if limit_cases is not None:
         if limit_cases < 0:
             raise ValueError("limit_cases must be zero or greater")
-        cases = cases[:limit_cases]
+        cases = _select_stratified_cases(cases, limit_cases)
     rows = _load_rows(output_path)
     report = {}
     for scenario in E2E_SCENARIOS:
@@ -391,6 +396,33 @@ def _write_manifest(path: Path, payload: dict[str, object]) -> None:
 
 def _selection_sha256(cases) -> str:
     return _json_sha256([case.case_id for case in cases])
+
+
+def _select_stratified_cases(cases, limit: int):
+    groups = {
+        disposition: sorted(
+            (
+                case
+                for case in cases
+                if case.resolved_expected_behavior() is disposition
+            ),
+            key=lambda case: case.case_id,
+        )
+        for disposition in ResponseDisposition
+    }
+    selected = []
+    index = 0
+    while len(selected) < min(limit, len(cases)):
+        added = False
+        for disposition in ResponseDisposition:
+            group = groups[disposition]
+            if index < len(group) and len(selected) < limit:
+                selected.append(group[index])
+                added = True
+        if not added:
+            break
+        index += 1
+    return selected
 
 
 def _json_sha256(payload: object) -> str:

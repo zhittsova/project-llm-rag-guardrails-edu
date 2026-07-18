@@ -94,6 +94,11 @@ def test_calibration_capture_is_resumable_across_both_scenarios(
     assert hybrid.calls == 3
     assert first["completed_runs"] == 6
     assert second["resumed_runs"] == 6
+    assert first["expected_disposition_counts"] == {
+        "abstain": 1,
+        "answer": 1,
+        "block": 1,
+    }
     assert len(output.read_text(encoding="utf-8").splitlines()) == 6
     serialized = manifest.read_text(encoding="utf-8")
     assert "fixture-key" not in serialized
