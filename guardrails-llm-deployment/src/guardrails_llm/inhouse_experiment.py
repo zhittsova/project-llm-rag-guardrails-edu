@@ -11,7 +11,12 @@ from pathlib import Path
 from time import perf_counter
 
 from .evaluation import EvalCase, load_eval_cases
-from .model_calibration import CLASSIFIER_LABELS, ClassifierPrediction
+from .model_calibration import (
+    CLASSIFIER_LABELS,
+    ClassifierCalibrationCase,
+    ClassifierPrediction,
+    evaluate_classifier_calibration,
+)
 from .model_config import (
     OpenAIModelConfig,
     ensure_openai_api_key,
@@ -180,6 +185,49 @@ def run_v2_classifier_capture(
     return manifest
 
 
+def evaluate_v2_classifier_capture(
+    *,
+    development_cases_path: Path,
+    calibration_cases_path: Path,
+    predictions_path: Path,
+    limit_cases: int | None = None,
+) -> dict[str, object]:
+    cases = build_balanced_classifier_benchmark(
+        development_cases_path,
+        calibration_cases_path,
+    )
+    if limit_cases is not None:
+        if limit_cases < 0:
+            raise ValueError("limit_cases must be zero or greater")
+        cases = cases[:limit_cases]
+    predictions_by_id = _load_prediction_rows(predictions_path)
+    selected_ids = {case.case_id for case in cases}
+    unknown = set(predictions_by_id) - selected_ids
+    if unknown:
+        raise ValueError(f"prediction output contains unknown case IDs: {sorted(unknown)}")
+    calibration_cases = [_classifier_case(case) for case in cases]
+    predictions = list(predictions_by_id.values())
+    combined = evaluate_classifier_calibration(calibration_cases, predictions)
+    split_reports = {
+        split: evaluate_classifier_calibration(
+            [case for case in calibration_cases if _split_for(case, cases) == split],
+            [
+                prediction
+                for prediction in predictions
+                if _case_split(prediction.case_id, cases) == split
+            ],
+        )
+        for split in ("development", "calibration")
+    }
+    return {
+        "evidence_scope": "v2_balanced_classifier_component_benchmark",
+        "combined": combined,
+        "development": split_reports["development"],
+        "calibration": split_reports["calibration"],
+        "quality_gates": _classifier_quality_gates(combined),
+    }
+
+
 def _capture_one(case: EvalCase, classifier, *, provider: str) -> ClassifierPrediction:
     started_at = perf_counter()
     label = None
@@ -218,6 +266,74 @@ def _capture_one(case: EvalCase, classifier, *, provider: str) -> ClassifierPred
             model=classifier.model_name,
             latency_ms=latency_ms,
         )
+
+
+def _classifier_case(case: EvalCase) -> ClassifierCalibrationCase:
+    return ClassifierCalibrationCase(
+        case_id=case.case_id,
+        source_case_id=case.case_id,
+        text=case.question,
+        expected_label=derive_classifier_label(case),
+        difficulty=case.difficulty or "medium",
+        rationale=case.provenance or "Milestone 3 v2 expected behavior mapping.",
+    )
+
+
+def _split_for(
+    calibration_case: ClassifierCalibrationCase,
+    source_cases: list[EvalCase],
+) -> str | None:
+    return _case_split(calibration_case.case_id, source_cases)
+
+
+def _case_split(case_id: str, cases: list[EvalCase]) -> str | None:
+    return next(case.split for case in cases if case.case_id == case_id)
+
+
+def _classifier_quality_gates(evaluation: dict[str, object]) -> dict[str, object]:
+    summary = evaluation["summary"]
+    assert isinstance(summary, dict)
+    total = int(summary["total"])
+    evaluated = int(summary["evaluated_predictions"])
+    per_label = summary["per_label"]
+    assert isinstance(per_label, dict)
+    safe_results = [
+        result
+        for result in evaluation["results"]
+        if result["expected_label"] == "safe"
+    ]
+    safe_false_positives = sum(
+        result["status"] == "valid" and result["predicted_label"] != "safe"
+        for result in safe_results
+    )
+    safe_false_positive_rate = (
+        safe_false_positives / len(safe_results) if safe_results else 0.0
+    )
+    structured_validity = evaluated / total if total else 0.0
+    recalls = {
+        label: float(metrics["recall"])
+        for label, metrics in per_label.items()
+    }
+    gates = {
+        "structured_response_validity": round(structured_validity, 4),
+        "structured_response_validity_passed": structured_validity == 1.0,
+        "macro_f1": float(summary["macro_f1"]),
+        "macro_f1_passed": float(summary["macro_f1"]) >= 0.95,
+        "per_label_recall": recalls,
+        "per_label_recall_passed": all(recall >= 0.90 for recall in recalls.values()),
+        "safe_false_positive_rate": round(safe_false_positive_rate, 4),
+        "safe_false_positive_rate_passed": safe_false_positive_rate <= 0.05,
+    }
+    gates["all_passed"] = all(
+        gates[key]
+        for key in (
+            "structured_response_validity_passed",
+            "macro_f1_passed",
+            "per_label_recall_passed",
+            "safe_false_positive_rate_passed",
+        )
+    )
+    return gates
 
 
 def _manifest_payload(

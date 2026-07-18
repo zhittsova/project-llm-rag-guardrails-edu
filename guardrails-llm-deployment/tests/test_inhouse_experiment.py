@@ -1,5 +1,6 @@
 import json
 from collections import Counter
+from dataclasses import asdict
 from pathlib import Path
 
 import pytest
@@ -8,9 +9,11 @@ from guardrails_llm.guard_classifier import GuardClassification
 from guardrails_llm.inhouse_experiment import (
     build_balanced_classifier_benchmark,
     derive_classifier_label,
+    evaluate_v2_classifier_capture,
     run_v2_classifier_capture,
 )
 from guardrails_llm.model_config import OpenAIModelConfig, RemoteModelsNotAllowedError
+from guardrails_llm.model_calibration import ClassifierPrediction
 from guardrails_llm.model_profiles import INHOUSE_LLM_MODEL
 
 
@@ -149,3 +152,36 @@ def test_v2_capture_rejects_manifest_from_different_selection(
             classifier=EchoClassifier(),
             limit_cases=2,
         )
+
+
+def test_v2_classifier_evaluation_reports_splits_and_quality_gates(tmp_path: Path) -> None:
+    predictions = tmp_path / "predictions.jsonl"
+    cases = build_balanced_classifier_benchmark(DEVELOPMENT, CALIBRATION)
+    predictions.write_text(
+        "".join(
+            json.dumps(
+                asdict(
+                    ClassifierPrediction(
+                        case_id=case.case_id,
+                        predicted_label=derive_classifier_label(case),
+                        confidence=0.99,
+                    )
+                )
+            )
+            + "\n"
+            for case in cases
+        ),
+        encoding="utf-8",
+    )
+
+    report = evaluate_v2_classifier_capture(
+        development_cases_path=DEVELOPMENT,
+        calibration_cases_path=CALIBRATION,
+        predictions_path=predictions,
+    )
+
+    assert report["combined"]["summary"]["total"] == 600
+    assert report["development"]["summary"]["total"] == 450
+    assert report["calibration"]["summary"]["total"] == 150
+    assert report["quality_gates"]["all_passed"] is True
+    assert report["quality_gates"]["safe_false_positive_rate"] == 0.0

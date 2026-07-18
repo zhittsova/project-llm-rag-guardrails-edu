@@ -423,6 +423,37 @@ def test_capture_v2_classifier_uses_inhouse_profile(
     assert json.loads(capsys.readouterr().out)["completed_cases"] == 2
 
 
+def test_evaluate_v2_classifier_is_local(tmp_path: Path, monkeypatch, capsys) -> None:
+    captured_kwargs = {}
+
+    def fake_evaluate(**kwargs):
+        captured_kwargs.update(kwargs)
+        return {"quality_gates": {"all_passed": False}}
+
+    monkeypatch.setattr(
+        "guardrails_llm.cli.evaluate_v2_classifier_capture",
+        fake_evaluate,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "evaluate-v2-classifier",
+            "--predictions",
+            str(tmp_path / "predictions.jsonl"),
+            "--limit-cases",
+            "10",
+        ],
+    )
+
+    main()
+
+    assert captured_kwargs["limit_cases"] == 10
+    assert "config" not in captured_kwargs
+    assert json.loads(capsys.readouterr().out)["quality_gates"]["all_passed"] is False
+
+
 def test_query_wires_grounded_evidence_options(monkeypatch, capsys) -> None:
     captured_kwargs: dict[str, object] = {}
 

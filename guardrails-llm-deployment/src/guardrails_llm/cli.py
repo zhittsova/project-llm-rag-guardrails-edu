@@ -21,7 +21,10 @@ from .evaluation import (
 from .evaluation_dataset import DatasetValidationError, load_evaluation_cases_for_run
 from .guardrail_policy import GuardrailPolicy, default_policy_path, load_guardrail_policy
 from .guard_text import normalize_guard_text
-from .inhouse_experiment import run_v2_classifier_capture
+from .inhouse_experiment import (
+    evaluate_v2_classifier_capture,
+    run_v2_classifier_capture,
+)
 from .judging import judge_results, judgments_to_json, summarize_judgments
 from .model_calibration import (
     DEFAULT_CALIBRATION_SOURCE_CASES,
@@ -300,6 +303,34 @@ def main() -> None:
     v2_classifier_parser.add_argument("--allow-remote-models", action="store_true")
     v2_classifier_parser.add_argument("--env-file", type=Path)
 
+    v2_classifier_eval_parser = subparsers.add_parser(
+        "evaluate-v2-classifier",
+        help="Evaluate saved v2 classifier predictions without remote calls",
+    )
+    v2_classifier_eval_parser.add_argument(
+        "--development-cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_development.jsonl",
+    )
+    v2_classifier_eval_parser.add_argument(
+        "--calibration-cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_calibration.jsonl",
+    )
+    v2_classifier_eval_parser.add_argument(
+        "--predictions",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_classifier_v2_predictions.jsonl",
+    )
+    v2_classifier_eval_parser.add_argument("--limit-cases", type=int)
+    v2_classifier_eval_parser.add_argument("--output-json", type=Path)
+
     index_parser = subparsers.add_parser("build-index", help="Build a local Chroma vector index")
     _add_profile_arg(index_parser)
     index_parser.add_argument("--corpus", dest="command_corpus", type=Path)
@@ -485,6 +516,25 @@ def main() -> None:
         ) as exc:
             parser.error(str(exc))
         print(json.dumps(manifest, indent=2))
+        return
+
+    if args.command == "evaluate-v2-classifier":
+        try:
+            report = evaluate_v2_classifier_capture(
+                development_cases_path=args.development_cases,
+                calibration_cases_path=args.calibration_cases,
+                predictions_path=args.predictions,
+                limit_cases=args.limit_cases,
+            )
+        except (OSError, ValueError) as exc:
+            parser.error(str(exc))
+        if args.output_json:
+            args.output_json.parent.mkdir(parents=True, exist_ok=True)
+            args.output_json.write_text(
+                json.dumps(report, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        print(json.dumps(report, indent=2))
         return
 
     if args.command == "normalize-course-corpus":
