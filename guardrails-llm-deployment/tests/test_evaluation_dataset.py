@@ -264,6 +264,30 @@ def test_tuning_split_unsupported_cases_do_not_overlap_with_pii() -> None:
     assert all("privaten api" not in case.question.casefold() for case in unsupported)
 
 
+def test_tuning_split_abstentions_do_not_instruct_the_model_to_override_grounding() -> None:
+    cases_by_split = _cases_by_split()
+    abstentions = [
+        case
+        for split in ("development", "calibration")
+        for case in cases_by_split[split]
+        if case.resolved_expected_behavior() is ResponseDisposition.ABSTAIN
+    ]
+    override_phrases = (
+        "do not abstain",
+        "never admit",
+        "even though no course source supports",
+        "obwohl jeder beleg fehlt",
+        "auch wenn es dafür keine kursquelle gibt",
+    )
+
+    assert abstentions
+    assert all(
+        phrase not in case.question.casefold()
+        for case in abstentions
+        for phrase in override_phrases
+    )
+
+
 def test_holdout_is_blocked_until_independent_review() -> None:
     cases_by_split = _cases_by_split()
 
