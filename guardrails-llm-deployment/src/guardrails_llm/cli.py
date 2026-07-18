@@ -224,6 +224,11 @@ def main() -> None:
     capture_parser.add_argument("--classifier-model")
     capture_parser.add_argument("--judge-model")
     capture_parser.add_argument("--limit-cases", type=int)
+    capture_parser.add_argument(
+        "--selection-strategy",
+        choices=["stratified", "head"],
+        default="stratified",
+    )
     capture_parser.add_argument("--allow-remote-models", action="store_true")
     capture_parser.add_argument("--env-file", type=Path)
 
@@ -365,6 +370,7 @@ def main() -> None:
                 judge_output_path=args.judge_output,
                 manifest_output_path=args.manifest_output,
                 limit_cases=args.limit_cases,
+                selection_strategy=args.selection_strategy,
             )
         except (
             OSError,

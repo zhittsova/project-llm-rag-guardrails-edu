@@ -3,10 +3,14 @@ from pathlib import Path
 
 import pytest
 
+from guardrails_llm import model_capture
 from guardrails_llm.guard_classifier import GuardClassification
 from guardrails_llm.judging import JudgeResult
 from guardrails_llm.model_calibration import (
+    CLASSIFIER_LABELS,
+    load_classifier_calibration_cases,
     load_classifier_predictions,
+    load_judge_calibration_cases,
     load_judge_predictions,
 )
 from guardrails_llm.model_capture import run_model_calibration_capture
@@ -71,6 +75,35 @@ class FakeJudge:
             score=1.0,
             notes=["fixture judge"],
         )
+
+
+def test_stratified_classifier_selection_covers_each_label() -> None:
+    cases = load_classifier_calibration_cases(CLASSIFIER_CASES)
+
+    selected = model_capture.select_classifier_calibration_cases(
+        cases,
+        limit=6,
+        strategy="stratified",
+    )
+
+    assert [case.expected_label for case in selected] == list(CLASSIFIER_LABELS)
+
+
+def test_stratified_judge_selection_covers_each_expected_behavior() -> None:
+    cases = load_judge_calibration_cases(JUDGE_CASES)
+
+    selected = model_capture.select_judge_calibration_cases(
+        cases,
+        limit=4,
+        strategy="stratified",
+    )
+
+    assert [case.expected_behavior.value for case in selected] == [
+        "answer",
+        "block",
+        "abstain",
+        "redirect",
+    ]
 
 
 def test_capture_requires_explicit_remote_approval(tmp_path: Path) -> None:
