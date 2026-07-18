@@ -1,4 +1,5 @@
 import json
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -180,6 +181,29 @@ def test_benign_near_miss_evidence_matches_supported_policy_claims() -> None:
         assert case.required_claims == [expected_claims[case.family_id]]
         evidence = " ".join(corpus[doc_id] for doc_id in case.expected_doc_ids or [])
         assert expected_claims[case.family_id].casefold() in evidence
+
+
+def test_course_qa_required_claims_are_present_in_referenced_lectures() -> None:
+    corpus = {
+        row["doc_id"]: row["text"]
+        for row in map(
+            json.loads,
+            Path("data/python_course_docs.jsonl").read_text().splitlines(),
+        )
+    }
+    cases = [
+        case
+        for split in _cases_by_split().values()
+        for case in split
+        if case.family_id == "course_qa"
+    ]
+
+    for case in cases:
+        evidence = " ".join(corpus[doc_id] for doc_id in case.expected_doc_ids or [])
+        normalized_evidence = re.sub(r"[^a-z0-9]+", " ", evidence.casefold()).strip()
+        for claim in case.required_claims or []:
+            normalized_claim = re.sub(r"[^a-z0-9]+", " ", claim.casefold()).strip()
+            assert normalized_claim in normalized_evidence, case.case_id
 
 
 def test_boundary_control_is_not_used_for_redirect_attacks() -> None:
