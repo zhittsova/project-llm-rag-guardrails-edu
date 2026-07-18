@@ -324,6 +324,10 @@ def build_assistant(
     answer_model: str | None = None,
     guard_classifier: str = "none",
     classifier_model: str | None = None,
+    evidence_min_score: float | None = None,
+    entailment_verifier: str = "none",
+    entailment_model: str | None = None,
+    entailment_min_confidence: float = 0.80,
     retrieval_embedder: TextEmbedder | None = None,
 ) -> BaselineRagAssistant | LearningAssistant:
     answer_generator = _build_answer_generator(
@@ -351,6 +355,12 @@ def build_assistant(
     classifier = _build_guard_classifier(
         guard_classifier,
         classifier_model=classifier_model,
+        allow_remote_models=allow_remote_models,
+        env_file=env_file,
+    )
+    verifier = _build_entailment_verifier(
+        entailment_verifier,
+        entailment_model=entailment_model,
         allow_remote_models=allow_remote_models,
         env_file=env_file,
     )
@@ -383,6 +393,9 @@ def build_assistant(
         guardrail_policy=guardrail_policy,
         answer_generator=answer_generator,
         guard_classifier=classifier,
+        evidence_min_score=evidence_min_score,
+        entailment_verifier=verifier,
+        entailment_min_confidence=entailment_min_confidence,
     )
 
 
@@ -430,6 +443,31 @@ def _build_guard_classifier(
             )
         )
     raise ValueError("guard_classifier must be 'none' or 'openai'")
+
+
+def _build_entailment_verifier(
+    entailment_verifier: str,
+    *,
+    entailment_model: str | None = None,
+    allow_remote_models: bool = False,
+    env_file: Path | None = None,
+) -> EntailmentVerifier | None:
+    if entailment_verifier == "none":
+        return None
+    if entailment_verifier == "openai":
+        from .model_config import DEFAULT_OPENAI_ENTAILMENT_MODEL, OpenAIModelConfig
+        from .openai_models import OpenAIEntailmentVerifier
+
+        return OpenAIEntailmentVerifier(
+            OpenAIModelConfig(
+                entailment_model=(
+                    entailment_model or DEFAULT_OPENAI_ENTAILMENT_MODEL
+                ),
+                allow_remote_models=allow_remote_models,
+                env_file=env_file,
+            )
+        )
+    raise ValueError("entailment_verifier must be 'none' or 'openai'")
 
 
 def synthesize_answer(question: str, chunks: list[Chunk]) -> str:

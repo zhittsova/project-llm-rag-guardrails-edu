@@ -34,6 +34,10 @@ def write_rag_visualization(
     answer_model: str | None = None,
     guard_classifier: str = "none",
     classifier_model: str | None = None,
+    evidence_min_score: float | None = None,
+    entailment_verifier: str = "none",
+    entailment_model: str | None = None,
+    entailment_min_confidence: float = 0.80,
 ) -> VisualizationStats:
     assistant = build_assistant(
         corpus_path,
@@ -50,6 +54,10 @@ def write_rag_visualization(
         answer_model=answer_model,
         guard_classifier=guard_classifier,
         classifier_model=classifier_model,
+        evidence_min_score=evidence_min_score,
+        entailment_verifier=entailment_verifier,
+        entailment_model=entailment_model,
+        entailment_min_confidence=entailment_min_confidence,
     )
     response = assistant.answer(question)
     chunk_lookup = _chunk_lookup(corpus_path, retriever_backend)

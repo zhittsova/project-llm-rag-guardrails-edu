@@ -66,6 +66,7 @@ def main() -> None:
     _add_embedding_args(query_parser)
     _add_generation_args(query_parser)
     _add_guard_classifier_args(query_parser)
+    _add_grounding_args(query_parser)
     query_parser.add_argument("--policy", type=Path)
     _add_guard_embedding_args(query_parser)
     query_parser.add_argument("--question", required=True)
@@ -79,6 +80,7 @@ def main() -> None:
     _add_embedding_args(eval_parser)
     _add_generation_args(eval_parser)
     _add_guard_classifier_args(eval_parser)
+    _add_grounding_args(eval_parser)
     eval_parser.add_argument("--cases", type=Path, default=Path(__file__).resolve().parents[2] / "data" / "eval_cases.jsonl")
     eval_parser.add_argument("--policy", type=Path)
     _add_guard_embedding_args(eval_parser)
@@ -99,6 +101,7 @@ def main() -> None:
     _add_embedding_args(compare_parser)
     _add_generation_args(compare_parser)
     _add_guard_classifier_args(compare_parser)
+    _add_grounding_args(compare_parser)
     compare_parser.add_argument("--cases", type=Path, default=Path(__file__).resolve().parents[2] / "data" / "eval_cases.jsonl")
     compare_parser.add_argument("--policy", type=Path, default=default_policy_path())
     _add_guard_embedding_args(compare_parser)
@@ -264,6 +267,7 @@ def main() -> None:
     _add_embedding_args(visualize_parser)
     _add_generation_args(visualize_parser)
     _add_guard_classifier_args(visualize_parser)
+    _add_grounding_args(visualize_parser)
     visualize_parser.add_argument("--policy", type=Path)
     _add_guard_embedding_args(visualize_parser)
     visualize_parser.add_argument("--question", required=True)
@@ -439,6 +443,10 @@ def main() -> None:
                 answer_model=args.answer_model,
                 guard_classifier=args.guard_classifier,
                 classifier_model=args.classifier_model,
+                evidence_min_score=args.evidence_min_score,
+                entailment_verifier=args.entailment_verifier,
+                entailment_model=args.entailment_model,
+                entailment_min_confidence=args.entailment_min_confidence,
             )
         except (
             VectorIndexError,
@@ -487,6 +495,10 @@ def main() -> None:
                     answer_model=args.answer_model,
                     guard_classifier=classifier,
                     classifier_model=args.classifier_model,
+                    evidence_min_score=args.evidence_min_score,
+                    entailment_verifier=args.entailment_verifier,
+                    entailment_model=args.entailment_model,
+                    entailment_min_confidence=args.entailment_min_confidence,
                     retrieval_embedder=retrieval_embedder,
                 )
                 comparison_results = run_evaluation(comparison_assistant, cases)
@@ -551,6 +563,14 @@ def main() -> None:
             answer_model=getattr(args, "answer_model", None),
             guard_classifier=getattr(args, "guard_classifier", "none"),
             classifier_model=getattr(args, "classifier_model", None),
+            evidence_min_score=getattr(args, "evidence_min_score", None),
+            entailment_verifier=getattr(args, "entailment_verifier", "none"),
+            entailment_model=getattr(args, "entailment_model", None),
+            entailment_min_confidence=getattr(
+                args,
+                "entailment_min_confidence",
+                0.80,
+            ),
         )
     except (
         VectorIndexError,
@@ -627,9 +647,31 @@ def _add_guard_classifier_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--classifier-model")
 
 
+def _add_grounding_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--evidence-min-score", type=_unit_float)
+    parser.add_argument(
+        "--entailment-verifier",
+        choices=["none", "openai"],
+        default="none",
+    )
+    parser.add_argument("--entailment-model")
+    parser.add_argument(
+        "--entailment-min-confidence",
+        type=_unit_float,
+        default=0.80,
+    )
+
+
 def _add_guard_embedding_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--guard-embedding-provider", choices=["hashing", "openai"], default="hashing")
     parser.add_argument("--guard-embedding-model")
+
+
+def _unit_float(value: str) -> float:
+    parsed = float(value)
+    if not 0.0 <= parsed <= 1.0:
+        raise argparse.ArgumentTypeError("value must be between 0 and 1")
+    return parsed
 
 
 def _limit_cases(cases, limit: int | None):
