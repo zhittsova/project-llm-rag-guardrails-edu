@@ -64,7 +64,12 @@ class FakeResponsesEndpoint:
 
 
 class FakeChatCompletionsEndpoint:
-    def __init__(self, response_text: str, *, error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        response_text: str | list[str],
+        *,
+        error: Exception | None = None,
+    ) -> None:
         self.calls: list[dict[str, object]] = []
         self._response_text = response_text
         self._error = error
@@ -73,10 +78,15 @@ class FakeChatCompletionsEndpoint:
         self.calls.append({"model": model, "messages": messages, **kwargs})
         if self._error:
             raise self._error
+        response_text = (
+            self._response_text.pop(0)
+            if isinstance(self._response_text, list)
+            else self._response_text
+        )
         return SimpleNamespace(
             choices=[
                 SimpleNamespace(
-                    message=SimpleNamespace(content=self._response_text)
+                    message=SimpleNamespace(content=response_text)
                 )
             ]
         )
@@ -374,6 +384,42 @@ def test_openai_guard_classifier_fails_closed_on_malformed_json(tmp_path, monkey
     assert result.label == "unsafe_request"
     assert result.confidence == 1.0
     assert result.explanation.startswith("model_classifier_error:")
+    assert len(classifier._client.responses.calls) == 2
+
+
+def test_openai_guard_classifier_retries_one_malformed_chat_response(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENAI_API_URL", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "OPENAI_API_KEY=test-key",
+                "OPENAI_API_URL=https://learning.example.edu/litellm/v1",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    client = FakeOpenAIClient()
+    client.chat.completions = FakeChatCompletionsEndpoint(
+        [
+            "not json",
+            '{"label":"safe","confidence":0.92,"explanation":"benign course question"}',
+        ]
+    )
+    classifier = OpenAIGuardClassifier(
+        OpenAIModelConfig(allow_remote_models=True, env_file=env_file),
+        client=client,
+    )
+
+    result = classifier.classify("What is a Python list?")
+
+    assert result.label == "safe"
+    assert result.confidence == 0.92
+    assert len(client.chat.completions.calls) == 2
 
 
 def test_openai_guard_classifier_rejects_invalid_json_fields(tmp_path, monkeypatch) -> None:

@@ -22,7 +22,8 @@ from .model_config import (
 
 EMBEDDING_BATCH_SIZE = 128
 ANSWER_PROMPT_VERSION = "rag-answer-v1"
-GUARD_CLASSIFIER_PROMPT_VERSION = "guard-classifier-v3"
+GUARD_CLASSIFIER_PROMPT_VERSION = "guard-classifier-v3.1"
+GUARD_CLASSIFIER_MAX_ATTEMPTS = 2
 ENTAILMENT_PROMPT_VERSION = "answer-entailment-v1"
 
 
@@ -104,30 +105,7 @@ class OpenAIGuardClassifier:
 
     def classify(self, text: str) -> GuardClassification:
         try:
-            instructions = _guard_classifier_instructions()
-            if self._use_chat_completions:
-                response = self._client.chat.completions.create(
-                    model=self.model_name,
-                    messages=[
-                        {"role": "system", "content": instructions},
-                        {"role": "user", "content": text},
-                    ],
-                    response_format={"type": "json_object"},
-                    temperature=0,
-                )
-                payload = _json_from_text(
-                    _chat_response_text(response),
-                    "OpenAI guard classifier",
-                )
-            else:
-                response = self._client.responses.create(
-                    model=self.model_name,
-                    instructions=instructions,
-                    input=text,
-                    text=_json_schema_text_config("guard_classification", GUARD_CLASSIFIER_SCHEMA),
-                )
-                payload = _json_response(response, "OpenAI guard classifier")
-            _validate_guard_classifier_payload(payload)
+            payload = self._classify_payload(text)
             label = str(payload["label"])
             confidence = float(payload["confidence"])
             explanation = str(payload["explanation"]).strip()
@@ -138,6 +116,42 @@ class OpenAIGuardClassifier:
                 confidence=1.0,
                 explanation=f"model_classifier_error:{type(exc).__name__}",
             )
+
+    def _classify_payload(self, text: str) -> dict[str, object]:
+        instructions = _guard_classifier_instructions()
+        for attempt in range(GUARD_CLASSIFIER_MAX_ATTEMPTS):
+            try:
+                if self._use_chat_completions:
+                    response = self._client.chat.completions.create(
+                        model=self.model_name,
+                        messages=[
+                            {"role": "system", "content": instructions},
+                            {"role": "user", "content": text},
+                        ],
+                        response_format={"type": "json_object"},
+                        temperature=0,
+                    )
+                    payload = _json_from_text(
+                        _chat_response_text(response),
+                        "OpenAI guard classifier",
+                    )
+                else:
+                    response = self._client.responses.create(
+                        model=self.model_name,
+                        instructions=instructions,
+                        input=text,
+                        text=_json_schema_text_config(
+                            "guard_classification",
+                            GUARD_CLASSIFIER_SCHEMA,
+                        ),
+                    )
+                    payload = _json_response(response, "OpenAI guard classifier")
+                _validate_guard_classifier_payload(payload)
+                return payload
+            except ValueError:
+                if attempt + 1 == GUARD_CLASSIFIER_MAX_ATTEMPTS:
+                    raise
+        raise RuntimeError("guard classifier attempt loop did not return")
 
 
 class OpenAIJudge:
