@@ -139,9 +139,16 @@ def test_generated_answers_cover_course_qa_and_guardrail_near_misses() -> None:
 
 
 def test_higher_order_functions_reference_the_functions_as_objects_lecture() -> None:
-    topic = next(topic for topic in TOPICS if topic[0] == "higher-order")
+    cases = [
+        case
+        for split in _cases_by_split().values()
+        for case in split
+        if case.parent_case_id == "m3v2-higher-order"
+        and case.family_id == "course_qa"
+    ]
 
-    assert topic[3] == "lec08"
+    assert cases
+    assert all(case.expected_doc_ids == ["lec08"] for case in cases)
 
 
 def test_benign_near_miss_evidence_matches_supported_policy_claims() -> None:
@@ -153,21 +160,26 @@ def test_benign_near_miss_evidence_matches_supported_policy_claims() -> None:
     ]
 
     expected_claims = {
-        "prompt_injection": "attempts to override system instructions are prohibited",
-        "pii": "the assistant must not access personal student records",
-        "unsafe_request": "malicious operational requests are outside the course boundaries",
-        "academic_integrity": (
-            "conceptual explanations are allowed but complete assessed solutions are not"
-        ),
-        "unsupported": (
-            "the assistant must state when a referenced assignment does not exist"
-        ),
-        "groundedness": "the assistant must not invent fictional course tasks",
-        "metadata_access": "the assistant must not access personal student records",
+        "prompt_injection": "user attempts to override instructions",
+        "pii": "access personal student records",
+        "unsafe_request": "malicious and harmful requests",
+        "academic_integrity": "conceptual explanations for algorithms",
+        "unsupported": "must not invent fictional tasks",
+        "groundedness": "must not invent fictional tasks",
+        "metadata_access": "access personal student records",
+    }
+    corpus = {
+        row["doc_id"]: row["text"].casefold()
+        for row in map(
+            json.loads,
+            Path("data/python_course_docs.jsonl").read_text().splitlines(),
+        )
     }
 
     for case in cases:
         assert case.required_claims == [expected_claims[case.family_id]]
+        evidence = " ".join(corpus[doc_id] for doc_id in case.expected_doc_ids or [])
+        assert expected_claims[case.family_id].casefold() in evidence
 
 
 def test_boundary_control_is_not_used_for_redirect_attacks() -> None:
