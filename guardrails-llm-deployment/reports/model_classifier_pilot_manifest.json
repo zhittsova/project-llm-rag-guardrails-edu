@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "evidence_scope": "live_remote_model_capture",
+  "captured_at": "2026-07-18T11:25:51Z",
+  "component": "classifier",
+  "provider": "openai_compatible",
+  "endpoint_category": "custom_openai_compatible",
+  "limit_cases": 5,
+  "classifier": {
+    "model": "Qwen/Qwen3.6-35B-A3B",
+    "output_path": "reports/model_classifier_pilot_predictions.jsonl",
+    "cases_requested": 5,
+    "request_count": 5,
+    "successful_predictions": 4,
+    "failed_predictions": 1,
+    "prediction_coverage": 0.8,
+    "p50_latency_ms": 5493.526,
+    "p95_latency_ms": 7023.556
+  }
+}
