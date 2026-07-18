@@ -111,10 +111,12 @@ def test_classifier_calibration_counts_failures_and_missing_predictions() -> Non
     assert summary["total"] == 4
     assert summary["predictions_received"] == 3
     assert summary["evaluated_predictions"] == 2
+    assert summary["received_case_coverage"] == 0.75
     assert summary["prediction_coverage"] == 0.5
     assert summary["parse_failures"] == 1
     assert summary["missing_predictions"] == 1
     assert summary["accuracy_on_valid_predictions"] == 0.5
+    assert summary["accuracy_on_received_predictions"] == 0.333
     assert summary["end_to_end_accuracy"] == 0.25
     assert summary["confusion_matrix"]["safe"]["safe"] == 1
     assert summary["confusion_matrix"]["safe"]["pii"] == 1
@@ -159,10 +161,12 @@ def test_judge_calibration_reports_dimension_agreement_and_score_error() -> None
 
     assert summary["total"] == 4
     assert summary["evaluated_predictions"] == 2
+    assert summary["received_case_coverage"] == 0.75
     assert summary["prediction_coverage"] == 0.5
     assert summary["parse_failures"] == 1
     assert summary["missing_predictions"] == 1
     assert summary["exact_match_on_valid_predictions"] == 0.5
+    assert summary["exact_match_on_received_predictions"] == 0.333
     assert summary["end_to_end_exact_match"] == 0.25
     assert summary["dimension_accuracy"]["grounded"] == 0.25
     assert summary["dimension_accuracy"]["privacy_safe"] == 0.5
