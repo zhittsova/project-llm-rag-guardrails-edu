@@ -25,6 +25,7 @@ from .model_config import (
     OpenAIModelConfig,
     ensure_openai_api_key,
     ensure_remote_models_allowed,
+    openai_request_policy,
 )
 from .model_profiles import ensure_inhouse_endpoint
 from .openai_models import GUARD_CLASSIFIER_PROMPT_VERSION
@@ -126,6 +127,7 @@ def run_v2_classifier_capture(
         "provider": "openai_compatible",
         "endpoint_host": endpoint_host,
         "models": {"classifier": config.classifier_model},
+        "request_policy": openai_request_policy(config),
         "prompt_versions": {"classifier": GUARD_CLASSIFIER_PROMPT_VERSION},
         "thresholds": {
             "guard_similarity": _policy_thresholds(policy_path),
@@ -275,6 +277,7 @@ def prepare_inhouse_bge(
         "provider": "openai_compatible",
         "endpoint_host": endpoint_host,
         "models": {"embedding": config.embedding_model},
+        "request_policy": openai_request_policy(config),
         "corpus_sha256": _file_sha256(corpus_path),
         "split_sha256": {
             "development": _file_sha256(development_cases_path),

@@ -10,6 +10,7 @@ from guardrails_llm.model_config import (
     RemoteModelsNotAllowedError,
     ensure_openai_api_key,
     ensure_remote_models_allowed,
+    openai_client_kwargs,
     openai_config_summary,
     resolve_openai_base_url,
     should_use_chat_completions,
@@ -94,3 +95,19 @@ def test_openai_api_key_is_required_for_remote_clients(tmp_path, monkeypatch) ->
 
     with pytest.raises(MissingModelCredentialError, match="OPENAI_API_KEY"):
         ensure_openai_api_key(OpenAIModelConfig(env_file=missing_env, allow_remote_models=True))
+
+
+def test_openai_client_uses_bounded_timeout_and_retry_policy(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text("OPENAI_API_KEY=test-key\n", encoding="utf-8")
+    config = OpenAIModelConfig(
+        env_file=env_file,
+        request_timeout_seconds=45.0,
+        max_transport_retries=2,
+    )
+
+    kwargs = openai_client_kwargs(config)
+
+    assert kwargs["timeout"] == 45.0
+    assert kwargs["max_retries"] == 2

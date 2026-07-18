@@ -17,6 +17,7 @@ from .model_config import (
     OpenAIModelConfig,
     ensure_openai_api_key,
     ensure_remote_models_allowed,
+    openai_request_policy,
 )
 from .model_profiles import ensure_inhouse_endpoint
 from .openai_models import (
@@ -74,6 +75,7 @@ def run_calibration_e2e_capture(
             "classifier": config.classifier_model,
             "entailment": config.entailment_model,
         },
+        "request_policy": openai_request_policy(config),
         "prompt_versions": {
             "answer": ANSWER_PROMPT_VERSION,
             "classifier": GUARD_CLASSIFIER_PROMPT_VERSION,

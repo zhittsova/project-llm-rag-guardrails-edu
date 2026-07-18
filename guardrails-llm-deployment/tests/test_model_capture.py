@@ -175,6 +175,10 @@ def test_classifier_capture_writes_replay_file_and_safe_manifest(
     assert manifest == stored_manifest
     assert manifest["evidence_scope"] == "live_remote_model_capture"
     assert manifest["endpoint_category"] == "custom_openai_compatible"
+    assert manifest["request_policy"] == {
+        "timeout_seconds": 90.0,
+        "max_transport_retries": 1,
+    }
     assert manifest["prompt_versions"]["classifier"] == "guard-classifier-v3.1"
     assert manifest["classifier"] == {
         "model": "fake-classifier",

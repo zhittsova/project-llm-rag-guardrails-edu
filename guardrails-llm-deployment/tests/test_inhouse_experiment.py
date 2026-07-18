@@ -144,6 +144,10 @@ def test_v2_capture_resumes_and_writes_safe_manifest(tmp_path: Path, monkeypatch
     assert first["completed_cases"] == 3
     assert second["resumed_cases"] == 3
     assert second["endpoint_host"] == "learning-services4.fokus.fraunhofer.de"
+    assert second["request_policy"] == {
+        "timeout_seconds": 90.0,
+        "max_transport_retries": 1,
+    }
     assert second["split_case_counts"] == {"development": 3}
     serialized = manifest.read_text(encoding="utf-8")
     assert "fixture-key" not in serialized

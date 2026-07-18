@@ -94,6 +94,10 @@ def test_calibration_capture_is_resumable_across_both_scenarios(
     assert hybrid.calls == 3
     assert first["completed_runs"] == 6
     assert second["resumed_runs"] == 6
+    assert first["request_policy"] == {
+        "timeout_seconds": 90.0,
+        "max_transport_retries": 1,
+    }
     assert first["expected_disposition_counts"] == {
         "abstain": 1,
         "answer": 1,
