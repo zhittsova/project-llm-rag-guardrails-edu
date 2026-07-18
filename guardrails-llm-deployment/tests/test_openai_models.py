@@ -886,6 +886,9 @@ def test_openai_entailment_verifier_retries_one_invalid_chat_response(
     assert result.supported is True
     assert result.supporting_chunk_ids == ["rag:0"]
     assert len(client.chat.completions.calls) == 2
+    retry_instructions = client.chat.completions.calls[1]["messages"][0]["content"]
+    assert "previous response failed validation" in retry_instructions.lower()
+    assert "valid json" in retry_instructions.lower()
 
 
 def test_openai_entailment_verifier_fails_closed_on_provider_error(tmp_path, monkeypatch) -> None:
