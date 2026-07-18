@@ -5,14 +5,19 @@ from pathlib import Path
 
 from .dispositions import ResponseDisposition
 from .embeddings import HashingEmbedder, TextEmbedder, cosine_similarity, create_embedder
+from .evaluation_dataset import DEFAULT_DATASET_MANIFEST_PATH
 from .evaluation import EvalCase, load_eval_cases
 from .guard_text import normalize_guard_text
 from .guardrail_policy import load_guardrail_policy
-from .inhouse_experiment import derive_classifier_label
+from .inhouse_experiment import (
+    _verify_development_and_calibration_dataset,
+    derive_classifier_label,
+)
 from .model_config import (
     OpenAIModelConfig,
     ensure_openai_api_key,
     ensure_remote_models_allowed,
+    openai_request_policy,
 )
 from .model_profiles import ensure_inhouse_endpoint
 from .retrieval_routing import route_retrieval_query
@@ -32,6 +37,7 @@ def run_bge_common_split_evaluation(
     course_id: str = "python-intro",
     top_k: int = 3,
     bge_embedder: TextEmbedder | None = None,
+    dataset_manifest_path: Path = DEFAULT_DATASET_MANIFEST_PATH,
 ) -> tuple[dict[str, object], dict[str, list[dict[str, object]]]]:
     if top_k <= 0:
         raise ValueError("top_k must be greater than zero")
@@ -42,11 +48,17 @@ def run_bge_common_split_evaluation(
     calibration = load_eval_cases(calibration_cases_path)
     _require_split(development, "development")
     _require_split(calibration, "calibration")
+    dataset_evidence = _verify_development_and_calibration_dataset(
+        dataset_manifest_path,
+        development_cases_path=development_cases_path,
+        calibration_cases_path=calibration_cases_path,
+    )
     cases = development + calibration
 
     bge = bge_embedder or create_embedder(
         "openai",
         model=config.embedding_model,
+        model_config=config,
         allow_remote_models=config.allow_remote_models,
         env_file=config.env_file,
         cache_path=cache_path,
@@ -67,12 +79,14 @@ def run_bge_common_split_evaluation(
             embedding_provider="openai",
             embedding_model=config.embedding_model,
             embedder=bge,
+            corpus_path=corpus_path,
         ),
         "hashing": VectorRetriever(
             hashing_index_dir,
             min_score=DEFAULT_VECTOR_MIN_SCORE,
             embedding_provider="hashing",
             embedder=hashing,
+            corpus_path=corpus_path,
         ),
     }
     embedders = {"bge_m3": bge, "hashing": hashing}
@@ -93,6 +107,9 @@ def run_bge_common_split_evaluation(
     summary = {
         "evidence_scope": "common_split_embedding_and_retrieval_calibration",
         "endpoint_host": endpoint_host,
+        "request_policy": openai_request_policy(config),
+        "dataset_version": dataset_evidence["dataset_version"],
+        "dataset_manifest_sha256": dataset_evidence["dataset_manifest_sha256"],
         "models": {
             "bge_m3": config.embedding_model,
             "hashing": hashing.model_name,

@@ -71,6 +71,8 @@ def test_bge_evaluation_uses_common_dev_and_calibration_splits(
     )
     config = OpenAIModelConfig(
         embedding_model="BAAI/bge-m3",
+        request_timeout_seconds=12.5,
+        max_transport_retries=0,
         allow_remote_models=True,
     )
     embedder = FakeBgeEmbedder()
@@ -102,6 +104,8 @@ def test_bge_evaluation_uses_common_dev_and_calibration_splits(
     assert summary["case_counts"] == {"development": 1200, "calibration": 400}
     assert summary["threshold_selection_split"] == "development"
     assert summary["threshold_validation_split"] == "calibration"
+    assert summary["dataset_version"] == "milestone3-v2"
+    assert len(summary["dataset_manifest_sha256"]) == 64
     assert set(summary["techniques"]) == {"hashing", "bge_m3"}
     assert len(details["bge_m3"]) == 1600
     assert len(details["hashing"]) == 1600
@@ -150,3 +154,7 @@ def test_bge_evaluation_uses_common_dev_and_calibration_splits(
     assert blocked["retrieval_attempted"] is False
     assert blocked["retrieval_query"] is None
     assert summary["runtime_retriever_min_score"] == 0.05
+    assert summary["request_policy"] == {
+        "timeout_seconds": 12.5,
+        "max_transport_retries": 0,
+    }

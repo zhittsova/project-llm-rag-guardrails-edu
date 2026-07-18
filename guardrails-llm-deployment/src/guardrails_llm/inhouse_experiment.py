@@ -12,6 +12,10 @@ from pathlib import Path
 from time import perf_counter
 
 from .embeddings import CachedEmbedder, create_embedder
+from .evaluation_dataset import (
+    DEFAULT_DATASET_MANIFEST_PATH,
+    verify_dataset_split_manifest,
+)
 from .evaluation import EvalCase, load_eval_cases
 from .guard_text import normalize_guard_text
 from .guardrail_policy import load_guardrail_policy
@@ -103,6 +107,7 @@ def run_v2_classifier_capture(
     output_path: Path,
     manifest_path: Path,
     policy_path: Path = DEFAULT_POLICY_PATH,
+    dataset_manifest_path: Path = DEFAULT_DATASET_MANIFEST_PATH,
     classifier=None,
     limit_cases: int | None = None,
     max_concurrency: int = 1,
@@ -121,6 +126,11 @@ def run_v2_classifier_capture(
         development_cases_path,
         calibration_cases_path,
     )
+    dataset_evidence = _verify_development_and_calibration_dataset(
+        dataset_manifest_path,
+        development_cases_path=development_cases_path,
+        calibration_cases_path=calibration_cases_path,
+    )
     if limit_cases is not None:
         cases = cases[:limit_cases]
     configuration = {
@@ -131,6 +141,8 @@ def run_v2_classifier_capture(
         "endpoint_host": endpoint_host,
         "models": {"classifier": config.classifier_model},
         "request_policy": openai_request_policy(config),
+        "dataset_version": dataset_evidence["dataset_version"],
+        "dataset_manifest_sha256": dataset_evidence["dataset_manifest_sha256"],
         "prompt_versions": {"classifier": GUARD_CLASSIFIER_PROMPT_VERSION},
         "thresholds": {
             "guard_similarity": _policy_thresholds(policy_path),
@@ -227,11 +239,17 @@ def evaluate_v2_classifier_capture(
     development_cases_path: Path,
     calibration_cases_path: Path,
     predictions_path: Path,
+    dataset_manifest_path: Path = DEFAULT_DATASET_MANIFEST_PATH,
     limit_cases: int | None = None,
 ) -> dict[str, object]:
     cases = build_balanced_classifier_benchmark(
         development_cases_path,
         calibration_cases_path,
+    )
+    dataset_evidence = _verify_development_and_calibration_dataset(
+        dataset_manifest_path,
+        development_cases_path=development_cases_path,
+        calibration_cases_path=calibration_cases_path,
     )
     if limit_cases is not None:
         if limit_cases < 0:
@@ -256,6 +274,8 @@ def evaluate_v2_classifier_capture(
     )
     return {
         "evidence_scope": "v2_balanced_classifier_component_benchmark",
+        "dataset_version": dataset_evidence["dataset_version"],
+        "dataset_manifest_sha256": dataset_evidence["dataset_manifest_sha256"],
         "combined": raw_reports["combined"],
         "development": raw_reports["development"],
         "calibration": raw_reports["calibration"],
@@ -282,6 +302,7 @@ def prepare_inhouse_bge(
     index_dir: Path,
     cache_path: Path,
     manifest_path: Path,
+    dataset_manifest_path: Path = DEFAULT_DATASET_MANIFEST_PATH,
     chunk_size: int = 650,
     chunk_overlap: int = 80,
     embedder=None,
@@ -293,6 +314,11 @@ def prepare_inhouse_bge(
     calibration = load_eval_cases(calibration_cases_path)
     _require_split(development, "development")
     _require_split(calibration, "calibration")
+    dataset_evidence = _verify_development_and_calibration_dataset(
+        dataset_manifest_path,
+        development_cases_path=development_cases_path,
+        calibration_cases_path=calibration_cases_path,
+    )
 
     configuration = {
         "schema_version": 1,
@@ -302,6 +328,8 @@ def prepare_inhouse_bge(
         "endpoint_host": endpoint_host,
         "models": {"embedding": config.embedding_model},
         "request_policy": openai_request_policy(config),
+        "dataset_version": dataset_evidence["dataset_version"],
+        "dataset_manifest_sha256": dataset_evidence["dataset_manifest_sha256"],
         "corpus_sha256": _file_sha256(corpus_path),
         "split_sha256": {
             "development": _file_sha256(development_cases_path),
@@ -326,6 +354,7 @@ def prepare_inhouse_bge(
         cached_embedder = create_embedder(
             "openai",
             model=config.embedding_model,
+            model_config=config,
             allow_remote_models=config.allow_remote_models,
             env_file=config.env_file,
             cache_path=cache_path,
@@ -381,6 +410,31 @@ def prepare_inhouse_bge(
     }
     _write_manifest(manifest_path, manifest)
     return manifest
+
+
+def _verify_development_and_calibration_dataset(
+    manifest_path: Path,
+    *,
+    development_cases_path: Path,
+    calibration_cases_path: Path,
+) -> dict[str, str]:
+    development = verify_dataset_split_manifest(
+        manifest_path,
+        split="development",
+        split_path=development_cases_path,
+    )
+    calibration = verify_dataset_split_manifest(
+        manifest_path,
+        split="calibration",
+        split_path=calibration_cases_path,
+    )
+    if (
+        development["dataset_version"] != calibration["dataset_version"]
+        or development["dataset_manifest_sha256"]
+        != calibration["dataset_manifest_sha256"]
+    ):
+        raise ValueError("evaluation splits do not belong to the same dataset manifest")
+    return development
 
 
 def _capture_one(case: EvalCase, classifier, *, provider: str) -> ClassifierPrediction:

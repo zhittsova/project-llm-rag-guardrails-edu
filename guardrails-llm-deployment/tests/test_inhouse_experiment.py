@@ -160,6 +160,8 @@ def test_v2_capture_resumes_and_writes_safe_manifest(tmp_path: Path, monkeypatch
         "max_transport_retries": 1,
     }
     assert second["split_case_counts"] == {"development": 3}
+    assert second["dataset_version"] == "milestone3-v2"
+    assert len(second["dataset_manifest_sha256"]) == 64
     serialized = manifest.read_text(encoding="utf-8")
     assert "fixture-key" not in serialized
     assert "https://" not in serialized
@@ -441,7 +443,45 @@ def test_prepare_inhouse_bge_indexes_only_development_and_calibration(
     assert manifest["index"]["chunks"] > 0
     assert manifest["retrieval_evidence_threshold"] is None
     assert manifest["retrieval_routes"] == [ACADEMIC_INTEGRITY_RETRIEVAL_QUERY]
+    assert manifest["dataset_version"] == "milestone3-v2"
+    assert len(manifest["dataset_manifest_sha256"]) == 64
     assert manifest_path.exists()
     assert ACADEMIC_INTEGRITY_RETRIEVAL_QUERY in {
         text for batch in embedder.calls for text in batch
     }
+
+
+def test_prepare_inhouse_bge_propagates_remote_request_policy(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _configure_inhouse(monkeypatch)
+    config = OpenAIModelConfig(
+        embedding_model="BAAI/bge-m3",
+        request_timeout_seconds=12.5,
+        max_transport_retries=0,
+        allow_remote_models=True,
+    )
+    observed = {}
+
+    def fake_create_embedder(*_args, **kwargs):
+        observed.update(kwargs)
+        return FakeBgeEmbedder()
+
+    monkeypatch.setattr(
+        "guardrails_llm.inhouse_experiment.create_embedder",
+        fake_create_embedder,
+    )
+
+    prepare_inhouse_bge(
+        config=config,
+        development_cases_path=DEVELOPMENT,
+        calibration_cases_path=CALIBRATION,
+        corpus_path=CORPUS,
+        policy_path=ROOT / "data" / "guardrail_policy_bge_m3.toml",
+        index_dir=tmp_path / "index",
+        cache_path=tmp_path / "cache.jsonl",
+        manifest_path=tmp_path / "manifest.json",
+    )
+
+    assert observed["model_config"] is config

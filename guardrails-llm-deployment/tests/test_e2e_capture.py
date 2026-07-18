@@ -119,6 +119,8 @@ def test_calibration_capture_is_resumable_across_both_scenarios(
         "max_transport_retries": 1,
     }
     assert first["embedding_cache_mode"] == "read_only"
+    assert first["dataset_version"] == "milestone3-v2"
+    assert len(first["dataset_manifest_sha256"]) == 64
     assert first["expected_disposition_counts"] == {
         "abstain": 1,
         "answer": 1,

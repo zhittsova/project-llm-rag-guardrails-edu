@@ -13,6 +13,10 @@ from pathlib import Path
 from .confidence_intervals import bootstrap_confidence_intervals
 from .embeddings import create_embedder
 from .evaluation import EvalCase, EvalResult, load_eval_cases, run_evaluation, summarize
+from .evaluation_dataset import (
+    DEFAULT_DATASET_MANIFEST_PATH,
+    verify_dataset_split_manifest,
+)
 from .dispositions import ResponseDisposition
 from .guardrail_policy import load_guardrail_policy
 from .model_config import (
@@ -40,6 +44,8 @@ _CAPTURE_CONFIGURATION_KEYS = (
     "scenarios",
     "models",
     "request_policy",
+    "dataset_version",
+    "dataset_manifest_sha256",
     "embedding_cache_mode",
     "prompt_versions",
     "thresholds",
@@ -73,6 +79,7 @@ def run_calibration_e2e_capture(
     limit_cases: int | None = None,
     max_concurrency: int = 1,
     assistants: dict[str, object] | None = None,
+    dataset_manifest_path: Path = DEFAULT_DATASET_MANIFEST_PATH,
 ) -> dict[str, object]:
     if not math.isfinite(evidence_min_score):
         raise ValueError("evidence_min_score must be finite")
@@ -90,6 +97,11 @@ def run_calibration_e2e_capture(
     cases = load_eval_cases(calibration_cases_path)
     if any(case.split != "calibration" for case in cases):
         raise ValueError("end-to-end capture requires a calibration split dataset")
+    dataset_evidence = verify_dataset_split_manifest(
+        dataset_manifest_path,
+        split="calibration",
+        split_path=calibration_cases_path,
+    )
     if limit_cases is not None:
         cases = _select_stratified_cases(cases, limit_cases)
 
@@ -107,6 +119,8 @@ def run_calibration_e2e_capture(
             "entailment": config.entailment_model,
         },
         "request_policy": openai_request_policy(config),
+        "dataset_version": dataset_evidence["dataset_version"],
+        "dataset_manifest_sha256": dataset_evidence["dataset_manifest_sha256"],
         "embedding_cache_mode": "read_only",
         "prompt_versions": {
             "answer": ANSWER_PROMPT_VERSION,
@@ -233,11 +247,17 @@ def evaluate_calibration_e2e_capture(
     calibration_cases_path: Path,
     output_path: Path,
     manifest_path: Path | None = None,
+    dataset_manifest_path: Path = DEFAULT_DATASET_MANIFEST_PATH,
     limit_cases: int | None = None,
 ) -> dict[str, object]:
     cases = load_eval_cases(calibration_cases_path)
     if any(case.split != "calibration" for case in cases):
         raise ValueError("end-to-end evaluation requires a calibration split dataset")
+    dataset_evidence = verify_dataset_split_manifest(
+        dataset_manifest_path,
+        split="calibration",
+        split_path=calibration_cases_path,
+    )
     if limit_cases is not None:
         if limit_cases < 0:
             raise ValueError("limit_cases must be zero or greater")
@@ -249,6 +269,7 @@ def evaluate_calibration_e2e_capture(
         manifest,
         calibration_cases_path=calibration_cases_path,
         cases=cases,
+        dataset_evidence=dataset_evidence,
     )
     rows = _load_rows(output_path)
     expected_keys = {(scenario, case.case_id) for scenario in E2E_SCENARIOS for case in cases}
@@ -430,6 +451,7 @@ def _validate_capture_manifest(
     *,
     calibration_cases_path: Path,
     cases: list[EvalCase],
+    dataset_evidence: dict[str, str],
 ) -> None:
     if any(key not in manifest for key in _CAPTURE_CONFIGURATION_KEYS):
         raise ValueError("capture manifest is missing configuration fields")
@@ -441,6 +463,13 @@ def _validate_capture_manifest(
         raise ValueError("capture manifest configuration fingerprint does not match")
     if manifest["calibration_split_sha256"] != _file_sha256(calibration_cases_path):
         raise ValueError("capture manifest calibration split hash does not match")
+    if manifest["dataset_version"] != dataset_evidence["dataset_version"]:
+        raise ValueError("capture manifest dataset version does not match")
+    if (
+        manifest["dataset_manifest_sha256"]
+        != dataset_evidence["dataset_manifest_sha256"]
+    ):
+        raise ValueError("capture manifest dataset hash does not match")
 
     selected_case_ids = [case.case_id for case in cases]
     if manifest["selected_case_ids"] != selected_case_ids:

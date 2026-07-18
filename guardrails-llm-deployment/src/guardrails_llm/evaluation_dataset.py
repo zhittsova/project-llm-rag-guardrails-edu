@@ -17,6 +17,9 @@ DATASET_FILENAMES = {
     "annotations": "eval_cases_milestone3_v2_holdout_annotations.jsonl",
     "manifest": "eval_cases_milestone3_v2_manifest.json",
 }
+DEFAULT_DATASET_MANIFEST_PATH = (
+    Path(__file__).resolve().parents[2] / "data" / DATASET_FILENAMES["manifest"]
+)
 EXPECTED_SPLIT_COUNTS = {"development": 1200, "calibration": 400, "holdout": 400}
 EXPECTED_DISPOSITION_COUNTS = {
     ResponseDisposition.ANSWER: 500,
@@ -492,6 +495,41 @@ def load_evaluation_cases_for_run(
         require_reviewed_holdout=True,
     )
     return updated_holdout
+
+
+def verify_dataset_split_manifest(
+    manifest_path: Path,
+    *,
+    split: str,
+    split_path: Path,
+) -> dict[str, str]:
+    if split not in EXPECTED_SPLIT_COUNTS:
+        raise DatasetValidationError(f"unknown evaluation split: {split}")
+    manifest_bytes = manifest_path.read_bytes()
+    try:
+        manifest = json.loads(manifest_bytes)
+        entry = manifest["files"][split]
+        expected_hash = str(entry["sha256"])
+        authoritative_path = manifest_path.parent / str(entry["path"])
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise DatasetValidationError("invalid evaluation dataset manifest") from exc
+    if authoritative_path.resolve() != split_path.resolve():
+        raise DatasetValidationError(
+            f"{split} experiments must use the exact versioned file from the dataset manifest"
+        )
+    actual_hash = sha256(split_path.read_bytes()).hexdigest()
+    if actual_hash != expected_hash:
+        raise DatasetValidationError(f"{split} file does not match its frozen SHA-256")
+    cases = load_eval_cases(split_path)
+    if len(cases) != EXPECTED_SPLIT_COUNTS[split] or any(
+        case.split != split for case in cases
+    ):
+        raise DatasetValidationError(f"{split} file does not match its declared split")
+    return {
+        "dataset_version": str(manifest.get("dataset_version", "")),
+        "dataset_manifest_sha256": sha256(manifest_bytes).hexdigest(),
+        "split_sha256": actual_hash,
+    }
 
 
 def _load_dataset_state(

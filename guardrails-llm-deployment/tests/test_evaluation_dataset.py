@@ -19,6 +19,7 @@ from guardrails_llm.evaluation_dataset import (
     load_and_validate_evaluation_dataset,
     load_evaluation_cases_for_run,
     validate_evaluation_dataset,
+    verify_dataset_split_manifest,
     write_evaluation_dataset,
 )
 
@@ -293,6 +294,39 @@ def test_writer_is_deterministic_and_manifest_hashes_match(tmp_path: Path) -> No
     assert manifest["total_cases"] == 2000
     assert manifest["holdout_frozen"] is True
     assert manifest["holdout_review_status"] == "pending_double_review"
+
+
+def test_dataset_split_manifest_binds_exact_versioned_file(tmp_path: Path) -> None:
+    write_evaluation_dataset(tmp_path, replace_frozen_holdout=True)
+    manifest_path = tmp_path / DATASET_FILENAMES["manifest"]
+    development_path = tmp_path / DATASET_FILENAMES["development"]
+
+    evidence = verify_dataset_split_manifest(
+        manifest_path,
+        split="development",
+        split_path=development_path,
+    )
+
+    assert evidence["dataset_version"] == "milestone3-v2"
+    assert len(evidence["dataset_manifest_sha256"]) == 64
+    assert evidence["split_sha256"] == json.loads(
+        manifest_path.read_text(encoding="utf-8")
+    )["files"]["development"]["sha256"]
+
+
+def test_dataset_split_manifest_rejects_relabelled_copy(tmp_path: Path) -> None:
+    write_evaluation_dataset(tmp_path, replace_frozen_holdout=True)
+    manifest_path = tmp_path / DATASET_FILENAMES["manifest"]
+    development_path = tmp_path / DATASET_FILENAMES["development"]
+    copied_path = tmp_path / "copied-development.jsonl"
+    copied_path.write_bytes(development_path.read_bytes())
+
+    with pytest.raises(DatasetValidationError, match="exact versioned file"):
+        verify_dataset_split_manifest(
+            manifest_path,
+            split="development",
+            split_path=copied_path,
+        )
 
 
 def test_writer_preserves_existing_human_annotations(tmp_path: Path) -> None:
