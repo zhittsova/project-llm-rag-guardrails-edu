@@ -145,6 +145,10 @@ class VectorRetriever:
         )
         self._min_score = min_score
 
+    @property
+    def indexed_chunks(self) -> int:
+        return self._collection.count()
+
     def search(
         self,
         query: str,
@@ -156,7 +160,7 @@ class VectorRetriever:
         if not tokenize(query):
             return []
 
-        count = self._collection.count()
+        count = self.indexed_chunks
         if count == 0:
             return []
 

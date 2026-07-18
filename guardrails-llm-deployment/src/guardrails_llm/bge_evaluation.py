@@ -150,7 +150,7 @@ def _score_cases(
                 retrieval_query,
                 course_id=course_id,
                 allowed_visibility=set(policy.allowed_visibility),
-                top_k=top_k * 4,
+                top_k=retriever.indexed_chunks,
             )
             if retrieval_query is not None
             else []
@@ -175,6 +175,9 @@ def _score_cases(
                 "expected_doc_ids": list(case.expected_doc_ids or []),
                 "retrieved_doc_ids": retrieved_doc_ids,
                 "ranked_doc_ids": ranked_doc_ids,
+                "document_ranking_candidate_limit": (
+                    retriever.indexed_chunks if retrieval_attempted else 0
+                ),
                 "retrieval_scores": [
                     round(float(score), 6) for _chunk, score in runtime_matches
                 ],
@@ -197,19 +200,21 @@ def _score_cases(
 
 
 def _summarize_technique(rows: list[dict[str, object]]) -> dict[str, object]:
-    development = [
+    development = [row for row in rows if row["split"] == "development"]
+    calibration = [row for row in rows if row["split"] == "calibration"]
+    retrieval_development = [
         row
-        for row in rows
-        if row["split"] == "development" and row["retrieval_attempted"] is True
+        for row in development
+        if row["retrieval_attempted"] is True
     ]
-    calibration = [
+    retrieval_calibration = [
         row
-        for row in rows
-        if row["split"] == "calibration" and row["retrieval_attempted"] is True
+        for row in calibration
+        if row["retrieval_attempted"] is True
     ]
     retrieval_threshold = _select_threshold(
-        [float(row["top_retrieval_score"]) for row in development],
-        [bool(row["evidence_available"]) for row in development],
+        [float(row["top_retrieval_score"]) for row in retrieval_development],
+        [bool(row["evidence_available"]) for row in retrieval_development],
     )
     guard_triggers = tuple(development[0]["guard_similarity_scores"]) if development else ()
     guard_summary = {}
@@ -234,8 +239,14 @@ def _summarize_technique(rows: list[dict[str, object]]) -> dict[str, object]:
     return {
         "retrieval": {
             "selected_threshold": retrieval_threshold,
-            "development": _retrieval_metrics(development, retrieval_threshold),
-            "calibration": _retrieval_metrics(calibration, retrieval_threshold),
+            "development": _retrieval_metrics(
+                retrieval_development,
+                retrieval_threshold,
+            ),
+            "calibration": _retrieval_metrics(
+                retrieval_calibration,
+                retrieval_threshold,
+            ),
         },
         "guard_similarity": guard_summary,
     }

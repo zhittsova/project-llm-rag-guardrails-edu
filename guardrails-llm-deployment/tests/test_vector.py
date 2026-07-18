@@ -177,6 +177,7 @@ def test_vector_index_can_record_openai_embedding_provider_with_fake_embedder(tm
         embedder=FakeEmbedder(),
     )
 
+    assert retriever.indexed_chunks == stats.chunks
     results = retriever.search("retrieval augmented generation")
 
     assert stats.embedding_provider == "openai"

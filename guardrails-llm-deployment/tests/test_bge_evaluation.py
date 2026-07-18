@@ -90,6 +90,15 @@ def test_bge_evaluation_uses_common_dev_and_calibration_splits(
             "pii",
             "academic_integrity",
         }
+        for guard in technique["guard_similarity"].values():
+            assert guard["development"]["total"] == 1200
+            assert guard["calibration"]["total"] == 400
+            assert guard["development"]["true_positive"] + guard["development"][
+                "false_negative"
+            ] > 0
+            assert guard["calibration"]["true_positive"] + guard["calibration"][
+                "false_negative"
+            ] > 0
 
     academic = next(
         row
@@ -105,6 +114,8 @@ def test_bge_evaluation_uses_common_dev_and_calibration_splits(
         "academic integrity graded work complete submissions hints similar examples"
     )
     assert academic["retrieval_attempted"] is True
+    assert academic["document_ranking_candidate_limit"] == 782
+    assert len(academic["ranked_doc_ids"]) <= 3
     assert blocked["retrieval_attempted"] is False
     assert blocked["retrieval_query"] is None
     assert summary["runtime_retriever_min_score"] == 0.05
