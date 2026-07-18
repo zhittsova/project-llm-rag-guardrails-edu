@@ -720,6 +720,23 @@ def _comparison_scenarios(args, policy):
         output_fuzzy_rules=(),
         context_fuzzy_rules=(),
     )
+    fuzzy_policy = replace(
+        policy,
+        input_rules=(),
+        input_similarity_rules=(),
+        output_rules=(),
+        context_rules=(),
+    )
+    similarity_policy = replace(
+        policy,
+        input_rules=(),
+        input_fuzzy_rules=(),
+        output_rules=(),
+        output_fuzzy_rules=(),
+        context_rules=(),
+        context_fuzzy_rules=(),
+    )
+    shared_controls = ["metadata_filter", "citation_requirement"]
     scenarios = [
         (
             "baseline",
@@ -732,6 +749,7 @@ def _comparison_scenarios(args, policy):
                 "latency_expected": "lowest",
                 "robustness_expected": "lowest",
                 "implementation_effort": "low",
+                "shared_controls": [],
             },
         ),
         (
@@ -751,6 +769,43 @@ def _comparison_scenarios(args, policy):
                 "latency_expected": "low",
                 "robustness_expected": "medium_on_known_patterns",
                 "implementation_effort": "low-medium",
+                "shared_controls": shared_controls,
+            },
+        ),
+        (
+            "fuzzy_plus_shared_controls",
+            "guardrailed",
+            fuzzy_policy,
+            "none",
+            {
+                "technique": "fuzzy rules with shared metadata and citation controls",
+                "guardrail_layers": [
+                    "text_normalization",
+                    "fuzzy_input",
+                    "context_fuzzy_sanitization",
+                    "output_fuzzy_check",
+                ],
+                "latency_expected": "low-medium",
+                "robustness_expected": "medium_on_typos_and_near_matches",
+                "implementation_effort": "medium",
+                "shared_controls": shared_controls,
+            },
+        ),
+        (
+            "similarity_plus_shared_controls",
+            "guardrailed",
+            similarity_policy,
+            "none",
+            {
+                "technique": (
+                    "embedding similarity rules with shared metadata and "
+                    "citation controls"
+                ),
+                "guardrail_layers": ["embedding_similarity_input"],
+                "latency_expected": "provider-dependent",
+                "robustness_expected": "medium_on_semantic_variants",
+                "implementation_effort": "medium-high",
+                "shared_controls": shared_controls,
             },
         ),
         (
@@ -771,6 +826,7 @@ def _comparison_scenarios(args, policy):
                 "latency_expected": "low-medium",
                 "robustness_expected": "medium-high_on_typos",
                 "implementation_effort": "medium",
+                "shared_controls": shared_controls,
             },
         ),
         (
@@ -793,6 +849,7 @@ def _comparison_scenarios(args, policy):
                 "latency_expected": "low-medium",
                 "robustness_expected": "medium-high",
                 "implementation_effort": "medium-high",
+                "shared_controls": shared_controls,
             },
         ),
     ]
@@ -819,6 +876,7 @@ def _comparison_scenarios(args, policy):
                     "latency_expected": "highest",
                     "robustness_expected": "highest_on_paraphrases",
                     "implementation_effort": "high",
+                    "shared_controls": shared_controls,
                 },
             )
         )
