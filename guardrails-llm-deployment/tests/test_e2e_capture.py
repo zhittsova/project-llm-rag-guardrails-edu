@@ -1,5 +1,7 @@
 import json
 from pathlib import Path
+import threading
+import time
 
 import pytest
 
@@ -34,6 +36,22 @@ class FakeAssistant:
             disposition="abstain",
             grounding_supported=False,
         )
+
+
+class ConcurrentAssistant(FakeAssistant):
+    def __init__(self, barrier: threading.Barrier, active: list[int]) -> None:
+        super().__init__()
+        self._barrier = barrier
+        self._active = active
+
+    def answer(self, question: str) -> AssistantResponse:
+        self._active[0] += 1
+        self._active[1] = max(self._active[1], self._active[0])
+        self._barrier.wait(timeout=2)
+        time.sleep(0.01)
+        response = super().answer(question)
+        self._active[0] -= 1
+        return response
 
 
 def _config() -> OpenAIModelConfig:
@@ -129,6 +147,44 @@ def test_calibration_capture_rejects_holdout_dataset(tmp_path: Path, monkeypatch
                 "complete_inhouse_hybrid": FakeAssistant(),
             },
         )
+
+
+def test_calibration_capture_uses_separate_assistants_for_bounded_concurrency(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _env(monkeypatch)
+    barrier = threading.Barrier(2)
+    active = [0, 0]
+
+    def build_assistants(**_kwargs):
+        return {
+            "qwen_classifier_only": ConcurrentAssistant(barrier, active),
+            "complete_inhouse_hybrid": ConcurrentAssistant(barrier, active),
+        }
+
+    monkeypatch.setattr(
+        "guardrails_llm.e2e_capture._build_assistants",
+        build_assistants,
+    )
+
+    manifest = run_calibration_e2e_capture(
+        config=_config(),
+        calibration_cases_path=CALIBRATION,
+        corpus_path=CORPUS,
+        policy_path=POLICY,
+        index_dir=tmp_path / "unused-index",
+        cache_path=tmp_path / "unused-cache.jsonl",
+        output_path=tmp_path / "e2e.jsonl",
+        manifest_path=tmp_path / "manifest.json",
+        evidence_min_score=0.42,
+        limit_cases=2,
+        max_concurrency=2,
+    )
+
+    assert active[1] == 2
+    assert manifest["max_concurrency"] == 2
+    assert manifest["completed_runs"] == 4
 
 
 def test_e2e_capture_evaluation_keeps_failures_visible(tmp_path: Path, monkeypatch) -> None:

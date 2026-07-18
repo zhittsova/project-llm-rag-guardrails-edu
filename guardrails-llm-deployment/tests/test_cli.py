@@ -598,6 +598,8 @@ def test_capture_inhouse_calibration_requires_explicit_threshold(
             "0.42",
             "--limit-cases",
             "2",
+            "--max-concurrency",
+            "2",
             "--output",
             str(tmp_path / "capture.jsonl"),
             "--manifest",
@@ -613,6 +615,7 @@ def test_capture_inhouse_calibration_requires_explicit_threshold(
     assert config.classifier_model == "Qwen/Qwen3.6-35B-A3B"
     assert config.entailment_model == "Qwen/Qwen3.6-35B-A3B"
     assert captured_kwargs["evidence_min_score"] == 0.42
+    assert captured_kwargs["max_concurrency"] == 2
     assert json.loads(capsys.readouterr().out)["completed_runs"] == 4
 
 

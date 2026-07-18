@@ -502,6 +502,7 @@ def main() -> None:
     )
     e2e_capture_parser.add_argument("--course-id", default="python-intro")
     e2e_capture_parser.add_argument("--limit-cases", type=int)
+    e2e_capture_parser.add_argument("--max-concurrency", type=int, default=1)
     e2e_capture_parser.add_argument(
         "--output",
         type=Path,
@@ -839,6 +840,7 @@ def main() -> None:
                 entailment_min_confidence=args.entailment_min_confidence,
                 course_id=args.course_id,
                 limit_cases=args.limit_cases,
+                max_concurrency=args.max_concurrency,
             )
         except (
             OSError,

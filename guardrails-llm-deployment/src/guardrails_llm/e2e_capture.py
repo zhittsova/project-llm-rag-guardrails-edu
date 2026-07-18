@@ -4,13 +4,14 @@ import json
 import math
 import os
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 
 from .embeddings import create_embedder
-from .evaluation import EvalResult, load_eval_cases, run_evaluation, summarize
+from .evaluation import EvalCase, EvalResult, load_eval_cases, run_evaluation, summarize
 from .dispositions import ResponseDisposition
 from .guardrail_policy import load_guardrail_policy
 from .model_config import (
@@ -45,6 +46,7 @@ def run_calibration_e2e_capture(
     entailment_min_confidence: float = 0.80,
     course_id: str = "python-intro",
     limit_cases: int | None = None,
+    max_concurrency: int = 1,
     assistants: dict[str, object] | None = None,
 ) -> dict[str, object]:
     if not math.isfinite(evidence_min_score):
@@ -53,6 +55,10 @@ def run_calibration_e2e_capture(
         raise ValueError("entailment_min_confidence must be between zero and one")
     if limit_cases is not None and limit_cases < 0:
         raise ValueError("limit_cases must be zero or greater")
+    if max_concurrency <= 0:
+        raise ValueError("max_concurrency must be greater than zero")
+    if assistants is not None and max_concurrency != 1:
+        raise ValueError("custom assistants require max_concurrency=1")
     ensure_remote_models_allowed(config)
     ensure_openai_api_key(config)
     endpoint_host = ensure_inhouse_endpoint(config.env_file)
@@ -90,6 +96,7 @@ def run_calibration_e2e_capture(
         "policy_sha256": _file_sha256(policy_path),
         "selection_sha256": _selection_sha256(cases),
         "selected_cases": len(cases),
+        "max_concurrency": max_concurrency,
         "expected_disposition_counts": dict(
             sorted(Counter(case.resolved_expected_behavior().value for case in cases).items())
         ),
@@ -110,67 +117,86 @@ def run_calibration_e2e_capture(
     if unknown:
         raise ValueError("end-to-end output contains unknown scenario or case IDs")
 
-    if assistants is None:
-        assistants = _build_assistants(
-            config=config,
-            corpus_path=corpus_path,
-            policy_path=policy_path,
-            index_dir=index_dir,
-            cache_path=cache_path,
-            evidence_min_score=evidence_min_score,
-            entailment_min_confidence=entailment_min_confidence,
-            course_id=course_id,
-        )
-    if set(assistants) != set(E2E_SCENARIOS):
+    assistant_sets = (
+        [assistants]
+        if assistants is not None
+        else [
+            _build_assistants(
+                config=config,
+                corpus_path=corpus_path,
+                policy_path=policy_path,
+                index_dir=index_dir,
+                cache_path=cache_path,
+                evidence_min_score=evidence_min_score,
+                entailment_min_confidence=entailment_min_confidence,
+                course_id=course_id,
+            )
+            for _worker in range(max_concurrency)
+        ]
+    )
+    if any(set(worker_assistants) != set(E2E_SCENARIOS) for worker_assistants in assistant_sets):
         raise ValueError("assistants must provide both end-to-end scenarios")
 
     started_at = (existing_manifest or {}).get("started_at", _utc_now())
     resumed_runs = len(rows)
     manifest = _manifest(configuration, fingerprint, started_at, rows)
     _write_manifest(manifest_path, manifest)
-    for scenario in E2E_SCENARIOS:
-        assistant = assistants[scenario]
-        for case in cases:
-            key = (scenario, case.case_id)
-            if key in rows:
-                continue
-            try:
-                result = run_evaluation(assistant, [case])[0]
-                model_error = _result_model_error(result)
-                if model_error:
-                    row = {
-                        "schema_version": 1,
-                        "scenario": scenario,
-                        "case_id": case.case_id,
-                        "status": "error",
-                        "error": model_error,
-                        "result": None,
-                    }
-                else:
-                    row = {
-                        "schema_version": 1,
-                        "scenario": scenario,
-                        "case_id": case.case_id,
-                        "status": "success",
-                        "error": None,
-                        "result": asdict(result),
-                    }
-            except Exception as exc:
-                row = {
-                    "schema_version": 1,
-                    "scenario": scenario,
-                    "case_id": case.case_id,
-                    "status": "error",
-                    "error": f"capture_error:{type(exc).__name__}",
-                    "result": None,
-                }
-            _append_row(output_path, row)
-            rows[key] = row
-            manifest = _manifest(configuration, fingerprint, started_at, rows)
-            _write_manifest(manifest_path, manifest)
+    pending = [
+        (scenario, case)
+        for scenario in E2E_SCENARIOS
+        for case in cases
+        if (scenario, case.case_id) not in rows
+    ]
+    with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
+        for start in range(0, len(pending), max_concurrency):
+            batch = pending[start : start + max_concurrency]
+            work = [
+                (scenario, case, assistant_sets[index][scenario])
+                for index, (scenario, case) in enumerate(batch)
+            ]
+            captured = executor.map(_capture_one_run, work)
+            for row in captured:
+                key = (str(row["scenario"]), str(row["case_id"]))
+                _append_row(output_path, row)
+                rows[key] = row
+                manifest = _manifest(configuration, fingerprint, started_at, rows)
+                _write_manifest(manifest_path, manifest)
     manifest["resumed_runs"] = resumed_runs
     _write_manifest(manifest_path, manifest)
     return manifest
+
+
+def _capture_one_run(work: tuple[str, EvalCase, object]) -> dict[str, object]:
+    scenario, case, assistant = work
+    try:
+        result = run_evaluation(assistant, [case])[0]
+        model_error = _result_model_error(result)
+        if model_error:
+            return {
+                "schema_version": 1,
+                "scenario": scenario,
+                "case_id": case.case_id,
+                "status": "error",
+                "error": model_error,
+                "result": None,
+            }
+        return {
+            "schema_version": 1,
+            "scenario": scenario,
+            "case_id": case.case_id,
+            "status": "success",
+            "error": None,
+            "result": asdict(result),
+        }
+    except Exception as exc:
+        return {
+            "schema_version": 1,
+            "scenario": scenario,
+            "case_id": case.case_id,
+            "status": "error",
+            "error": f"capture_error:{type(exc).__name__}",
+            "result": None,
+        }
 
 
 def evaluate_calibration_e2e_capture(
