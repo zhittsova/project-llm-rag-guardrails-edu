@@ -5,15 +5,18 @@ from pathlib import Path
 import pytest
 
 from guardrails_llm.dispositions import ResponseDisposition
-from guardrails_llm.evaluation import EvalCase
+from guardrails_llm.evaluation import EvalCase, load_eval_cases
 from guardrails_llm.evaluation_dataset import (
     DATASET_FILENAMES,
     GUARDRAIL_FAMILIES,
+    TOPICS,
     DatasetValidationError,
     apply_holdout_annotations,
     cohens_kappa,
+    finalize_holdout_annotations,
     generate_evaluation_dataset,
     load_and_validate_evaluation_dataset,
+    load_evaluation_cases_for_run,
     validate_evaluation_dataset,
     write_evaluation_dataset,
 )
@@ -58,6 +61,21 @@ def test_generated_dataset_keeps_parent_families_inside_one_split() -> None:
             parents[case.parent_case_id].add(split)
 
     assert all(len(splits) == 1 for splits in parents.values())
+    assert Counter(next(iter(splits)) for splits in parents.values()) == {
+        "development": 15,
+        "calibration": 5,
+        "holdout": 5,
+    }
+
+
+def test_german_cases_use_german_topic_names() -> None:
+    german_topics = {slug: topic_de for slug, _topic, topic_de, _doc, _claim in TOPICS}
+
+    for cases in _cases_by_split().values():
+        for case in cases:
+            if case.language == "de":
+                slug = case.parent_case_id.removeprefix("m3v2-")
+                assert german_topics[slug].casefold() in case.question.casefold()
 
 
 def test_generated_dataset_covers_each_guardrail_family_in_every_split() -> None:
@@ -86,6 +104,17 @@ def test_generated_answers_cover_course_qa_and_guardrail_near_misses() -> None:
 
     assert Counter(case.family_id for case in answers)["course_qa"] == 250
     assert sum(case.coverage_role == "benign_near_miss" for case in answers) == 250
+
+
+def test_boundary_control_is_not_used_for_redirect_attacks() -> None:
+    redirects = [
+        case
+        for cases in _cases_by_split().values()
+        for case in cases
+        if case.resolved_expected_behavior() is ResponseDisposition.REDIRECT
+    ]
+
+    assert all(case.coverage_role != "boundary_control" for case in redirects)
 
 
 def test_generated_evidence_references_real_python_course_documents() -> None:
@@ -320,3 +349,70 @@ def test_file_validator_detects_modified_frozen_holdout(tmp_path: Path) -> None:
 
     with pytest.raises(DatasetValidationError, match="holdout.*SHA-256"):
         load_and_validate_evaluation_dataset(tmp_path)
+
+
+def _complete_holdout_annotations(tmp_path: Path) -> None:
+    holdout = {
+        case.case_id: case
+        for case in load_eval_cases(tmp_path / DATASET_FILENAMES["holdout"])
+    }
+    annotation_path = tmp_path / DATASET_FILENAMES["annotations"]
+    annotations = [json.loads(line) for line in annotation_path.read_text().splitlines()]
+    for index, row in enumerate(annotations):
+        case = holdout[row["case_id"]]
+        behavior = case.resolved_expected_behavior().value
+        evidence = case.evidence_available
+        if index == 0:
+            behavior = "block"
+            evidence = False
+        row.update(
+            {
+                "annotator_a_id": "reviewer-1",
+                "annotator_b_id": "reviewer-2",
+                "adjudicator_id": "reviewer-1",
+                "annotator_a_behavior": behavior,
+                "annotator_b_behavior": behavior,
+                "adjudicated_behavior": behavior,
+                "annotator_a_evidence_available": evidence,
+                "annotator_b_evidence_available": evidence,
+                "adjudicated_evidence_available": evidence,
+            }
+        )
+    annotation_path.write_text(
+        "".join(json.dumps(row, separators=(",", ":")) + "\n" for row in annotations)
+    )
+
+
+def test_unsealed_holdout_cannot_run_even_after_review(tmp_path: Path) -> None:
+    write_evaluation_dataset(tmp_path)
+    _complete_holdout_annotations(tmp_path)
+
+    with pytest.raises(DatasetValidationError, match="sealed"):
+        load_evaluation_cases_for_run(
+            tmp_path / DATASET_FILENAMES["holdout"],
+        )
+
+
+def test_finalized_holdout_uses_adjudicated_labels(tmp_path: Path) -> None:
+    write_evaluation_dataset(tmp_path)
+    _complete_holdout_annotations(tmp_path)
+
+    manifest = finalize_holdout_annotations(tmp_path)
+    cases = load_evaluation_cases_for_run(tmp_path / DATASET_FILENAMES["holdout"])
+
+    assert manifest["annotation_sealed"] is True
+    assert manifest["holdout_review_status"] == "adjudicated"
+    assert cases[0].annotation_status == "adjudicated"
+    assert cases[0].resolved_expected_behavior() is ResponseDisposition.BLOCK
+    assert cases[0].evidence_available is False
+
+
+def test_sealed_annotation_tampering_is_detected(tmp_path: Path) -> None:
+    write_evaluation_dataset(tmp_path)
+    _complete_holdout_annotations(tmp_path)
+    finalize_holdout_annotations(tmp_path)
+    annotation_path = tmp_path / DATASET_FILENAMES["annotations"]
+    annotation_path.write_text(annotation_path.read_text() + "\n")
+
+    with pytest.raises(DatasetValidationError, match="annotation.*SHA-256"):
+        load_evaluation_cases_for_run(tmp_path / DATASET_FILENAMES["holdout"])

@@ -10,13 +10,14 @@ from .corpus import default_data_path, validate_corpus
 from .course_corpus import default_course_output_path, default_course_source_path, normalize_course_corpus
 from .embeddings import CachedEmbedder, create_embedder
 from .evaluation import (
-    load_eval_cases,
+    EvalCase,
     results_to_json,
     run_evaluation,
     select_eval_split,
     summarize,
     write_results_csv,
 )
+from .evaluation_dataset import DatasetValidationError, load_evaluation_cases_for_run
 from .guardrail_policy import GuardrailPolicy, default_policy_path, load_guardrail_policy
 from .guard_text import normalize_guard_text
 from .judging import judge_results, judgments_to_json, summarize_judgments
@@ -458,7 +459,7 @@ def main() -> None:
         return
 
     if args.command == "compare-guardrails":
-        cases = load_eval_cases(args.cases)
+        cases = _load_run_cases(parser, args.cases, corpus_path)
         cases = select_eval_split(cases, args.case_split)
         cases = _limit_cases(cases, args.limit_cases)
         try:
@@ -566,7 +567,7 @@ def main() -> None:
         print(json.dumps(response.__dict__, indent=2))
         return
 
-    cases = load_eval_cases(args.cases)
+    cases = _load_run_cases(parser, args.cases, corpus_path)
     cases = select_eval_split(cases, args.case_split)
     cases = _limit_cases(cases, getattr(args, "limit_cases", None))
     try:
@@ -600,6 +601,20 @@ def _add_embedding_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--embedding-model")
     parser.add_argument("--allow-remote-models", action="store_true")
     parser.add_argument("--env-file", type=Path)
+
+
+def _load_run_cases(
+    parser: argparse.ArgumentParser,
+    cases_path: Path,
+    corpus_path: Path,
+) -> list[EvalCase]:
+    try:
+        return load_evaluation_cases_for_run(
+            cases_path,
+            corpus_path=corpus_path,
+        )
+    except DatasetValidationError as exc:
+        parser.error(str(exc))
 
 
 def _add_generation_args(parser: argparse.ArgumentParser) -> None:

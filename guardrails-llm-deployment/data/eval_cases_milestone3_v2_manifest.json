@@ -21,22 +21,31 @@
   "holdout_review_status": "pending_double_review",
   "cases_per_disposition": 500,
   "holdout_frozen": true,
+  "annotation_sealed": false,
+  "annotation_summary": {
+    "total_cases": 400,
+    "double_labeled_cases": 0,
+    "adjudicated_cases": 0,
+    "behavior_kappa": null,
+    "evidence_kappa": null,
+    "ready_for_final_holdout": false
+  },
   "files": {
     "development": {
       "path": "eval_cases_milestone3_v2_development.jsonl",
-      "sha256": "a26e07ab65a34648b39689a18ef80b43d2dd217801ded1fb689e18beb58a55e5"
+      "sha256": "fb6b4267e1c20b15bad75ba82ee5832de33a2c6880314cc1651fe4a791d2feb8"
     },
     "calibration": {
       "path": "eval_cases_milestone3_v2_calibration.jsonl",
-      "sha256": "2c3f9a0e9bacc7938a102f6d56dddbd532f8ca298b00a6f85467cbcc25260e25"
+      "sha256": "593bb12596d16b92385cf7fd43cc41488067ee3bac43ee615d4795535634ae85"
     },
     "holdout": {
       "path": "eval_cases_milestone3_v2_holdout.jsonl",
-      "sha256": "baa826670e9b83d6cf2a3f73af601e3b9e476275429dc78f67a1fda5618b7499"
+      "sha256": "d924383da690089ea4baabb44966112552783ef5266c1df3e6920b24225c36cf"
     },
     "annotations": {
       "path": "eval_cases_milestone3_v2_holdout_annotations.jsonl",
-      "sha256": "54469a376b96f2cb99bcdb64dac03fe43d62835d34b2448d29428a2e230646ca"
+      "sha256": "95225d8fa447cecd744285d7e4d798b833ba3773ec318d1b4fd3787d44552215"
     }
   },
   "limitations": [

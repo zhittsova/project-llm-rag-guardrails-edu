@@ -15,6 +15,7 @@ from guardrails_llm.cli import (
 )
 from guardrails_llm.embeddings import HashingEmbedder
 from guardrails_llm.evaluation import load_eval_cases
+from guardrails_llm.evaluation_dataset import DATASET_FILENAMES, write_evaluation_dataset
 from guardrails_llm.guardrail_policy import load_guardrail_policy
 from guardrails_llm.model_config import RemoteModelCallError
 
@@ -47,6 +48,37 @@ class TrackingEmbedder:
     def embed_many(self, texts: list[str]) -> list[list[float]]:
         self.calls.append(texts)
         return [[1.0, 0.0] for _text in texts]
+
+
+@pytest.mark.parametrize("command", ["evaluate", "compare-guardrails"])
+def test_evaluation_commands_reject_unreviewed_v2_holdout(
+    command: str,
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    write_evaluation_dataset(tmp_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            command,
+            "--corpus",
+            str(ROOT / "data" / "python_course_docs.jsonl"),
+            "--course-id",
+            "python-intro",
+            "--cases",
+            str(tmp_path / DATASET_FILENAMES["holdout"]),
+            "--limit-cases",
+            "1",
+        ],
+    )
+
+    with pytest.raises(SystemExit, match="2"):
+        main()
+
+    assert "independently reviewed and adjudicated" in capsys.readouterr().err
 
 
 def test_compare_guardrails_writes_json_artifact(tmp_path: Path, monkeypatch) -> None:
