@@ -78,6 +78,38 @@ def test_german_cases_use_german_topic_names() -> None:
                 assert german_topics[slug].casefold() in case.question.casefold()
 
 
+def test_prompt_templates_do_not_cross_split_boundaries() -> None:
+    topic_names = [name for _slug, en, de, _doc, _claim in TOPICS for name in (en, de)]
+    contexts = [
+        "lecture review",
+        "lab discussion",
+        "deployment demo",
+        "evaluation report",
+        "course-policy workshop",
+        "Vorlesungsrückblick",
+        "Labordiskussion",
+        "Deployment-Demo",
+        "Evaluationsbericht",
+        "Workshop zur Kursrichtlinie",
+    ]
+
+    def template(question: str) -> str:
+        normalized = question.casefold()
+        for value in sorted(topic_names, key=len, reverse=True):
+            normalized = normalized.replace(value.casefold(), "<topic>")
+        for value in sorted(contexts, key=len, reverse=True):
+            normalized = normalized.replace(value.casefold(), "<context>")
+        return " ".join(normalized.split())
+
+    templates = {
+        split: {template(case.question) for case in cases}
+        for split, cases in _cases_by_split().items()
+    }
+    assert templates["development"].isdisjoint(templates["calibration"])
+    assert templates["development"].isdisjoint(templates["holdout"])
+    assert templates["calibration"].isdisjoint(templates["holdout"])
+
+
 def test_generated_dataset_covers_each_guardrail_family_in_every_split() -> None:
     cases_by_split = _cases_by_split()
 
@@ -249,6 +281,12 @@ def test_holdout_annotations_require_two_distinct_reviewers() -> None:
             "annotator_a_evidence_available": True,
             "annotator_b_evidence_available": True,
             "adjudicated_evidence_available": True,
+            "annotator_a_expected_doc_ids": holdout[0].expected_doc_ids,
+            "annotator_b_expected_doc_ids": holdout[0].expected_doc_ids,
+            "adjudicated_expected_doc_ids": holdout[0].expected_doc_ids,
+            "annotator_a_required_claims": holdout[0].required_claims,
+            "annotator_b_required_claims": holdout[0].required_claims,
+            "adjudicated_required_claims": holdout[0].required_claims,
         }
     ]
 
@@ -270,6 +308,12 @@ def test_holdout_annotations_compute_agreement_and_apply_adjudication() -> None:
             "annotator_a_evidence_available": True,
             "annotator_b_evidence_available": True,
             "adjudicated_evidence_available": True,
+            "annotator_a_expected_doc_ids": holdout[0].expected_doc_ids,
+            "annotator_b_expected_doc_ids": holdout[0].expected_doc_ids,
+            "adjudicated_expected_doc_ids": holdout[0].expected_doc_ids,
+            "annotator_a_required_claims": holdout[0].required_claims,
+            "annotator_b_required_claims": holdout[0].required_claims,
+            "adjudicated_required_claims": holdout[0].required_claims,
         },
         {
             "case_id": holdout[1].case_id,
@@ -282,6 +326,12 @@ def test_holdout_annotations_compute_agreement_and_apply_adjudication() -> None:
             "annotator_a_evidence_available": False,
             "annotator_b_evidence_available": True,
             "adjudicated_evidence_available": False,
+            "annotator_a_expected_doc_ids": [],
+            "annotator_b_expected_doc_ids": holdout[1].expected_doc_ids,
+            "adjudicated_expected_doc_ids": [],
+            "annotator_a_required_claims": [],
+            "annotator_b_required_claims": holdout[1].required_claims,
+            "adjudicated_required_claims": [],
         },
     ]
 
@@ -296,6 +346,8 @@ def test_holdout_annotations_compute_agreement_and_apply_adjudication() -> None:
         "adjudicated_cases": 2,
         "behavior_kappa": 0.0,
         "evidence_kappa": 0.0,
+        "expected_doc_ids_exact_agreement": 0.5,
+        "required_claims_exact_agreement": 0.5,
         "ready_for_final_holdout": True,
     }
 
@@ -362,9 +414,13 @@ def _complete_holdout_annotations(tmp_path: Path) -> None:
         case = holdout[row["case_id"]]
         behavior = case.resolved_expected_behavior().value
         evidence = case.evidence_available
+        expected_doc_ids = case.expected_doc_ids
+        required_claims = case.required_claims
         if index == 0:
             behavior = "block"
             evidence = False
+            expected_doc_ids = []
+            required_claims = []
         row.update(
             {
                 "annotator_a_id": "reviewer-1",
@@ -376,6 +432,12 @@ def _complete_holdout_annotations(tmp_path: Path) -> None:
                 "annotator_a_evidence_available": evidence,
                 "annotator_b_evidence_available": evidence,
                 "adjudicated_evidence_available": evidence,
+                "annotator_a_expected_doc_ids": expected_doc_ids,
+                "annotator_b_expected_doc_ids": expected_doc_ids,
+                "adjudicated_expected_doc_ids": expected_doc_ids,
+                "annotator_a_required_claims": required_claims,
+                "annotator_b_required_claims": required_claims,
+                "adjudicated_required_claims": required_claims,
             }
         )
     annotation_path.write_text(
@@ -405,6 +467,8 @@ def test_finalized_holdout_uses_adjudicated_labels(tmp_path: Path) -> None:
     assert cases[0].annotation_status == "adjudicated"
     assert cases[0].resolved_expected_behavior() is ResponseDisposition.BLOCK
     assert cases[0].evidence_available is False
+    assert cases[0].expected_doc_ids == []
+    assert cases[0].required_claims == []
 
 
 def test_sealed_annotation_tampering_is_detected(tmp_path: Path) -> None:
@@ -416,3 +480,41 @@ def test_sealed_annotation_tampering_is_detected(tmp_path: Path) -> None:
 
     with pytest.raises(DatasetValidationError, match="annotation.*SHA-256"):
         load_evaluation_cases_for_run(tmp_path / DATASET_FILENAMES["holdout"])
+
+
+def test_finalization_rejects_inconsistent_adjudicated_evidence(tmp_path: Path) -> None:
+    write_evaluation_dataset(tmp_path)
+    _complete_holdout_annotations(tmp_path)
+    holdout = {
+        case.case_id: case
+        for case in load_eval_cases(tmp_path / DATASET_FILENAMES["holdout"])
+    }
+    annotation_path = tmp_path / DATASET_FILENAMES["annotations"]
+    annotations = [json.loads(line) for line in annotation_path.read_text().splitlines()]
+    target = next(
+        row
+        for row in annotations
+        if holdout[row["case_id"]].resolved_expected_behavior() is ResponseDisposition.BLOCK
+    )
+    target.update(
+        {
+            "annotator_a_behavior": "answer",
+            "annotator_b_behavior": "answer",
+            "adjudicated_behavior": "answer",
+            "annotator_a_evidence_available": True,
+            "annotator_b_evidence_available": True,
+            "adjudicated_evidence_available": True,
+            "annotator_a_expected_doc_ids": [],
+            "annotator_b_expected_doc_ids": [],
+            "adjudicated_expected_doc_ids": [],
+            "annotator_a_required_claims": [],
+            "annotator_b_required_claims": [],
+            "adjudicated_required_claims": [],
+        }
+    )
+    annotation_path.write_text(
+        "".join(json.dumps(row, separators=(",", ":")) + "\n" for row in annotations)
+    )
+
+    with pytest.raises(DatasetValidationError, match="expected evidence metadata"):
+        finalize_holdout_annotations(tmp_path)

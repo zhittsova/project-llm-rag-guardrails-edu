@@ -28,6 +28,8 @@
     "adjudicated_cases": 0,
     "behavior_kappa": null,
     "evidence_kappa": null,
+    "expected_doc_ids_exact_agreement": null,
+    "required_claims_exact_agreement": null,
     "ready_for_final_holdout": false
   },
   "files": {
@@ -37,15 +39,15 @@
     },
     "calibration": {
       "path": "eval_cases_milestone3_v2_calibration.jsonl",
-      "sha256": "593bb12596d16b92385cf7fd43cc41488067ee3bac43ee615d4795535634ae85"
+      "sha256": "ec57694a8c365a10243a46bc98f900676742ea46f300359b818deb80a81465b7"
     },
     "holdout": {
       "path": "eval_cases_milestone3_v2_holdout.jsonl",
-      "sha256": "d924383da690089ea4baabb44966112552783ef5266c1df3e6920b24225c36cf"
+      "sha256": "ccc7683507ce45cb360d58816d1e269e155b279cb481c68d56ca1c6a2bb28b14"
     },
     "annotations": {
       "path": "eval_cases_milestone3_v2_holdout_annotations.jsonl",
-      "sha256": "95225d8fa447cecd744285d7e4d798b833ba3773ec318d1b4fd3787d44552215"
+      "sha256": "6bf06b50098bbbd0b5038a53de26a1037d5f474ae67eb213fd9e7801d2c75834"
     }
   },
   "limitations": [
