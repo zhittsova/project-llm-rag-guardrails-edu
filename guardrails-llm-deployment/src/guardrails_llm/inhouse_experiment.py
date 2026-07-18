@@ -5,7 +5,7 @@ import os
 import tomllib
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
@@ -41,6 +41,7 @@ CLASSIFIER_TRIGGER_LABELS = {
     "ungrounded": "unsupported",
 }
 DEFAULT_POLICY_PATH = Path(__file__).resolve().parents[2] / "data" / "guardrail_policy_bge_m3.toml"
+RUNTIME_CLASSIFIER_CONFIDENCE_THRESHOLD = 0.65
 
 
 def derive_classifier_label(case: EvalCase) -> str:
@@ -243,24 +244,30 @@ def evaluate_v2_classifier_capture(
         raise ValueError(f"prediction output contains unknown case IDs: {sorted(unknown)}")
     calibration_cases = [_classifier_case(case) for case in cases]
     predictions = list(predictions_by_id.values())
-    combined = evaluate_classifier_calibration(calibration_cases, predictions)
-    split_reports = {
-        split: evaluate_classifier_calibration(
-            [case for case in calibration_cases if _split_for(case, cases) == split],
-            [
-                prediction
-                for prediction in predictions
-                if _case_split(prediction.case_id, cases) == split
-            ],
-        )
-        for split in ("development", "calibration")
-    }
+    raw_reports = _evaluate_classifier_reports(calibration_cases, predictions, cases)
+    operational_predictions = [
+        _operational_classifier_prediction(prediction)
+        for prediction in predictions
+    ]
+    operational_reports = _evaluate_classifier_reports(
+        calibration_cases,
+        operational_predictions,
+        cases,
+    )
     return {
         "evidence_scope": "v2_balanced_classifier_component_benchmark",
-        "combined": combined,
-        "development": split_reports["development"],
-        "calibration": split_reports["calibration"],
-        "quality_gates": _classifier_quality_gates(combined),
+        "combined": raw_reports["combined"],
+        "development": raw_reports["development"],
+        "calibration": raw_reports["calibration"],
+        "operational": {
+            "runtime_confidence_threshold": RUNTIME_CLASSIFIER_CONFIDENCE_THRESHOLD,
+            "combined": operational_reports["combined"],
+            "development": operational_reports["development"],
+            "calibration": operational_reports["calibration"],
+        },
+        "quality_gates": _classifier_quality_gates(
+            operational_reports["calibration"]
+        ),
     }
 
 
@@ -424,6 +431,44 @@ def _classifier_case(case: EvalCase) -> ClassifierCalibrationCase:
         difficulty=case.difficulty or "medium",
         rationale=case.provenance or "Milestone 3 v2 expected behavior mapping.",
     )
+
+
+def _operational_classifier_prediction(
+    prediction: ClassifierPrediction,
+) -> ClassifierPrediction:
+    if (
+        prediction.error is None
+        and prediction.predicted_label != "safe"
+        and prediction.confidence is not None
+        and prediction.confidence < RUNTIME_CLASSIFIER_CONFIDENCE_THRESHOLD
+    ):
+        return replace(prediction, predicted_label="safe")
+    return prediction
+
+
+def _evaluate_classifier_reports(
+    calibration_cases: list[ClassifierCalibrationCase],
+    predictions: list[ClassifierPrediction],
+    source_cases: list[EvalCase],
+) -> dict[str, dict[str, object]]:
+    return {
+        "combined": evaluate_classifier_calibration(calibration_cases, predictions),
+        **{
+            split: evaluate_classifier_calibration(
+                [
+                    case
+                    for case in calibration_cases
+                    if _split_for(case, source_cases) == split
+                ],
+                [
+                    prediction
+                    for prediction in predictions
+                    if _case_split(prediction.case_id, source_cases) == split
+                ],
+            )
+            for split in ("development", "calibration")
+        },
+    }
 
 
 def _split_for(

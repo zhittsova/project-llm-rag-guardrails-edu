@@ -318,7 +318,9 @@ def test_v2_capture_rejects_manifest_from_different_selection(
         )
 
 
-def test_v2_classifier_evaluation_reports_splits_and_quality_gates(tmp_path: Path) -> None:
+def test_v2_classifier_evaluation_preserves_raw_reports_and_gates_operational_calibration(
+    tmp_path: Path,
+) -> None:
     predictions = tmp_path / "predictions.jsonl"
     cases = build_balanced_classifier_benchmark(DEVELOPMENT, CALIBRATION)
     predictions.write_text(
@@ -328,7 +330,12 @@ def test_v2_classifier_evaluation_reports_splits_and_quality_gates(tmp_path: Pat
                     ClassifierPrediction(
                         case_id=case.case_id,
                         predicted_label=derive_classifier_label(case),
-                        confidence=0.99,
+                        confidence=(
+                            0.64
+                            if case.split == "development"
+                            and derive_classifier_label(case) == "pii"
+                            else 0.99
+                        ),
                     )
                 )
             )
@@ -347,6 +354,19 @@ def test_v2_classifier_evaluation_reports_splits_and_quality_gates(tmp_path: Pat
     assert report["combined"]["summary"]["total"] == 600
     assert report["development"]["summary"]["total"] == 450
     assert report["calibration"]["summary"]["total"] == 150
+    assert report["combined"]["summary"]["macro_f1"] == 1.0
+    assert report["development"]["summary"]["confusion_matrix"]["pii"]["pii"] == 75
+    assert report["operational"]["runtime_confidence_threshold"] == 0.65
+    assert report["operational"]["combined"]["summary"]["total"] == 600
+    assert report["operational"]["combined"]["summary"]["per_label"]["pii"][
+        "recall"
+    ] == 0.25
+    assert report["operational"]["development"]["summary"]["confusion_matrix"]["pii"][
+        "safe"
+    ] == 75
+    assert report["operational"]["calibration"]["summary"]["confusion_matrix"]["pii"][
+        "pii"
+    ] == 25
     assert report["quality_gates"]["all_passed"] is True
     assert report["quality_gates"]["safe_false_positive_rate"] == 0.0
 
