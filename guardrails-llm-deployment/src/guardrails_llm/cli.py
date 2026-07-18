@@ -46,6 +46,12 @@ from .model_config import (
     RemoteModelsNotAllowedError,
     openai_config_summary,
 )
+from .model_profiles import (
+    InHouseEndpointError,
+    MODEL_PROFILES,
+    apply_model_profile,
+    model_profile_summary,
+)
 from .pipeline import build_assistant
 from .retrieval_benchmark import run_local_retrieval_benchmark
 from .vector import VectorIndexError, build_vector_index, default_index_path
@@ -59,6 +65,7 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     query_parser = subparsers.add_parser("query", help="Ask one question")
+    _add_profile_arg(query_parser)
     query_parser.add_argument("--corpus", dest="command_corpus", type=Path)
     query_parser.add_argument("--index-dir", type=Path, default=default_index_path())
     query_parser.add_argument("--course-id", default="guardrails-101")
@@ -73,6 +80,7 @@ def main() -> None:
     query_parser.add_argument("--question", required=True)
 
     eval_parser = subparsers.add_parser("evaluate", help="Run JSONL evaluation")
+    _add_profile_arg(eval_parser)
     eval_parser.add_argument("--corpus", dest="command_corpus", type=Path)
     eval_parser.add_argument("--index-dir", type=Path, default=default_index_path())
     eval_parser.add_argument("--course-id", default="guardrails-101")
@@ -95,6 +103,7 @@ def main() -> None:
     eval_parser.add_argument("--show-judgments", action="store_true")
 
     compare_parser = subparsers.add_parser("compare-guardrails", help="Compare guardrail techniques on one evaluation set")
+    _add_profile_arg(compare_parser)
     compare_parser.add_argument("--corpus", dest="command_corpus", type=Path)
     compare_parser.add_argument("--index-dir", type=Path, default=default_index_path())
     compare_parser.add_argument("--course-id", default="guardrails-101")
@@ -186,6 +195,7 @@ def main() -> None:
         "capture-model-calibration",
         help="Capture gated remote classifier and judge predictions",
     )
+    _add_profile_arg(capture_parser)
     capture_parser.add_argument(
         "--component",
         choices=["classifier", "judge", "both"],
@@ -238,6 +248,7 @@ def main() -> None:
     capture_parser.add_argument("--env-file", type=Path)
 
     index_parser = subparsers.add_parser("build-index", help="Build a local Chroma vector index")
+    _add_profile_arg(index_parser)
     index_parser.add_argument("--corpus", dest="command_corpus", type=Path)
     index_parser.add_argument("--index-dir", type=Path, default=default_index_path())
     index_parser.add_argument("--chunk-size", type=int, default=650)
@@ -252,6 +263,7 @@ def main() -> None:
 
     model_config_parser = subparsers.add_parser("model-config", help="Show safe remote-model configuration")
     model_config_parser.add_argument("--provider", choices=["openai"], default="openai")
+    _add_profile_arg(model_config_parser)
     model_config_parser.add_argument("--env-file", type=Path)
 
     course_parser = subparsers.add_parser("normalize-course-corpus", help="Normalize markdown course corpus to JSONL")
@@ -260,6 +272,7 @@ def main() -> None:
     course_parser.add_argument("--course-id", default="python-intro")
 
     visualize_parser = subparsers.add_parser("visualize", help="Write a static HTML RAG pipeline visualization")
+    _add_profile_arg(visualize_parser)
     visualize_parser.add_argument("--corpus", dest="command_corpus", type=Path)
     visualize_parser.add_argument("--index-dir", type=Path, default=default_index_path())
     visualize_parser.add_argument("--course-id", default="guardrails-101")
@@ -275,6 +288,10 @@ def main() -> None:
     visualize_parser.add_argument("--output", type=Path, required=True)
 
     args = parser.parse_args()
+    try:
+        apply_model_profile(args)
+    except (InHouseEndpointError, ValueError) as exc:
+        parser.error(str(exc))
     corpus_path = getattr(args, "command_corpus", None) or args.corpus
 
     if args.command == "validate-corpus":
@@ -305,7 +322,10 @@ def main() -> None:
         return
 
     if args.command == "model-config":
-        print(json.dumps(openai_config_summary(args.env_file), indent=2))
+        if args.profile == "local":
+            print(json.dumps(openai_config_summary(args.env_file), indent=2))
+        else:
+            print(json.dumps(model_profile_summary(args.profile, args.env_file), indent=2))
         return
 
     if args.command == "benchmark-retrieval":
@@ -622,6 +642,10 @@ def _add_embedding_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--embedding-model")
     parser.add_argument("--allow-remote-models", action="store_true")
     parser.add_argument("--env-file", type=Path)
+
+
+def _add_profile_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--profile", choices=MODEL_PROFILES, default="local")
 
 
 def _load_run_cases(
