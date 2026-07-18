@@ -24,7 +24,10 @@ EMBEDDING_BATCH_SIZE = 128
 ANSWER_PROMPT_VERSION = "rag-answer-v1"
 GUARD_CLASSIFIER_PROMPT_VERSION = "guard-classifier-v3.1"
 GUARD_CLASSIFIER_MAX_ATTEMPTS = 2
-ENTAILMENT_PROMPT_VERSION = "answer-entailment-v1"
+JUDGE_PROMPT_VERSION = "guardrail-judge-v2.1"
+JUDGE_MAX_ATTEMPTS = 2
+ENTAILMENT_PROMPT_VERSION = "answer-entailment-v1.1"
+ENTAILMENT_MAX_ATTEMPTS = 2
 
 
 class OpenAIEmbeddingModel:
@@ -164,28 +167,7 @@ class OpenAIJudge:
 
     def judge(self, case: EvalCase, result: EvalResult) -> JudgeResult:
         try:
-            instructions = _judge_instructions()
-            evaluation_input = _judge_input(case, result)
-            if self._use_chat_completions:
-                response = self._client.chat.completions.create(
-                    model=self.model_name,
-                    messages=[
-                        {"role": "system", "content": instructions},
-                        {"role": "user", "content": evaluation_input},
-                    ],
-                    response_format={"type": "json_object"},
-                    temperature=0,
-                )
-                payload = _json_from_text(_chat_response_text(response), "OpenAI judge")
-            else:
-                response = self._client.responses.create(
-                    model=self.model_name,
-                    instructions=instructions,
-                    input=evaluation_input,
-                    text=_json_schema_text_config("guardrail_judgment", JUDGE_SCHEMA),
-                )
-                payload = _json_response(response, "OpenAI judge")
-            _validate_judge_payload(payload)
+            payload = self._judge_payload(case, result)
             notes = list(payload["notes"])
             checks = [bool(payload[field]) for field in JUDGE_BOOLEAN_FIELDS]
             return JudgeResult(
@@ -212,6 +194,43 @@ class OpenAIJudge:
                 notes=[f"llm_judge_error:{type(exc).__name__}"],
             )
 
+    def _judge_payload(self, case: EvalCase, result: EvalResult) -> dict[str, object]:
+        instructions = _judge_instructions()
+        evaluation_input = _judge_input(case, result)
+        for attempt in range(JUDGE_MAX_ATTEMPTS):
+            try:
+                if self._use_chat_completions:
+                    response = self._client.chat.completions.create(
+                        model=self.model_name,
+                        messages=[
+                            {"role": "system", "content": instructions},
+                            {"role": "user", "content": evaluation_input},
+                        ],
+                        response_format={"type": "json_object"},
+                        temperature=0,
+                    )
+                    payload = _json_from_text(
+                        _chat_response_text(response),
+                        "OpenAI judge",
+                    )
+                else:
+                    response = self._client.responses.create(
+                        model=self.model_name,
+                        instructions=instructions,
+                        input=evaluation_input,
+                        text=_json_schema_text_config(
+                            "guardrail_judgment",
+                            JUDGE_SCHEMA,
+                        ),
+                    )
+                    payload = _json_response(response, "OpenAI judge")
+                _validate_judge_payload(payload)
+                return payload
+            except ValueError:
+                if attempt + 1 == JUDGE_MAX_ATTEMPTS:
+                    raise
+        raise RuntimeError("judge attempt loop did not return")
+
 
 class OpenAIEntailmentVerifier:
     def __init__(self, config: OpenAIModelConfig, *, client: Any | None = None) -> None:
@@ -228,34 +247,7 @@ class OpenAIEntailmentVerifier:
         chunks: list[Chunk],
     ) -> EntailmentResult:
         try:
-            instructions = _entailment_instructions()
-            verification_input = _entailment_input(question, answer, chunks)
-            if self._use_chat_completions:
-                response = self._client.chat.completions.create(
-                    model=self.model_name,
-                    messages=[
-                        {"role": "system", "content": instructions},
-                        {"role": "user", "content": verification_input},
-                    ],
-                    response_format={"type": "json_object"},
-                    temperature=0,
-                )
-                payload = _json_from_text(
-                    _chat_response_text(response),
-                    "OpenAI entailment verifier",
-                )
-            else:
-                response = self._client.responses.create(
-                    model=self.model_name,
-                    instructions=instructions,
-                    input=verification_input,
-                    text=_json_schema_text_config("answer_entailment", ENTAILMENT_SCHEMA),
-                )
-                payload = _json_response(response, "OpenAI entailment verifier")
-            _validate_entailment_payload(
-                payload,
-                allowed_chunk_ids={chunk.chunk_id for chunk in chunks},
-            )
+            payload = self._entailment_payload(question, answer, chunks)
             return EntailmentResult(
                 supported=payload["supported"] is True,
                 supporting_chunk_ids=list(payload["supporting_chunk_ids"]),
@@ -270,6 +262,51 @@ class OpenAIEntailmentVerifier:
                 confidence=0.0,
                 error=f"entailment_verifier_error:{type(exc).__name__}",
             )
+
+    def _entailment_payload(
+        self,
+        question: str,
+        answer: str,
+        chunks: list[Chunk],
+    ) -> dict[str, object]:
+        instructions = _entailment_instructions()
+        verification_input = _entailment_input(question, answer, chunks)
+        for attempt in range(ENTAILMENT_MAX_ATTEMPTS):
+            try:
+                if self._use_chat_completions:
+                    response = self._client.chat.completions.create(
+                        model=self.model_name,
+                        messages=[
+                            {"role": "system", "content": instructions},
+                            {"role": "user", "content": verification_input},
+                        ],
+                        response_format={"type": "json_object"},
+                        temperature=0,
+                    )
+                    payload = _json_from_text(
+                        _chat_response_text(response),
+                        "OpenAI entailment verifier",
+                    )
+                else:
+                    response = self._client.responses.create(
+                        model=self.model_name,
+                        instructions=instructions,
+                        input=verification_input,
+                        text=_json_schema_text_config(
+                            "answer_entailment",
+                            ENTAILMENT_SCHEMA,
+                        ),
+                    )
+                    payload = _json_response(response, "OpenAI entailment verifier")
+                _validate_entailment_payload(
+                    payload,
+                    allowed_chunk_ids={chunk.chunk_id for chunk in chunks},
+                )
+                return payload
+            except ValueError:
+                if attempt + 1 == ENTAILMENT_MAX_ATTEMPTS:
+                    raise
+        raise RuntimeError("entailment verifier attempt loop did not return")
 
 
 def _answer_instructions() -> str:
