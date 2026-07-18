@@ -362,6 +362,7 @@ def build_assistant(
     embedding_model: str | None = None,
     allow_remote_models: bool = False,
     env_file: Path | None = None,
+    embedding_cache_path: Path | None = None,
     generator: str = "extractive",
     answer_model: str | None = None,
     guard_classifier: str = "none",
@@ -388,6 +389,7 @@ def build_assistant(
             embedding_model=embedding_model,
             allow_remote_models=allow_remote_models,
             env_file=env_file,
+            embedding_cache_path=embedding_cache_path,
             answer_generator=answer_generator,
             retrieval_embedder=retrieval_embedder,
         )
@@ -423,6 +425,7 @@ def build_assistant(
             embedding_model=embedding_model,
             allow_remote_models=allow_remote_models,
             env_file=env_file,
+            embedding_cache_path=embedding_cache_path,
             embedder=retrieval_embedder,
         )
     else:

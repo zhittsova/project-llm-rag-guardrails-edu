@@ -55,6 +55,7 @@ def build_vector_index(
     embedding_model: str | None = None,
     allow_remote_models: bool = False,
     env_file: Path | None = None,
+    embedding_cache_path: Path | None = None,
     embedder: TextEmbedder | None = None,
 ) -> VectorIndexStats:
     # build-index pipeline:
@@ -68,6 +69,7 @@ def build_vector_index(
         model=resolved_model,
         allow_remote_models=allow_remote_models,
         env_file=env_file,
+        cache_path=embedding_cache_path,
     )
     documents = load_documents(corpus_path)
     chunks = langchain_chunk_documents(documents, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
@@ -120,6 +122,7 @@ class VectorRetriever:
         embedding_model: str | None = None,
         allow_remote_models: bool = False,
         env_file: Path | None = None,
+        embedding_cache_path: Path | None = None,
         embedder: TextEmbedder | None = None,
     ) -> None:
         resolved_model = resolve_embedding_model(embedding_provider, embedding_model)
@@ -137,6 +140,7 @@ class VectorRetriever:
             model=resolved_model,
             allow_remote_models=allow_remote_models,
             env_file=env_file,
+            cache_path=embedding_cache_path,
         )
         self._min_score = min_score
 

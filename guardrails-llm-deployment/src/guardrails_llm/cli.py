@@ -433,6 +433,7 @@ def main() -> None:
                 embedding_model=args.embedding_model,
                 allow_remote_models=args.allow_remote_models,
                 env_file=args.env_file,
+                embedding_cache_path=args.embedding_cache,
             )
         except (
             VectorIndexError,
@@ -460,6 +461,7 @@ def main() -> None:
                 embedding_model=args.embedding_model,
                 allow_remote_models=args.allow_remote_models,
                 env_file=args.env_file,
+                embedding_cache_path=args.embedding_cache,
                 generator=args.generator,
                 answer_model=args.answer_model,
                 guard_classifier=args.guard_classifier,
@@ -512,6 +514,7 @@ def main() -> None:
                     embedding_model=args.embedding_model,
                     allow_remote_models=args.allow_remote_models,
                     env_file=args.env_file,
+                    embedding_cache_path=args.embedding_cache,
                     generator=args.generator,
                     answer_model=args.answer_model,
                     guard_classifier=classifier,
@@ -580,6 +583,7 @@ def main() -> None:
             embedding_model=getattr(args, "embedding_model", None),
             allow_remote_models=getattr(args, "allow_remote_models", False),
             env_file=getattr(args, "env_file", None),
+            embedding_cache_path=getattr(args, "embedding_cache", None),
             generator=getattr(args, "generator", "extractive"),
             answer_model=getattr(args, "answer_model", None),
             guard_classifier=getattr(args, "guard_classifier", "none"),
@@ -642,6 +646,7 @@ def _add_embedding_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--embedding-model")
     parser.add_argument("--allow-remote-models", action="store_true")
     parser.add_argument("--env-file", type=Path)
+    parser.add_argument("--embedding-cache", type=Path)
 
 
 def _add_profile_arg(parser: argparse.ArgumentParser) -> None:
@@ -742,6 +747,7 @@ def _load_guardrail_policy(args):
         model=args.guard_embedding_model,
         allow_remote_models=args.allow_remote_models,
         env_file=args.env_file,
+        cache_path=getattr(args, "embedding_cache", None),
     )
     return load_guardrail_policy(policy_path, similarity_embedder=similarity_embedder)
 
@@ -755,6 +761,7 @@ def _preload_retrieval_embedder(args, cases):
             model=args.embedding_model,
             allow_remote_models=args.allow_remote_models,
             env_file=args.env_file,
+            cache_path=getattr(args, "embedding_cache", None),
         )
     )
     stats = _preload_embeddings(
@@ -775,6 +782,7 @@ def _load_comparison_policy(args, cases):
             model=args.guard_embedding_model,
             allow_remote_models=args.allow_remote_models,
             env_file=args.env_file,
+            cache_path=getattr(args, "embedding_cache", None),
         )
     )
     policy = load_guardrail_policy(policy_path, similarity_embedder=embedder)

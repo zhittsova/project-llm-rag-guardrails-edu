@@ -18,6 +18,7 @@ def _runtime_args() -> Namespace:
         retriever="lexical",
         embedding_provider="hashing",
         embedding_model=None,
+        embedding_cache=None,
         generator="extractive",
         answer_model=None,
         guard_classifier="none",
@@ -42,6 +43,7 @@ def test_inhouse_profile_selects_bge_and_qwen(monkeypatch) -> None:
     assert args.retriever == "vector"
     assert args.embedding_provider == "openai"
     assert args.embedding_model == INHOUSE_EMBEDDING_MODEL
+    assert args.embedding_cache.name == "bge-m3.jsonl"
     assert args.guard_embedding_provider == "openai"
     assert args.guard_embedding_model == INHOUSE_EMBEDDING_MODEL
     assert args.generator == "openai"

@@ -19,6 +19,8 @@ MODEL_PROFILES = (LOCAL_PROFILE, INHOUSE_PROFILE)
 INHOUSE_ENDPOINT_HOST = "learning-services4.fokus.fraunhofer.de"
 INHOUSE_EMBEDDING_MODEL = "BAAI/bge-m3"
 INHOUSE_LLM_MODEL = "Qwen/Qwen3.6-35B-A3B"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+INHOUSE_EMBEDDING_CACHE = PROJECT_ROOT / "indexes" / "cache" / "bge-m3.jsonl"
 
 
 class InHouseEndpointError(RuntimeError):
@@ -36,6 +38,8 @@ def apply_model_profile(args: Namespace) -> None:
     _set_if_present(args, "retriever", "vector")
     _set_if_present(args, "embedding_provider", "openai")
     _set_if_present(args, "embedding_model", INHOUSE_EMBEDDING_MODEL)
+    if hasattr(args, "embedding_cache") and args.embedding_cache is None:
+        args.embedding_cache = INHOUSE_EMBEDDING_CACHE
     _set_if_present(args, "guard_embedding_provider", "openai")
     _set_if_present(args, "guard_embedding_model", INHOUSE_EMBEDDING_MODEL)
     _set_if_present(args, "generator", "openai")

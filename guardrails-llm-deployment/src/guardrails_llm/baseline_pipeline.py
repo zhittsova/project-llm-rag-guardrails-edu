@@ -115,6 +115,7 @@ def build_baseline_assistant(
     embedding_model: str | None = None,
     allow_remote_models: bool = False,
     env_file: Path | None = None,
+    embedding_cache_path: Path | None = None,
     answer_generator: AnswerGenerator | None = None,
     retrieval_embedder: TextEmbedder | None = None,
 ) -> BaselineRagAssistant:
@@ -135,6 +136,7 @@ def build_baseline_assistant(
             embedding_model=embedding_model,
             allow_remote_models=allow_remote_models,
             env_file=env_file,
+            embedding_cache_path=embedding_cache_path,
             embedder=retrieval_embedder,
         )
     else:
