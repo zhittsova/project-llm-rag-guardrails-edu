@@ -12,6 +12,7 @@ DEFAULT_OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 DEFAULT_OPENAI_ANSWER_MODEL = "gpt-5.4-mini"
 DEFAULT_OPENAI_CLASSIFIER_MODEL = "gpt-5.4-nano"
 DEFAULT_OPENAI_JUDGE_MODEL = "gpt-5.4-nano"
+DEFAULT_OPENAI_ENTAILMENT_MODEL = "gpt-5.4-nano"
 DEFAULT_OPENAI_API_KEY_ENV = "OPENAI_API_KEY"
 DEFAULT_OPENAI_BASE_URL_ENV = "OPENAI_BASE_URL"
 OPENAI_API_URL_ALIAS_ENV = "OPENAI_API_URL"
@@ -38,6 +39,7 @@ class OpenAIModelConfig:
     answer_model: str = DEFAULT_OPENAI_ANSWER_MODEL
     classifier_model: str = DEFAULT_OPENAI_CLASSIFIER_MODEL
     judge_model: str = DEFAULT_OPENAI_JUDGE_MODEL
+    entailment_model: str = DEFAULT_OPENAI_ENTAILMENT_MODEL
     env_file: Path | None = None
     allow_remote_models: bool = False
 
@@ -78,6 +80,7 @@ def openai_config_summary(env_file: Path | None = None) -> dict[str, object]:
         "answer_model": DEFAULT_OPENAI_ANSWER_MODEL,
         "classifier_model": DEFAULT_OPENAI_CLASSIFIER_MODEL,
         "judge_model": DEFAULT_OPENAI_JUDGE_MODEL,
+        "entailment_model": DEFAULT_OPENAI_ENTAILMENT_MODEL,
     }
 
 
