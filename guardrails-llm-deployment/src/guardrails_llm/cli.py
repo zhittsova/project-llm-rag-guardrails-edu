@@ -33,6 +33,12 @@ from .final_evidence import (
 )
 from .guardrail_policy import GuardrailPolicy, default_policy_path, load_guardrail_policy
 from .guard_text import normalize_guard_text
+from .holdout_review import (
+    finalize_holdout_review,
+    holdout_review_status,
+    prepare_holdout_review,
+    reconcile_holdout_review,
+)
 from .inhouse_experiment import (
     evaluate_v2_classifier_capture,
     prepare_inhouse_bge,
@@ -640,6 +646,41 @@ def main() -> None:
     )
     judge_evaluate_parser.add_argument("--output-json", type=Path, required=True)
 
+    holdout_prepare_parser = subparsers.add_parser(
+        "prepare-holdout-review",
+        help="Prepare separate blinded reviewer files for the frozen holdout",
+    )
+    holdout_prepare_parser.add_argument(
+        "--cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_holdout.jsonl",
+    )
+    holdout_prepare_parser.add_argument("--output-dir", type=Path, required=True)
+
+    holdout_status_parser = subparsers.add_parser(
+        "holdout-review-status",
+        help="Report independent holdout review completion",
+    )
+    holdout_status_parser.add_argument("--study-dir", type=Path, required=True)
+
+    holdout_reconcile_parser = subparsers.add_parser(
+        "reconcile-holdout-review",
+        help="Measure holdout reviewer agreement and prepare disagreements",
+    )
+    holdout_reconcile_parser.add_argument("--study-dir", type=Path, required=True)
+
+    holdout_finalize_parser = subparsers.add_parser(
+        "finalize-holdout-review",
+        help="Compile consensus and adjudications into canonical annotations",
+    )
+    holdout_finalize_parser.add_argument("--study-dir", type=Path, required=True)
+    holdout_finalize_parser.add_argument(
+        "--output-annotations", type=Path, required=True
+    )
+    holdout_finalize_parser.add_argument("--replace", action="store_true")
+
     final_evidence_parser = subparsers.add_parser(
         "build-final-evidence",
         help="Build the final common-split calibration report",
@@ -1125,6 +1166,45 @@ def main() -> None:
                 study_dir=args.study_dir,
                 prediction_paths=args.predictions,
                 output_path=args.output_json,
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            parser.error(str(exc))
+        print(json.dumps(report, indent=2))
+        return
+
+    if args.command == "prepare-holdout-review":
+        try:
+            report = prepare_holdout_review(
+                cases_path=args.cases,
+                output_dir=args.output_dir,
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            parser.error(str(exc))
+        print(json.dumps(report, indent=2))
+        return
+
+    if args.command == "holdout-review-status":
+        try:
+            report = holdout_review_status(args.study_dir)
+        except (OSError, TypeError, ValueError) as exc:
+            parser.error(str(exc))
+        print(json.dumps(report, indent=2))
+        return
+
+    if args.command == "reconcile-holdout-review":
+        try:
+            report = reconcile_holdout_review(args.study_dir)
+        except (OSError, TypeError, ValueError) as exc:
+            parser.error(str(exc))
+        print(json.dumps(report, indent=2))
+        return
+
+    if args.command == "finalize-holdout-review":
+        try:
+            report = finalize_holdout_review(
+                study_dir=args.study_dir,
+                output_path=args.output_annotations,
+                replace=args.replace,
             )
         except (OSError, TypeError, ValueError) as exc:
             parser.error(str(exc))
