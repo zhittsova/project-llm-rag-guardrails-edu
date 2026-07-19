@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "evidence_scope": "balanced_generated_classifier_component_benchmark",
+  "dataset_version": "milestone3-v2",
+  "dataset_manifest_sha256": "2580d793478a8656c481c79fd94819b716073687eef864b2e7cb24f529205542",
+  "holdout_used": false,
+  "endpoint_host": "learning-services4.fokus.fraunhofer.de",
+  "model": "Qwen/Qwen3.6-35B-A3B",
+  "prompt_version": "guard-classifier-v3.4",
+  "runtime_confidence_threshold": 0.65,
+  "case_counts": {
+    "combined": 600,
+    "development": 450,
+    "calibration": 150,
+    "per_label_combined": 100
+  },
+  "operational": {
+    "structured_response_validity": 1.0,
+    "provider_or_schema_failures": 0,
+    "combined_accuracy": 0.995,
+    "combined_macro_f1": 0.995
+  },
+  "development": {
+    "accuracy": 0.998,
+    "macro_f1": 0.998,
+    "correct": 449,
+    "total": 450
+  },
+  "calibration": {
+    "accuracy": 0.987,
+    "macro_f1": 0.987,
+    "correct": 148,
+    "total": 150,
+    "per_label_recall": {
+      "safe": 0.96,
+      "prompt_injection": 1.0,
+      "pii": 1.0,
+      "academic_integrity": 1.0,
+      "unsafe_request": 1.0,
+      "unsupported": 0.96
+    },
+    "safe_false_positive_rate": 0.04
+  },
+  "historical_regression": {
+    "correct": 35,
+    "total": 36,
+    "accuracy": 0.972,
+    "macro_f1": 0.972,
+    "promotion_floor_passed": true
+  },
+  "quality_gates": {
+    "structured_response_validity_passed": true,
+    "calibration_macro_f1_at_least_0_95": true,
+    "per_label_recall_at_least_0_90": true,
+    "safe_false_positive_rate_at_most_0_05": true,
+    "all_passed": true
+  },
+  "source_artifact_sha256": {
+    "predictions": "be23135f5a94e302ed0767141f48a83f69f1c973feee87388dede8fdf13eedde",
+    "manifest": "76c90f5d00ab9530589dc0140371644531312cc423671038d65ebc03f1b55632",
+    "evaluation": "f08bf59f93774ba13f2748441d465dce233bbee82b9465e7f4a37ab06702c3ae",
+    "regression_predictions": "a032c8687a774c409eed7a062bcfda550f4665cab51dbeabeea3ca42ca07b22d",
+    "regression_manifest": "cb60815b6464e48d41ffc3ff643d907768e1e2879510392fab174651adb49887",
+    "regression_evaluation": "c46f4d74c4aae4b6cbf847ea7a1df85cb082e720fe4055ef1c66ff3f0e9277e6"
+  },
+  "limitations": [
+    "The balanced benchmark is generated from deterministic templates and is not an independently authored external challenge set.",
+    "Calibration labels are derived from the v2 case taxonomy rather than double human annotation.",
+    "This component result does not by itself prove end-to-end RAG behavior or grounded citation quality.",
+    "The frozen 400-case holdout remains unused pending independent review and adjudication."
+  ]
+}
