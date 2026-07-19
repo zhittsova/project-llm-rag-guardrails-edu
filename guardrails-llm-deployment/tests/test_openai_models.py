@@ -848,6 +848,38 @@ def test_openai_entailment_verifier_fails_closed_on_invalid_output(
     assert len(verifier._client.responses.calls) == 2
 
 
+def test_openai_entailment_verifier_reports_safe_validation_reason(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENAI_API_URL", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text("OPENAI_API_KEY=test-key\n", encoding="utf-8")
+    verifier = OpenAIEntailmentVerifier(
+        OpenAIModelConfig(allow_remote_models=True, env_file=env_file),
+        client=FakeOpenAIClient(
+            response_text=(
+                '{"supported":true,"supporting_chunk_ids":["unknown:0"],'
+                '"unsupported_claims":[],"confidence":0.95}'
+            )
+        ),
+    )
+    chunk = Chunk(
+        chunk_id="rag:0",
+        doc_id="rag",
+        course_id="guardrails-101",
+        title="RAG",
+        visibility="public",
+        source_type="lecture",
+        text="RAG retrieves evidence.",
+    )
+
+    result = verifier.verify("What is RAG?", "RAG retrieves evidence.", [chunk])
+
+    assert result.error == "entailment_verifier_error:unknown_chunk_id"
+
+
 def test_openai_entailment_verifier_retries_one_invalid_chat_response(
     tmp_path, monkeypatch
 ) -> None:

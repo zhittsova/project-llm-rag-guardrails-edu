@@ -267,12 +267,17 @@ class OpenAIEntailmentVerifier:
                 confidence=float(payload["confidence"]),
             )
         except Exception as exc:
+            error_reason = (
+                _entailment_validation_reason(exc)
+                if isinstance(exc, ValueError)
+                else type(exc).__name__
+            )
             return EntailmentResult(
                 supported=False,
                 supporting_chunk_ids=[],
                 unsupported_claims=[],
                 confidence=0.0,
-                error=f"entailment_verifier_error:{type(exc).__name__}",
+                error=f"entailment_verifier_error:{error_reason}",
             )
 
     def _entailment_payload(
@@ -601,6 +606,27 @@ def _validate_entailment_payload(
         raise ValueError("entailment response has an invalid confidence")
     if payload["supported"] and (not supporting_chunk_ids or unsupported_claims):
         raise ValueError("supported entailment response is internally inconsistent")
+
+
+def _entailment_validation_reason(exc: ValueError) -> str:
+    message = str(exc)
+    reasons = {
+        "response had an invalid JSON fence": "invalid_json_fence",
+        "response was not valid JSON": "invalid_json",
+        "response must be a JSON object": "non_object_json",
+        "response did not contain text output": "missing_text_output",
+        "response has invalid fields": "invalid_fields",
+        "response has invalid supported value": "invalid_supported_value",
+        "response has invalid supporting chunk IDs": "invalid_chunk_ids",
+        "response references an unknown chunk ID": "unknown_chunk_id",
+        "response has invalid unsupported claims": "invalid_unsupported_claims",
+        "response has an invalid confidence": "invalid_confidence",
+        "response is internally inconsistent": "inconsistent_payload",
+    }
+    for suffix, reason in reasons.items():
+        if message.endswith(suffix):
+            return reason
+    return "invalid_payload"
 
 
 def _is_unit_score(value: object) -> bool:
