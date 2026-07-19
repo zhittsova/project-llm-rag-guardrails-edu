@@ -5,6 +5,7 @@ import pytest
 
 from guardrails_llm.model_profiles import (
     INHOUSE_EMBEDDING_MODEL,
+    INHOUSE_EVIDENCE_MIN_SCORE,
     INHOUSE_LLM_MODEL,
     InHouseEndpointError,
     apply_model_profile,
@@ -30,6 +31,7 @@ def _runtime_args() -> Namespace:
         classifier_model=None,
         entailment_verifier="none",
         entailment_model=None,
+        evidence_min_score=None,
         guard_embedding_provider="hashing",
         guard_embedding_model=None,
         policy=None,
@@ -60,6 +62,7 @@ def test_inhouse_profile_selects_bge_and_qwen(monkeypatch) -> None:
     assert args.classifier_model == INHOUSE_LLM_MODEL
     assert args.entailment_verifier == "openai"
     assert args.entailment_model == INHOUSE_LLM_MODEL
+    assert args.evidence_min_score == INHOUSE_EVIDENCE_MIN_SCORE
     assert args.policy.name == "guardrail_policy_bge_m3.toml"
 
 
@@ -100,6 +103,7 @@ def test_profile_summary_never_contains_url_or_key(monkeypatch) -> None:
     summary = model_profile_summary("inhouse")
 
     assert summary["endpoint_host"] == "learning-services4.fokus.fraunhofer.de"
+    assert summary["retrieval_evidence_threshold"] == INHOUSE_EVIDENCE_MIN_SCORE
     serialized = str(summary)
     assert "not-for-output" not in serialized
     assert "https://" not in serialized

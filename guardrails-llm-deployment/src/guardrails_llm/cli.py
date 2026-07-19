@@ -58,6 +58,7 @@ from .model_config import (
     openai_config_summary,
 )
 from .model_profiles import (
+    INHOUSE_EVIDENCE_MIN_SCORE,
     InHouseEndpointError,
     MODEL_PROFILES,
     apply_model_profile,
@@ -495,7 +496,7 @@ def main() -> None:
     e2e_capture_parser.add_argument(
         "--evidence-min-score",
         type=_finite_float,
-        required=True,
+        default=INHOUSE_EVIDENCE_MIN_SCORE,
     )
     e2e_capture_parser.add_argument(
         "--entailment-min-confidence",

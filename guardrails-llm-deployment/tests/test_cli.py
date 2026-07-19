@@ -571,7 +571,7 @@ def test_calibrate_inhouse_bge_writes_summary_and_details(
     assert json.loads(capsys.readouterr().out)["holdout_used"] is False
 
 
-def test_capture_inhouse_calibration_requires_explicit_threshold(
+def test_capture_inhouse_calibration_uses_frozen_threshold_by_default(
     tmp_path: Path,
     monkeypatch,
     capsys,
@@ -597,8 +597,6 @@ def test_capture_inhouse_calibration_requires_explicit_threshold(
             "guardrails-llm",
             "capture-inhouse-calibration",
             "--allow-remote-models",
-            "--evidence-min-score",
-            "0.42",
             "--limit-cases",
             "2",
             "--max-concurrency",
@@ -617,7 +615,7 @@ def test_capture_inhouse_calibration_requires_explicit_threshold(
     assert config.answer_model == "Qwen/Qwen3.6-35B-A3B"
     assert config.classifier_model == "Qwen/Qwen3.6-35B-A3B"
     assert config.entailment_model == "Qwen/Qwen3.6-35B-A3B"
-    assert captured_kwargs["evidence_min_score"] == 0.42
+    assert captured_kwargs["evidence_min_score"] == 0.5618841052055359
     assert captured_kwargs["max_concurrency"] == 2
     assert json.loads(capsys.readouterr().out)["completed_runs"] == 4
 
