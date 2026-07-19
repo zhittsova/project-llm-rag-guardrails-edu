@@ -798,6 +798,7 @@ def test_openai_entailment_verifier_uses_strict_chat_contract(tmp_path, monkeypa
     assert call["response_format"] == {"type": "json_object"}
     assert [message["role"] for message in call["messages"]] == ["system", "user"]
     assert "supporting_chunk_ids" in call["messages"][0]["content"]
+    assert 'Allowed supporting_chunk_ids: ["rag:0"]' in call["messages"][0]["content"]
     assert "[rag:0]" in call["messages"][1]["content"]
 
 
@@ -924,6 +925,53 @@ def test_openai_entailment_verifier_retries_one_invalid_chat_response(
     retry_instructions = client.chat.completions.calls[1]["messages"][0]["content"]
     assert "previous response failed validation" in retry_instructions.lower()
     assert "valid json" in retry_instructions.lower()
+
+
+def test_openai_entailment_verifier_retries_unknown_chunk_id_with_allow_list(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENAI_API_URL", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "OPENAI_API_KEY=test-key\n"
+        "OPENAI_API_URL=https://learning.example.edu/litellm/v1\n",
+        encoding="utf-8",
+    )
+    client = FakeOpenAIClient()
+    client.chat.completions = FakeChatCompletionsEndpoint(
+        [
+            (
+                '{"supported":true,"supporting_chunk_ids":["rag"],'
+                '"unsupported_claims":[],"confidence":0.94}'
+            ),
+            (
+                '{"supported":true,"supporting_chunk_ids":["rag:0"],'
+                '"unsupported_claims":[],"confidence":0.94}'
+            ),
+        ]
+    )
+    verifier = OpenAIEntailmentVerifier(
+        OpenAIModelConfig(allow_remote_models=True, env_file=env_file),
+        client=client,
+    )
+    chunk = Chunk(
+        chunk_id="rag:0",
+        doc_id="rag",
+        course_id="guardrails-101",
+        title="RAG",
+        visibility="public",
+        source_type="lecture",
+        text="RAG retrieves evidence.",
+    )
+
+    result = verifier.verify("What is RAG?", "RAG retrieves evidence.", [chunk])
+
+    assert result.supported is True
+    retry_instructions = client.chat.completions.calls[1]["messages"][0]["content"]
+    assert "unknown chunk id" in retry_instructions.lower()
+    assert 'Allowed supporting_chunk_ids: ["rag:0"]' in retry_instructions
 
 
 def test_openai_entailment_verifier_fails_closed_on_provider_error(tmp_path, monkeypatch) -> None:

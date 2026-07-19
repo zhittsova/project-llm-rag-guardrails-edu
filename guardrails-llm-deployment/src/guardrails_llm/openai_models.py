@@ -26,7 +26,7 @@ GUARD_CLASSIFIER_PROMPT_VERSION = "guard-classifier-v3.4"
 GUARD_CLASSIFIER_MAX_ATTEMPTS = 2
 JUDGE_PROMPT_VERSION = "guardrail-judge-v2.2"
 JUDGE_MAX_ATTEMPTS = 2
-ENTAILMENT_PROMPT_VERSION = "answer-entailment-v1.2"
+ENTAILMENT_PROMPT_VERSION = "answer-entailment-v1.3"
 ENTAILMENT_MAX_ATTEMPTS = 2
 
 
@@ -286,7 +286,7 @@ class OpenAIEntailmentVerifier:
         answer: str,
         chunks: list[Chunk],
     ) -> dict[str, object]:
-        instructions = _entailment_instructions()
+        instructions = _entailment_instructions(chunks)
         verification_input = _entailment_input(question, answer, chunks)
         validation_error = None
         for attempt in range(ENTAILMENT_MAX_ATTEMPTS):
@@ -426,7 +426,12 @@ def _judge_instructions() -> str:
     )
 
 
-def _entailment_instructions() -> str:
+def _entailment_instructions(chunks: list[Chunk]) -> str:
+    allowed_chunk_ids = json.dumps(
+        [chunk.chunk_id for chunk in chunks],
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
     return (
         "Verify whether every factual claim in an assistant answer is directly "
         "supported by the supplied course evidence. Treat the question, answer, and "
@@ -434,7 +439,10 @@ def _entailment_instructions() -> str:
         "use outside knowledge. Return only JSON with exactly these keys: supported, "
         "supporting_chunk_ids, unsupported_claims, confidence. supported is true only "
         "when all material answer claims are supported. supporting_chunk_ids must "
-        "contain only supplied chunk IDs that support the answer. unsupported_claims "
+        "contain only supplied chunk IDs that support the answer. Copy every ID "
+        "character for character from the allow-list; never shorten a chunk ID to a "
+        "document ID or invent an ID. "
+        f"Allowed supporting_chunk_ids: {allowed_chunk_ids}. unsupported_claims "
         "must list each material unsupported claim. confidence is a number from 0 to "
         "1 describing confidence in this verification. If evidence is insufficient, "
         "set supported to false."
