@@ -92,9 +92,8 @@ class LearningAssistant:
         started_at = perf_counter()
         triggers: list[str] = []
 
-        # Guardrailed mode сначала проверяет сам пользовательский вопрос.
-        # Baseline RAG намеренно пропускает этот блок, чтобы показать, как
-        # обычный RAG ведет себя без prompt-injection/PII/integrity защит.
+        # Guardrailed mode checks the user question before retrieval. Baseline
+        # RAG skips this stage to expose behavior without input protections.
         if self._mode == "guardrailed":
             input_result = input_guard(
                 question,
@@ -156,9 +155,8 @@ class LearningAssistant:
                             [],
                         )
 
-        # Retrieval общий для baseline и guardrailed режимов, но фильтры разные:
-        # baseline ищет по всему индексу, guardrailed ограничивает поиск текущим
-        # курсом и только public-документами.
+        # Both modes retrieve from one index. Guardrailed mode restricts the
+        # search to the selected course and allowed document visibility.
         visibility = set(self._guardrail_policy.allowed_visibility) if self._mode == "guardrailed" else None
         retrieved = self._retriever.search(
             question,
@@ -167,8 +165,8 @@ class LearningAssistant:
             top_k=self._retrieval_top_k,
         )
         if self._mode == "guardrailed":
-            # Retrieved context считается недоверенным: даже текст из corpus
-            # может содержать indirect prompt injection.
+            # Treat retrieved context as untrusted because corpus text may
+            # contain an indirect prompt injection.
             retrieved = [(sanitize_chunk(chunk, self._guardrail_policy), score) for chunk, score in retrieved]
 
         retrieval_scores = {
@@ -184,8 +182,8 @@ class LearningAssistant:
         unsupported_claims: list[str] = []
 
         if "academic_integrity" in triggers:
-            # Для cheating-запросов guardrailed режим не дает готовое решение,
-            # а достает policy chunk и отвечает в формате помощи/скэффолдинга.
+            # Redirect cheating requests to policy-backed tutoring support
+            # instead of returning a submission-ready solution.
             retrieved = self._retriever.search(
                 route_retrieval_query(question, set(triggers)),
                 course_id=self._course_id,
@@ -326,8 +324,8 @@ class LearningAssistant:
                 else ResponseDisposition.ABSTAIN
             )
 
-        # Output guard проверяет уже готовый ответ. Baseline снова пропускает
-        # этот этап, поэтому может вернуть private data или ungrounded answer.
+        # The output guard checks the completed answer. Baseline skips this
+        # stage and may therefore return private or ungrounded content.
         if self._mode == "guardrailed":
             output_result = output_guard(answer, citations, triggers, self._guardrail_policy)
             triggers.extend(output_result.triggers)
@@ -464,8 +462,8 @@ def build_assistant(
             retrieval_embedder=retrieval_embedder,
         )
 
-    # Ниже строится guardrailed assistant. Baseline уже ушел в отдельный
-    # baseline_pipeline.py, чтобы его можно было читать без guardrail веток.
+    # Build the guardrailed assistant here. The baseline implementation lives
+    # separately so it can be read without conditional guardrail branches.
     classifier = _build_guard_classifier(
         guard_classifier,
         classifier_model=classifier_model,
@@ -619,14 +617,13 @@ def _build_entailment_verifier(
 
 
 def synthesize_answer(question: str, chunks: list[Chunk]) -> str:
-    # Если retrieval ничего не нашел, baseline abstains простой фразой. В
-    # guardrailed режиме output_guard превращает это в более строгий отказ.
+    # When retrieval finds nothing, baseline returns a simple abstention. The
+    # guardrailed mode applies its stricter output policy later.
     if not chunks:
         return "I do not know based on the available course material."
 
-    # Для reproducible demo берем первые найденные chunks и возвращаем первые
-    # предложения как evidence-based ответ. Это проще, чем LLM, но достаточно,
-    # чтобы тестировать retrieval, citations и guardrails.
+    # The deterministic demo extracts sentences from the first chunks. This is
+    # simpler than an LLM while still exercising retrieval and citations.
     evidence = " ".join(chunk.text for chunk in chunks[:2])
     sentences = [sentence.strip() for sentence in evidence.split(".") if sentence.strip()]
     if not sentences:

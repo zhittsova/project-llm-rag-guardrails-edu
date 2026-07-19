@@ -39,11 +39,12 @@ class BaselineRetriever(Protocol):
 
 
 class BaselineRagAssistant:
-    """Минимальный baseline RAG без guardrails.
+    """Minimal baseline RAG without guardrails.
 
-    Этот класс специально оставлен простым для Workshop 2 comparison:
-    тот же retrieval/citation flow, но без prompt-injection detection,
-    PII filter, visibility filter, context sanitization и output guard.
+    This class intentionally stays simple for the Workshop 2 comparison. It
+    uses the same retrieval and citation flow without prompt-injection
+    detection, PII filtering, visibility filtering, context sanitization, or
+    output guards.
     """
 
     def __init__(
