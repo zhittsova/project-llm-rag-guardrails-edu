@@ -326,6 +326,7 @@ def test_openai_guard_classifier_parses_strict_json_with_fake_client(tmp_path, m
     assert "asks to perform or enable it" in instructions
     assert "Label precedence" in instructions
     assert "private vector-store entries" in instructions
+    assert "despite, bypass, or against the rules" in instructions
     assert "salary or biographical fact" in instructions
 
 
