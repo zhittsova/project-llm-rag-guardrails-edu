@@ -197,6 +197,15 @@ def test_calibration_capture_selects_explicit_case_ids(
     assert qwen.calls == 2
     assert hybrid.calls == 2
 
+    report = evaluate_calibration_e2e_capture(
+        calibration_cases_path=CALIBRATION,
+        output_path=tmp_path / "e2e.jsonl",
+        manifest_path=tmp_path / "manifest.json",
+    )
+
+    assert report["qwen_classifier_only"]["expected_cases"] == 2
+    assert report["complete_inhouse_hybrid"]["expected_cases"] == 2
+
 
 def test_calibration_capture_rejects_unknown_explicit_case_id(
     tmp_path: Path,

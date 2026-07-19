@@ -307,13 +307,20 @@ def evaluate_calibration_e2e_capture(
         split="calibration",
         split_path=calibration_cases_path,
     )
+    manifest = _load_manifest(manifest_path or _default_manifest_path(output_path))
+    if manifest is None:
+        raise ValueError("end-to-end evaluation requires its capture manifest")
     if limit_cases is not None:
         if limit_cases < 0:
             raise ValueError("limit_cases must be zero or greater")
         cases = _select_stratified_cases(cases, limit_cases)
-    manifest = _load_manifest(manifest_path or _default_manifest_path(output_path))
-    if manifest is None:
-        raise ValueError("end-to-end evaluation requires its capture manifest")
+    else:
+        selected_case_ids = manifest.get("selected_case_ids")
+        if not isinstance(selected_case_ids, list) or not all(
+            isinstance(case_id, str) for case_id in selected_case_ids
+        ):
+            raise ValueError("capture manifest has invalid selected case IDs")
+        cases = _select_explicit_cases(cases, selected_case_ids)
     _validate_capture_manifest(
         manifest,
         calibration_cases_path=calibration_cases_path,
