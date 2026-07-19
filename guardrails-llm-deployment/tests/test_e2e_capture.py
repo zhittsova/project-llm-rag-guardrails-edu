@@ -133,7 +133,7 @@ def test_calibration_capture_is_resumable_across_both_scenarios(
     assert first["prompt_versions"] == {
         "answer": "rag-answer-v1",
         "classifier": "guard-classifier-v3.4",
-        "entailment": "answer-entailment-v1.3",
+        "entailment": "answer-entailment-v1.4",
     }
     assert first["dataset_version"] == "milestone3-v2"
     assert len(first["dataset_manifest_sha256"]) == 64

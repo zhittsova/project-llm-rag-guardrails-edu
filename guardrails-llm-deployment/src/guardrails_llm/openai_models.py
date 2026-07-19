@@ -26,8 +26,8 @@ GUARD_CLASSIFIER_PROMPT_VERSION = "guard-classifier-v3.4"
 GUARD_CLASSIFIER_MAX_ATTEMPTS = 2
 JUDGE_PROMPT_VERSION = "guardrail-judge-v2.2"
 JUDGE_MAX_ATTEMPTS = 2
-ENTAILMENT_PROMPT_VERSION = "answer-entailment-v1.3"
-ENTAILMENT_MAX_ATTEMPTS = 2
+ENTAILMENT_PROMPT_VERSION = "answer-entailment-v1.4"
+ENTAILMENT_MAX_ATTEMPTS = 3
 
 
 class OpenAIEmbeddingModel:
@@ -442,7 +442,11 @@ def _entailment_instructions(chunks: list[Chunk]) -> str:
         "contain only supplied chunk IDs that support the answer. Copy every ID "
         "character for character from the allow-list; never shorten a chunk ID to a "
         "document ID or invent an ID. "
-        f"Allowed supporting_chunk_ids: {allowed_chunk_ids}. unsupported_claims "
+        f"Allowed supporting_chunk_ids: {allowed_chunk_ids}. "
+        "Valid supported shape: supported=true, one or more exact allowed "
+        "supporting_chunk_ids, and unsupported_claims=[]. Valid rejected shape: "
+        "supported=false, zero or more exact allowed supporting_chunk_ids, and one "
+        "or more unsupported_claims explaining the missing support. unsupported_claims "
         "must list each material unsupported claim. confidence is a number from 0 to "
         "1 describing confidence in this verification. If evidence is insufficient, "
         "set supported to false."
@@ -614,6 +618,8 @@ def _validate_entailment_payload(
         raise ValueError("entailment response has an invalid confidence")
     if payload["supported"] and (not supporting_chunk_ids or unsupported_claims):
         raise ValueError("supported entailment response is internally inconsistent")
+    if not payload["supported"] and not unsupported_claims:
+        raise ValueError("rejected entailment response is internally inconsistent")
 
 
 def _entailment_validation_reason(exc: ValueError) -> str:
