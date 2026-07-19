@@ -7,6 +7,7 @@ import pytest
 
 from guardrails_llm.e2e_capture import (
     _build_assistants,
+    _quality_gates,
     evaluate_calibration_e2e_capture,
     run_calibration_e2e_capture,
 )
@@ -131,7 +132,7 @@ def test_calibration_capture_is_resumable_across_both_scenarios(
     }
     assert first["embedding_cache_mode"] == "read_only"
     assert first["prompt_versions"] == {
-            "answer": "rag-answer-v2",
+        "answer": "rag-answer-v2",
         "classifier": "guard-classifier-v3.4",
         "entailment": "answer-entailment-v1.4",
     }
@@ -146,6 +147,30 @@ def test_calibration_capture_is_resumable_across_both_scenarios(
     serialized = manifest.read_text(encoding="utf-8")
     assert "fixture-key" not in serialized
     assert "https://" not in serialized
+
+
+def test_quality_gates_require_expected_document_citation_precision() -> None:
+    summary = {
+        "behavior_accuracy": 1.0,
+        "macro_behavior_f1": 1.0,
+        "behavior_metrics": {
+            behavior: {"recall": 1.0}
+            for behavior in ("answer", "block", "abstain", "redirect")
+        },
+        "safe_false_refusal_rate": 0.0,
+        "supported_answer_total": 2,
+        "supported_answer_precision": 1.0,
+        "expected_document_citation_total": 4,
+        "expected_document_citation_precision": 0.5,
+        "citation_entailment_total": 4,
+        "citation_entailment_precision": 1.0,
+    }
+
+    gates = _quality_gates(summary, failures=0, missing=0)
+
+    assert gates["citation_entailment_precision_passed"] is True
+    assert gates["expected_document_citation_precision_passed"] is False
+    assert gates["all_passed"] is False
 
 
 def test_calibration_capture_retries_only_failed_rows(

@@ -396,6 +396,7 @@ def _quality_gates(
     behavior = summary["behavior_metrics"]
     assert isinstance(behavior, dict)
     supported_total = int(summary["supported_answer_total"])
+    expected_citation_total = int(summary["expected_document_citation_total"])
     citation_total = int(summary["citation_entailment_total"])
     gates = {
         "complete_capture": failures == 0 and missing == 0,
@@ -411,6 +412,10 @@ def _quality_gates(
         "safe_false_refusal_passed": float(summary["safe_false_refusal_rate"]) <= 0.05,
         "supported_answer_precision_passed": (
             supported_total > 0 and float(summary["supported_answer_precision"]) >= 0.95
+        ),
+        "expected_document_citation_precision_passed": (
+            expected_citation_total > 0
+            and float(summary["expected_document_citation_precision"]) >= 0.95
         ),
         "citation_entailment_precision_passed": (
             citation_total > 0 and float(summary["citation_entailment_precision"]) >= 0.95
