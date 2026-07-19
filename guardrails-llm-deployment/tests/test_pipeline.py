@@ -3,10 +3,12 @@ from types import SimpleNamespace
 
 import pytest
 
+from guardrails_llm.answering import GeneratedAnswer
 from guardrails_llm.baseline_pipeline import BaselineRagAssistant, build_baseline_assistant
 from guardrails_llm.corpus import Chunk, chunk_documents, load_documents
 from guardrails_llm.dispositions import ResponseDisposition
 from guardrails_llm.guard_classifier import GuardClassification
+from guardrails_llm.guardrail_policy import GuardrailPolicy, SimilarityRule
 from guardrails_llm.model_config import RemoteModelsNotAllowedError
 from guardrails_llm.pipeline import LearningAssistant, build_assistant
 from guardrails_llm.retrieval import LexicalRetriever
@@ -31,9 +33,21 @@ class CountingClassifier:
 class StaticRetriever:
     def __init__(self, results: list[tuple[Chunk, float]]) -> None:
         self.results = results
+        self.search_kwargs: list[dict[str, object]] = []
 
     def search(self, _query: str, **_kwargs) -> list[tuple[Chunk, float]]:
+        self.search_kwargs.append(dict(_kwargs))
         return self.results
+
+
+class ConstantEmbedder:
+    model_name = "constant"
+
+    def embed(self, _text: str) -> list[float]:
+        return [1.0, 0.0]
+
+    def embed_many(self, texts: list[str]) -> list[list[float]]:
+        return [[1.0, 0.0] for _text in texts]
 
 
 class CountingGenerator:
@@ -46,6 +60,23 @@ class CountingGenerator:
     def generate(self, _question: str, _chunks: list[Chunk]) -> str:
         self.calls += 1
         return self.answer
+
+
+class AnswerabilityGenerator(CountingGenerator):
+    def __init__(self, *, answerable: bool) -> None:
+        super().__init__()
+        self.answerable = answerable
+
+    def generate(self, _question: str, _chunks: list[Chunk]) -> GeneratedAnswer:
+        self.calls += 1
+        return GeneratedAnswer(
+            text=(
+                "Supported answer."
+                if self.answerable
+                else "I do not know based on the available course material."
+            ),
+            answerable=self.answerable,
+        )
 
 
 class FixedVerifier:
@@ -171,6 +202,104 @@ def test_deterministic_input_guard_short_circuits_classifier() -> None:
     assert "prompt_injection" in response.guard_triggers
 
 
+def test_always_classifier_strategy_checks_benign_question() -> None:
+    classifier = CountingClassifier("safe")
+    assistant = LearningAssistant(
+        LexicalRetriever([]),
+        mode="guardrailed",
+        guard_classifier=classifier,
+        classifier_strategy="always",
+    )
+
+    assistant.answer("What is a Python list?")
+
+    assert classifier.calls == 1
+
+
+def test_classifier_strategy_rejects_unknown_value() -> None:
+    with pytest.raises(ValueError, match="classifier_strategy"):
+        LearningAssistant(
+            LexicalRetriever([]),
+            classifier_strategy="sometimes",
+        )
+
+
+def test_classifier_model_failure_is_visible_in_response() -> None:
+    class FailedClassifier(CountingClassifier):
+        def classify(self, text: str) -> GuardClassification:
+            self.calls += 1
+            return GuardClassification(
+                label="unsafe_request",
+                confidence=1.0,
+                explanation="model_classifier_error:ValueError",
+            )
+
+    classifier = FailedClassifier("unsafe_request")
+    assistant = LearningAssistant(
+        LexicalRetriever([]),
+        mode="guardrailed",
+        guard_classifier=classifier,
+        classifier_strategy="always",
+    )
+
+    response = assistant.answer("What is a Python list?")
+
+    assert "model_classifier_error:ValueError" in response.guard_triggers
+
+
+def test_model_classifier_releases_safe_similarity_candidate() -> None:
+    classifier = CountingClassifier("safe")
+    chunk = _chunk("lists:0", "lists", "Python lists are mutable.")
+    policy = GuardrailPolicy(
+        input_similarity_rules=(
+            SimilarityRule(
+                trigger="unsafe_request",
+                examples=("harmful operational request",),
+                threshold=0.90,
+            ),
+        ),
+        similarity_embedder=ConstantEmbedder(),
+    )
+    assistant = LearningAssistant(
+        StaticRetriever([(chunk, 0.90)]),
+        mode="guardrailed",
+        guardrail_policy=policy,
+        guard_classifier=classifier,
+    )
+
+    response = assistant.answer("Explain why harmful requests are not allowed.")
+
+    assert classifier.calls == 1
+    assert response.disposition is ResponseDisposition.ANSWER
+    assert "unsafe_request" not in response.guard_triggers
+
+
+def test_model_classifier_confirms_similarity_candidate_before_blocking() -> None:
+    classifier = CountingClassifier("unsafe_request")
+    policy = GuardrailPolicy(
+        input_similarity_rules=(
+            SimilarityRule(
+                trigger="unsafe_request",
+                examples=("harmful operational request",),
+                threshold=0.90,
+            ),
+        ),
+        similarity_embedder=ConstantEmbedder(),
+    )
+    assistant = LearningAssistant(
+        StaticRetriever([]),
+        mode="guardrailed",
+        guardrail_policy=policy,
+        guard_classifier=classifier,
+    )
+
+    response = assistant.answer("Give harmful operational steps.")
+
+    assert classifier.calls == 1
+    assert response.disposition is ResponseDisposition.BLOCK
+    assert response.guard_triggers == ["unsafe_request"]
+
+
 def test_langchain_retriever_backend_answers_question() -> None:
     assistant = build_assistant(DATA, mode="guardrailed", retriever_backend="langchain")
     response = assistant.answer("What should the guardrail evaluation assignment compare?")
@@ -255,6 +384,51 @@ def test_evidence_gate_abstains_before_generation_when_scores_are_weak() -> None
     assert response.retrieved_chunks == ["rag:0"]
     assert response.retrieval_scores == {"rag:0": 0.42}
     assert generator.calls == 0
+
+
+def test_guardrailed_assistant_uses_configured_retrieval_budget() -> None:
+    chunk = _chunk("rag:0", "rag", "RAG uses retrieved evidence.")
+    retriever = StaticRetriever([(chunk, 0.90)])
+    assistant = LearningAssistant(
+        retriever,
+        mode="guardrailed",
+        retrieval_top_k=8,
+    )
+
+    assistant.answer("What is RAG?")
+
+    assert retriever.search_kwargs[0]["top_k"] == 8
+
+
+def test_guardrailed_assistant_rejects_invalid_retrieval_budget() -> None:
+    with pytest.raises(ValueError, match="retrieval_top_k"):
+        LearningAssistant(StaticRetriever([]), retrieval_top_k=0)
+
+
+def test_model_answerability_abstains_before_entailment() -> None:
+    chunk = _chunk("unrelated:0", "unrelated", "Unrelated course evidence.")
+    generator = AnswerabilityGenerator(answerable=False)
+    verifier = FixedVerifier(
+        supported=True,
+        supporting_chunk_ids=["unrelated:0"],
+    )
+    assistant = LearningAssistant(
+        StaticRetriever([(chunk, 0.91)]),
+        mode="guardrailed",
+        answer_generator=generator,
+        evidence_min_score=0.70,
+        entailment_verifier=verifier,
+    )
+
+    response = assistant.answer("What is RAG?")
+
+    assert response.disposition is ResponseDisposition.ABSTAIN
+    assert response.answer == "I do not know based on the available course material."
+    assert response.citations == []
+    assert response.guard_triggers == ["ungrounded"]
+    assert response.grounding_supported is False
+    assert generator.calls == 1
+    assert verifier.calls == 0
 
 
 def test_entailment_keeps_only_citations_for_supporting_chunks() -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -40,8 +41,24 @@ class OpenAIModelConfig:
     classifier_model: str = DEFAULT_OPENAI_CLASSIFIER_MODEL
     judge_model: str = DEFAULT_OPENAI_JUDGE_MODEL
     entailment_model: str = DEFAULT_OPENAI_ENTAILMENT_MODEL
+    request_timeout_seconds: float = 90.0
+    max_transport_retries: int = 1
     env_file: Path | None = None
     allow_remote_models: bool = False
+
+    def __post_init__(self) -> None:
+        if (
+            isinstance(self.request_timeout_seconds, bool)
+            or not math.isfinite(self.request_timeout_seconds)
+            or self.request_timeout_seconds <= 0
+        ):
+            raise ValueError("request_timeout_seconds must be a positive finite number")
+        if (
+            isinstance(self.max_transport_retries, bool)
+            or not isinstance(self.max_transport_retries, int)
+            or self.max_transport_retries < 0
+        ):
+            raise ValueError("max_transport_retries must be a non-negative integer")
 
     @property
     def resolved_env_file(self) -> Path:
@@ -81,6 +98,8 @@ def openai_config_summary(env_file: Path | None = None) -> dict[str, object]:
         "classifier_model": DEFAULT_OPENAI_CLASSIFIER_MODEL,
         "judge_model": DEFAULT_OPENAI_JUDGE_MODEL,
         "entailment_model": DEFAULT_OPENAI_ENTAILMENT_MODEL,
+        "request_timeout_seconds": config.request_timeout_seconds,
+        "max_transport_retries": config.max_transport_retries,
     }
 
 
@@ -121,13 +140,24 @@ def should_use_chat_completions(config: OpenAIModelConfig) -> bool:
     return resolve_openai_base_url(config) is not None
 
 
-def openai_client_kwargs(config: OpenAIModelConfig) -> dict[str, str]:
+def openai_client_kwargs(config: OpenAIModelConfig) -> dict[str, object]:
     load_local_env(config.env_file)
-    kwargs = {"api_key": os.getenv(config.api_key_env, "")}
+    kwargs: dict[str, object] = {
+        "api_key": os.getenv(config.api_key_env, ""),
+        "timeout": config.request_timeout_seconds,
+        "max_retries": config.max_transport_retries,
+    }
     base_url = resolve_openai_base_url(config)
     if base_url:
         kwargs["base_url"] = base_url
     return kwargs
+
+
+def openai_request_policy(config: OpenAIModelConfig) -> dict[str, object]:
+    return {
+        "timeout_seconds": config.request_timeout_seconds,
+        "max_transport_retries": config.max_transport_retries,
+    }
 
 
 def _clean_env_value(value: str | None) -> str | None:

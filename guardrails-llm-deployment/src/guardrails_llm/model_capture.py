@@ -28,8 +28,10 @@ from .model_config import (
     OpenAIModelConfig,
     ensure_openai_api_key,
     ensure_remote_models_allowed,
+    openai_request_policy,
     resolve_openai_base_url,
 )
+from .openai_models import GUARD_CLASSIFIER_PROMPT_VERSION, JUDGE_PROMPT_VERSION
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -84,6 +86,19 @@ def run_model_calibration_capture(
         "endpoint_category": endpoint_category,
         "limit_cases": limit_cases,
         "selection_strategy": selection_strategy,
+        "request_policy": openai_request_policy(config),
+        "prompt_versions": {
+            **(
+                {"classifier": GUARD_CLASSIFIER_PROMPT_VERSION}
+                if component in {"classifier", "both"}
+                else {}
+            ),
+            **(
+                {"judge": JUDGE_PROMPT_VERSION}
+                if component in {"judge", "both"}
+                else {}
+            ),
+        },
     }
 
     classifier_cases = []

@@ -133,9 +133,9 @@ def test_bge_m3_policy_uses_calibrated_similarity_thresholds() -> None:
         rule.trigger: rule.threshold
         for rule in policy.input_similarity_rules
     } == {
-        "prompt_injection": 0.61,
-        "pii": 0.57,
-        "academic_integrity": 0.62,
+        "prompt_injection": 0.5951756871547365,
+        "pii": 0.5412877154927469,
+        "academic_integrity": 0.5156032455169239,
     }
 
 

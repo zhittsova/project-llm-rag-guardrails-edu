@@ -371,13 +371,20 @@ def test_grounding_evaluation_preserves_evidence_and_reports_metrics() -> None:
         [
             AssistantResponse(
                 answer="RAG retrieves evidence.",
-                citations=["RAG (rag)"],
-                cited_doc_ids=["rag"],
+                citations=["RAG (rag)", "Other (other)"],
+                cited_doc_ids=["rag", "other"],
                 disposition=ResponseDisposition.ANSWER,
                 retrieved_chunks=["other:0", "rag:0"],
                 retrieved_doc_ids=["other", "rag"],
                 retrieval_scores={"other:0": 0.92, "rag:0": 0.89},
                 retrieved_evidence=[
+                    {
+                        "chunk_id": "other:0",
+                        "doc_id": "other",
+                        "title": "Other",
+                        "text": "Retrieval supplies context.",
+                        "score": 0.92,
+                    },
                     {
                         "chunk_id": "rag:0",
                         "doc_id": "rag",
@@ -386,7 +393,7 @@ def test_grounding_evaluation_preserves_evidence_and_reports_metrics() -> None:
                         "score": 0.89,
                     }
                 ],
-                supporting_chunks=["rag:0"],
+                supporting_chunks=["rag:0", "other:0"],
                 grounding_supported=True,
                 grounding_confidence=0.96,
             ),
@@ -415,9 +422,9 @@ def test_grounding_evaluation_preserves_evidence_and_reports_metrics() -> None:
     assert supported.language == "en"
     assert supported.expected_doc_ids == ["rag"]
     assert supported.retrieved_doc_ids == ["other", "rag"]
-    assert supported.retrieved_evidence[0]["text"] == "RAG retrieves evidence."
-    assert supported.cited_doc_ids == ["rag"]
-    assert supported.supporting_chunks == ["rag:0"]
+    assert supported.retrieved_evidence[1]["text"] == "RAG retrieves evidence."
+    assert supported.cited_doc_ids == ["rag", "other"]
+    assert supported.supporting_chunks == ["rag:0", "other:0"]
     assert supported.grounding_confidence == 0.96
     assert summary["retrieval_evaluable_total"] == 1
     assert summary["retrieval_recall_at_3"] == 1.0
@@ -426,8 +433,12 @@ def test_grounding_evaluation_preserves_evidence_and_reports_metrics() -> None:
     assert summary["evidence_sufficiency_accuracy"] == 1.0
     assert summary["supported_answer_total"] == 1
     assert summary["supported_answer_precision"] == 1.0
-    assert summary["citation_entailment_total"] == 1
+    assert summary["expected_document_citation_total"] == 2
+    assert summary["expected_document_citation_precision"] == 0.5
+    assert summary["citation_entailment_total"] == 2
     assert summary["citation_entailment_precision"] == 1.0
+    assert summary["citation_entailment_scope"] == "model_verifier_conditioned"
     assert summary["claim_support_total"] == 1
     assert summary["claim_support_rate"] == 1.0
+    assert summary["claim_support_scope"] == "model_verifier_conditioned"
     assert results[1].grounding_error == "entailment_verifier_error:TimeoutError"

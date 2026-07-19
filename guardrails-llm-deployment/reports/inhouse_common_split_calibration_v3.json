@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "evidence_scope": "calibration_only",
+  "dataset_version": "milestone3-v2",
+  "cases": 400,
+  "cases_per_disposition": 100,
+  "holdout_used": false,
+  "techniques": {
+    "baseline": {
+      "behavior_accuracy": 0.25,
+      "macro_f1": 0.1,
+      "row_accuracy_95ci": [0.2075, 0.29],
+      "family_accuracy_95ci": [0.1107, 0.5152],
+      "false_unsafe_answer_rate": 1.0
+    },
+    "regex_only_with_shared_controls": {
+      "behavior_accuracy": 0.5075,
+      "macro_f1": 0.4204,
+      "row_accuracy_95ci": [0.46, 0.555],
+      "family_accuracy_95ci": [0.2244, 0.8177],
+      "safe_false_refusal_rate": 0.255,
+      "false_unsafe_answer_rate": 0.255
+    },
+    "fuzzy_only_with_shared_controls": {
+      "behavior_accuracy": 0.5375,
+      "macro_f1": 0.4849,
+      "row_accuracy_95ci": [0.4925, 0.585],
+      "family_accuracy_95ci": [0.3166, 0.7848],
+      "safe_false_refusal_rate": 0.18,
+      "false_unsafe_answer_rate": 0.285
+    },
+    "bge_similarity_with_shared_controls": {
+      "behavior_accuracy": 0.79,
+      "macro_f1": 0.7878,
+      "row_accuracy_95ci": [0.7525, 0.83],
+      "family_accuracy_95ci": [0.6054, 0.8959],
+      "safe_false_refusal_rate": 0.085,
+      "false_unsafe_answer_rate": 0.165
+    },
+    "deterministic_hybrid": {
+      "behavior_accuracy": 0.7925,
+      "macro_f1": 0.7899,
+      "row_accuracy_95ci": [0.755, 0.83],
+      "family_accuracy_95ci": [0.6054, 0.8998],
+      "safe_false_refusal_rate": 0.08,
+      "false_unsafe_answer_rate": 0.165
+    },
+    "qwen_classifier_only": {
+      "behavior_accuracy": 0.97,
+      "macro_f1": 0.9699,
+      "row_accuracy_95ci": [0.9525, 0.985],
+      "family_accuracy_95ci": [0.9514, 0.9899],
+      "answer_recall": 0.88,
+      "block_recall": 1.0,
+      "abstain_recall": 1.0,
+      "redirect_recall": 1.0,
+      "safe_false_refusal_rate": 0.06,
+      "false_unsafe_answer_rate": 0.0,
+      "supported_answer_precision": 1.0,
+      "citation_entailment_precision": 1.0,
+      "expected_document_citation_precision": 0.786,
+      "average_latency_ms": 15240.71,
+      "all_quality_gates_passed": false
+    },
+    "complete_inhouse_hybrid": {
+      "behavior_accuracy": 0.97,
+      "macro_f1": 0.9699,
+      "row_accuracy_95ci": [0.9525, 0.9875],
+      "family_accuracy_95ci": [0.951, 0.9896],
+      "answer_recall": 0.88,
+      "block_recall": 1.0,
+      "abstain_recall": 1.0,
+      "redirect_recall": 1.0,
+      "safe_false_refusal_rate": 0.06,
+      "false_unsafe_answer_rate": 0.0,
+      "supported_answer_precision": 1.0,
+      "citation_entailment_precision": 1.0,
+      "expected_document_citation_precision": 0.78,
+      "average_latency_ms": 13718.81,
+      "all_quality_gates_passed": false
+    }
+  },
+  "interpretation": {
+    "primary_result": "Model classification plus grounded generation materially improves behavior quality.",
+    "hybrid_vs_qwen": "Equal behavior quality on this split; deterministic short-circuits reduce average latency.",
+    "remaining_quality_failure": "Twelve safe policy-explanation questions abstained, leaving answer recall below target.",
+    "expected_document_labels": "generated_not_human_adjudicated",
+    "citation_note": "Verifier-conditioned citation entailment passed; strict expected-document agreement remains provisional.",
+    "comparison_limit": "Deterministic techniques use extractive generation without Qwen entailment, while model-backed techniques use Qwen answerability and entailment.",
+    "final_holdout_status": "not_run"
+  }
+}

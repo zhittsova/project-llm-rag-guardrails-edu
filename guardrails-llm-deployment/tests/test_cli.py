@@ -111,6 +111,7 @@ def test_compare_guardrails_writes_json_artifact(tmp_path: Path, monkeypatch) ->
         "default_guardrails",
         "hybrid_policy_guardrails",
     ]
+    assert data["baseline"]["confidence_intervals"]["row"]["sampling_units"] == 2
     for label in (
         "similarity_plus_shared_controls",
         "hybrid_policy_guardrails",
@@ -170,6 +171,35 @@ def test_comparison_scenarios_isolate_local_guardrail_techniques() -> None:
             "metadata_filter",
             "citation_requirement",
         ]
+
+
+def test_comparison_scenarios_include_qwen_only_and_complete_hybrid() -> None:
+    policy = load_guardrail_policy(
+        ROOT / "data" / "guardrail_policy.toml",
+        similarity_embedder=HashingEmbedder(),
+    )
+    args = SimpleNamespace(guard_classifier="openai")
+    scenarios = {
+        label: (scenario_policy, classifier, profile)
+        for label, _mode, scenario_policy, classifier, profile
+        in _comparison_scenarios(args, policy)
+    }
+
+    qwen_policy, qwen_classifier, qwen_profile = scenarios["qwen_classifier_only"]
+    assert qwen_classifier == "openai"
+    assert qwen_profile["classifier_strategy"] == "always"
+    assert not qwen_policy.input_rules
+    assert not qwen_policy.input_fuzzy_rules
+    assert not qwen_policy.input_similarity_rules
+
+    hybrid_policy, hybrid_classifier, hybrid_profile = scenarios[
+        "complete_inhouse_hybrid"
+    ]
+    assert hybrid_classifier == "openai"
+    assert hybrid_profile["classifier_strategy"] == "always"
+    assert hybrid_policy.input_rules
+    assert hybrid_policy.input_fuzzy_rules
+    assert hybrid_policy.input_similarity_rules
 
 
 def test_compare_guardrails_writes_detailed_results(tmp_path: Path, monkeypatch) -> None:
@@ -378,6 +408,218 @@ def test_capture_model_calibration_wires_safe_cli_options(
     assert json.loads(capsys.readouterr().out)["evidence_scope"] == (
         "live_remote_model_capture"
     )
+
+
+def test_capture_v2_classifier_uses_inhouse_profile(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    captured_kwargs = {}
+
+    def fake_capture(**kwargs):
+        captured_kwargs.update(kwargs)
+        return {"status": "complete", "completed_cases": 2}
+
+    monkeypatch.setenv(
+        "OPENAI_BASE_URL",
+        "https://learning-services4.fokus.fraunhofer.de/litellm/v1",
+    )
+    monkeypatch.setattr(
+        "guardrails_llm.cli.run_v2_classifier_capture",
+        fake_capture,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "capture-v2-classifier",
+            "--allow-remote-models",
+            "--limit-cases",
+            "2",
+            "--max-concurrency",
+            "4",
+            "--retry-failures",
+            "--output",
+            str(tmp_path / "predictions.jsonl"),
+            "--manifest",
+            str(tmp_path / "manifest.json"),
+        ],
+    )
+
+    main()
+
+    assert captured_kwargs["config"].classifier_model == "Qwen/Qwen3.6-35B-A3B"
+    assert captured_kwargs["config"].allow_remote_models is True
+    assert captured_kwargs["limit_cases"] == 2
+    assert captured_kwargs["max_concurrency"] == 4
+    assert captured_kwargs["retry_failures"] is True
+    assert json.loads(capsys.readouterr().out)["completed_cases"] == 2
+
+
+def test_evaluate_v2_classifier_is_local(tmp_path: Path, monkeypatch, capsys) -> None:
+    captured_kwargs = {}
+
+    def fake_evaluate(**kwargs):
+        captured_kwargs.update(kwargs)
+        return {"quality_gates": {"all_passed": False}}
+
+    monkeypatch.setattr(
+        "guardrails_llm.cli.evaluate_v2_classifier_capture",
+        fake_evaluate,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "evaluate-v2-classifier",
+            "--predictions",
+            str(tmp_path / "predictions.jsonl"),
+            "--limit-cases",
+            "10",
+        ],
+    )
+
+    main()
+
+    assert captured_kwargs["limit_cases"] == 10
+    assert "config" not in captured_kwargs
+    assert json.loads(capsys.readouterr().out)["quality_gates"]["all_passed"] is False
+
+
+def test_prepare_inhouse_bge_wires_profile_without_calling_api(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    captured_kwargs = {}
+
+    def fake_prepare(**kwargs):
+        captured_kwargs.update(kwargs)
+        return {"status": "prepared", "index": {"chunks": 10}}
+
+    monkeypatch.setenv(
+        "OPENAI_BASE_URL",
+        "https://learning-services4.fokus.fraunhofer.de/litellm/v1",
+    )
+    monkeypatch.setattr("guardrails_llm.cli.prepare_inhouse_bge", fake_prepare)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "prepare-inhouse-bge",
+            "--allow-remote-models",
+            "--index-dir",
+            str(tmp_path / "chroma"),
+            "--manifest",
+            str(tmp_path / "manifest.json"),
+        ],
+    )
+
+    main()
+
+    assert captured_kwargs["config"].embedding_model == "BAAI/bge-m3"
+    assert captured_kwargs["cache_path"].name == "bge-m3.jsonl"
+    assert captured_kwargs["config"].allow_remote_models is True
+    assert json.loads(capsys.readouterr().out)["status"] == "prepared"
+
+
+def test_calibrate_inhouse_bge_writes_summary_and_details(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    captured_kwargs = {}
+
+    def fake_evaluate(**kwargs):
+        captured_kwargs.update(kwargs)
+        return {"holdout_used": False}, {"bge_m3": [], "hashing": []}
+
+    summary_path = tmp_path / "summary.json"
+    details_path = tmp_path / "details.json"
+    monkeypatch.setenv(
+        "OPENAI_BASE_URL",
+        "https://learning-services4.fokus.fraunhofer.de/litellm/v1",
+    )
+    monkeypatch.setattr(
+        "guardrails_llm.cli.run_bge_common_split_evaluation",
+        fake_evaluate,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "calibrate-inhouse-bge",
+            "--allow-remote-models",
+            "--output-json",
+            str(summary_path),
+            "--output-details-json",
+            str(details_path),
+        ],
+    )
+
+    main()
+
+    assert captured_kwargs["config"].embedding_model == "BAAI/bge-m3"
+    assert captured_kwargs["cache_path"].name == "bge-m3.jsonl"
+    assert json.loads(summary_path.read_text())["holdout_used"] is False
+    assert set(json.loads(details_path.read_text())) == {"bge_m3", "hashing"}
+    assert json.loads(capsys.readouterr().out)["holdout_used"] is False
+
+
+def test_capture_inhouse_calibration_uses_frozen_threshold_by_default(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    captured_kwargs = {}
+
+    def fake_capture(**kwargs):
+        captured_kwargs.update(kwargs)
+        return {"status": "complete", "completed_runs": 4}
+
+    monkeypatch.setenv(
+        "OPENAI_BASE_URL",
+        "https://learning-services4.fokus.fraunhofer.de/litellm/v1",
+    )
+    monkeypatch.setattr(
+        "guardrails_llm.cli.run_calibration_e2e_capture",
+        fake_capture,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "capture-inhouse-calibration",
+            "--allow-remote-models",
+            "--limit-cases",
+            "2",
+            "--max-concurrency",
+            "2",
+            "--retry-failures",
+            "--output",
+            str(tmp_path / "capture.jsonl"),
+            "--manifest",
+            str(tmp_path / "manifest.json"),
+        ],
+    )
+
+    main()
+
+    config = captured_kwargs["config"]
+    assert config.embedding_model == "BAAI/bge-m3"
+    assert config.answer_model == "Qwen/Qwen3.6-35B-A3B"
+    assert config.classifier_model == "Qwen/Qwen3.6-35B-A3B"
+    assert config.entailment_model == "Qwen/Qwen3.6-35B-A3B"
+    assert captured_kwargs["evidence_min_score"] == 0.5203531980514526
+    assert captured_kwargs["max_concurrency"] == 2
+    assert captured_kwargs["retry_failures"] is True
+    assert json.loads(capsys.readouterr().out)["completed_runs"] == 4
 
 
 def test_query_wires_grounded_evidence_options(monkeypatch, capsys) -> None:

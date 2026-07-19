@@ -1,4 +1,9 @@
-from guardrails_llm.embeddings import CachedEmbedder
+import json
+from pathlib import Path
+
+import pytest
+
+from guardrails_llm.embeddings import CachedEmbedder, PersistentCachedEmbedder
 
 
 class CountingEmbedder:
@@ -41,3 +46,64 @@ def test_cached_embedder_rejects_incomplete_provider_response() -> None:
         assert "returned 0 vectors for 1 texts" in str(exc)
     else:
         raise AssertionError("expected incomplete embedding response to fail")
+
+
+def test_persistent_cache_reuses_vectors_without_raw_text(tmp_path: Path) -> None:
+    cache_path = tmp_path / "bge-cache.jsonl"
+    first_delegate = CountingEmbedder()
+    first = PersistentCachedEmbedder(first_delegate, cache_path, batch_size=2)
+
+    assert first.embed_many(["secret alpha", "beta", "gamma"]) == [
+        [12.0],
+        [4.0],
+        [5.0],
+    ]
+    assert first_delegate.calls == [["secret alpha", "beta"], ["gamma"]]
+
+    second_delegate = CountingEmbedder()
+    second = PersistentCachedEmbedder(second_delegate, cache_path, batch_size=2)
+
+    assert second.embed_many(["gamma", "secret alpha"]) == [[5.0], [12.0]]
+    assert second_delegate.calls == []
+    assert second.cache_hits == 2
+    serialized = cache_path.read_text(encoding="utf-8")
+    assert "secret alpha" not in serialized
+    assert "beta" not in serialized
+    assert "gamma" not in serialized
+
+
+def test_persistent_cache_keeps_models_isolated(tmp_path: Path) -> None:
+    cache_path = tmp_path / "embedding-cache.jsonl"
+    first_delegate = CountingEmbedder()
+    PersistentCachedEmbedder(first_delegate, cache_path).embed("alpha")
+
+    second_delegate = CountingEmbedder()
+    second_delegate.model_name = "different-model"
+    PersistentCachedEmbedder(second_delegate, cache_path).embed("alpha")
+
+    records = [json.loads(line) for line in cache_path.read_text().splitlines()]
+    assert {record["model"] for record in records} == {
+        "test-embedding",
+        "different-model",
+    }
+    assert second_delegate.calls == [["alpha"]]
+
+
+def test_persistent_cache_rejects_corrupt_record(tmp_path: Path) -> None:
+    cache_path = tmp_path / "embedding-cache.jsonl"
+    cache_path.write_text('{"schema_version": 1}\n', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="invalid embedding cache record"):
+        PersistentCachedEmbedder(CountingEmbedder(), cache_path)
+
+
+def test_persistent_cache_read_only_mode_rejects_missing_text(tmp_path: Path) -> None:
+    cache_path = tmp_path / "embedding-cache.jsonl"
+    PersistentCachedEmbedder(CountingEmbedder(), cache_path).embed("cached")
+    delegate = CountingEmbedder()
+    read_only = PersistentCachedEmbedder(delegate, cache_path, read_only=True)
+
+    assert read_only.embed("cached") == [6.0]
+    with pytest.raises(ValueError, match="read-only embedding cache is missing 1 text"):
+        read_only.embed("missing")
+    assert delegate.calls == []

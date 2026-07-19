@@ -7,8 +7,14 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from time import perf_counter
 
+from .confidence_intervals import bootstrap_confidence_intervals
 from .corpus import default_data_path, validate_corpus
+from .bge_evaluation import run_bge_common_split_evaluation
 from .course_corpus import default_course_output_path, default_course_source_path, normalize_course_corpus
+from .e2e_capture import (
+    evaluate_calibration_e2e_capture,
+    run_calibration_e2e_capture,
+)
 from .embeddings import CachedEmbedder, create_embedder
 from .evaluation import (
     EvalCase,
@@ -21,6 +27,11 @@ from .evaluation import (
 from .evaluation_dataset import DatasetValidationError, load_evaluation_cases_for_run
 from .guardrail_policy import GuardrailPolicy, default_policy_path, load_guardrail_policy
 from .guard_text import normalize_guard_text
+from .inhouse_experiment import (
+    evaluate_v2_classifier_capture,
+    prepare_inhouse_bge,
+    run_v2_classifier_capture,
+)
 from .judging import judge_results, judgments_to_json, summarize_judgments
 from .model_calibration import (
     DEFAULT_CALIBRATION_SOURCE_CASES,
@@ -46,6 +57,13 @@ from .model_config import (
     RemoteModelsNotAllowedError,
     openai_config_summary,
 )
+from .model_profiles import (
+    INHOUSE_EVIDENCE_MIN_SCORE,
+    InHouseEndpointError,
+    MODEL_PROFILES,
+    apply_model_profile,
+    model_profile_summary,
+)
 from .pipeline import build_assistant
 from .retrieval_benchmark import run_local_retrieval_benchmark
 from .vector import VectorIndexError, build_vector_index, default_index_path
@@ -59,6 +77,7 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     query_parser = subparsers.add_parser("query", help="Ask one question")
+    _add_profile_arg(query_parser)
     query_parser.add_argument("--corpus", dest="command_corpus", type=Path)
     query_parser.add_argument("--index-dir", type=Path, default=default_index_path())
     query_parser.add_argument("--course-id", default="guardrails-101")
@@ -73,6 +92,7 @@ def main() -> None:
     query_parser.add_argument("--question", required=True)
 
     eval_parser = subparsers.add_parser("evaluate", help="Run JSONL evaluation")
+    _add_profile_arg(eval_parser)
     eval_parser.add_argument("--corpus", dest="command_corpus", type=Path)
     eval_parser.add_argument("--index-dir", type=Path, default=default_index_path())
     eval_parser.add_argument("--course-id", default="guardrails-101")
@@ -95,6 +115,7 @@ def main() -> None:
     eval_parser.add_argument("--show-judgments", action="store_true")
 
     compare_parser = subparsers.add_parser("compare-guardrails", help="Compare guardrail techniques on one evaluation set")
+    _add_profile_arg(compare_parser)
     compare_parser.add_argument("--corpus", dest="command_corpus", type=Path)
     compare_parser.add_argument("--index-dir", type=Path, default=default_index_path())
     compare_parser.add_argument("--course-id", default="guardrails-101")
@@ -186,6 +207,7 @@ def main() -> None:
         "capture-model-calibration",
         help="Capture gated remote classifier and judge predictions",
     )
+    _add_profile_arg(capture_parser)
     capture_parser.add_argument(
         "--component",
         choices=["classifier", "judge", "both"],
@@ -237,7 +259,294 @@ def main() -> None:
     capture_parser.add_argument("--allow-remote-models", action="store_true")
     capture_parser.add_argument("--env-file", type=Path)
 
+    v2_classifier_parser = subparsers.add_parser(
+        "capture-v2-classifier",
+        help="Capture the resumable 600-case in-house classifier benchmark",
+    )
+    v2_classifier_parser.add_argument(
+        "--profile",
+        choices=MODEL_PROFILES,
+        default="inhouse",
+    )
+    v2_classifier_parser.add_argument(
+        "--development-cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_development.jsonl",
+    )
+    v2_classifier_parser.add_argument(
+        "--calibration-cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_calibration.jsonl",
+    )
+    v2_classifier_parser.add_argument(
+        "--course-corpus",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "data" / "python_course_docs.jsonl",
+    )
+    v2_classifier_parser.add_argument(
+        "--policy",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "data" / "guardrail_policy_bge_m3.toml",
+    )
+    v2_classifier_parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_classifier_v2_predictions.jsonl",
+    )
+    v2_classifier_parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_classifier_v2_manifest.json",
+    )
+    v2_classifier_parser.add_argument("--classifier-model")
+    v2_classifier_parser.add_argument("--limit-cases", type=int)
+    v2_classifier_parser.add_argument("--max-concurrency", type=int, default=1)
+    v2_classifier_parser.add_argument("--retry-failures", action="store_true")
+    v2_classifier_parser.add_argument("--allow-remote-models", action="store_true")
+    v2_classifier_parser.add_argument("--env-file", type=Path)
+
+    v2_classifier_eval_parser = subparsers.add_parser(
+        "evaluate-v2-classifier",
+        help="Evaluate saved v2 classifier predictions without remote calls",
+    )
+    v2_classifier_eval_parser.add_argument(
+        "--development-cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_development.jsonl",
+    )
+    v2_classifier_eval_parser.add_argument(
+        "--calibration-cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_calibration.jsonl",
+    )
+    v2_classifier_eval_parser.add_argument(
+        "--predictions",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_classifier_v2_predictions.jsonl",
+    )
+    v2_classifier_eval_parser.add_argument("--limit-cases", type=int)
+    v2_classifier_eval_parser.add_argument("--output-json", type=Path)
+
+    bge_prepare_parser = subparsers.add_parser(
+        "prepare-inhouse-bge",
+        help="Cache v2 BGE embeddings and build the real-course Chroma index",
+    )
+    bge_prepare_parser.add_argument(
+        "--profile",
+        choices=["inhouse"],
+        default="inhouse",
+    )
+    bge_prepare_parser.add_argument(
+        "--development-cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_development.jsonl",
+    )
+    bge_prepare_parser.add_argument(
+        "--calibration-cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_calibration.jsonl",
+    )
+    bge_prepare_parser.add_argument(
+        "--course-corpus",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "data" / "python_course_docs.jsonl",
+    )
+    bge_prepare_parser.add_argument(
+        "--policy",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "data" / "guardrail_policy_bge_m3.toml",
+    )
+    bge_prepare_parser.add_argument(
+        "--index-dir",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "indexes" / "python-course-bge-m3",
+    )
+    bge_prepare_parser.add_argument("--chunk-size", type=int, default=650)
+    bge_prepare_parser.add_argument("--chunk-overlap", type=int, default=80)
+    bge_prepare_parser.add_argument("--embedding-model")
+    bge_prepare_parser.add_argument("--embedding-cache", type=Path)
+    bge_prepare_parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_bge_preparation_manifest.json",
+    )
+    bge_prepare_parser.add_argument("--allow-remote-models", action="store_true")
+    bge_prepare_parser.add_argument("--env-file", type=Path)
+
+    bge_evaluation_parser = subparsers.add_parser(
+        "calibrate-inhouse-bge",
+        help="Compare BGE and hashing on common development/calibration cases",
+    )
+    bge_evaluation_parser.add_argument(
+        "--profile",
+        choices=["inhouse"],
+        default="inhouse",
+    )
+    bge_evaluation_parser.add_argument(
+        "--development-cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_development.jsonl",
+    )
+    bge_evaluation_parser.add_argument(
+        "--calibration-cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_calibration.jsonl",
+    )
+    bge_evaluation_parser.add_argument(
+        "--course-corpus",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "data" / "python_course_docs.jsonl",
+    )
+    bge_evaluation_parser.add_argument(
+        "--policy",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "data" / "guardrail_policy_bge_m3.toml",
+    )
+    bge_evaluation_parser.add_argument(
+        "--bge-index-dir",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "indexes" / "python-course-bge-m3",
+    )
+    bge_evaluation_parser.add_argument(
+        "--hashing-index-dir",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "indexes" / "python-course-hashing-v2",
+    )
+    bge_evaluation_parser.add_argument("--embedding-model")
+    bge_evaluation_parser.add_argument("--embedding-cache", type=Path)
+    bge_evaluation_parser.add_argument("--course-id", default="python-intro")
+    bge_evaluation_parser.add_argument("--top-k", type=int, default=3)
+    bge_evaluation_parser.add_argument(
+        "--output-json",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_bge_common_split_summary.json",
+    )
+    bge_evaluation_parser.add_argument(
+        "--output-details-json",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_bge_common_split_details.json",
+    )
+    bge_evaluation_parser.add_argument("--allow-remote-models", action="store_true")
+    bge_evaluation_parser.add_argument("--env-file", type=Path)
+
+    e2e_capture_parser = subparsers.add_parser(
+        "capture-inhouse-calibration",
+        help="Run resumable Qwen-only and complete-hybrid calibration scenarios",
+    )
+    e2e_capture_parser.add_argument(
+        "--profile",
+        choices=["inhouse"],
+        default="inhouse",
+    )
+    e2e_capture_parser.add_argument(
+        "--cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_calibration.jsonl",
+    )
+    e2e_capture_parser.add_argument(
+        "--course-corpus",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "data" / "python_course_docs.jsonl",
+    )
+    e2e_capture_parser.add_argument(
+        "--policy",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "data" / "guardrail_policy_bge_m3.toml",
+    )
+    e2e_capture_parser.add_argument(
+        "--index-dir",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "indexes" / "python-course-bge-m3",
+    )
+    e2e_capture_parser.add_argument("--embedding-model")
+    e2e_capture_parser.add_argument("--embedding-cache", type=Path)
+    e2e_capture_parser.add_argument("--answer-model")
+    e2e_capture_parser.add_argument("--classifier-model")
+    e2e_capture_parser.add_argument("--entailment-model")
+    e2e_capture_parser.add_argument(
+        "--evidence-min-score",
+        type=_finite_float,
+        default=INHOUSE_EVIDENCE_MIN_SCORE,
+    )
+    e2e_capture_parser.add_argument(
+        "--entailment-min-confidence",
+        type=_unit_float,
+        default=0.80,
+    )
+    e2e_capture_parser.add_argument("--course-id", default="python-intro")
+    e2e_capture_parser.add_argument("--limit-cases", type=int)
+    e2e_capture_parser.add_argument("--max-concurrency", type=int, default=1)
+    e2e_capture_parser.add_argument("--retry-failures", action="store_true")
+    e2e_capture_parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_calibration_e2e.jsonl",
+    )
+    e2e_capture_parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_calibration_e2e_manifest.json",
+    )
+    e2e_capture_parser.add_argument("--allow-remote-models", action="store_true")
+    e2e_capture_parser.add_argument("--env-file", type=Path)
+
+    e2e_eval_parser = subparsers.add_parser(
+        "evaluate-inhouse-calibration",
+        help="Evaluate saved in-house calibration captures locally",
+    )
+    e2e_eval_parser.add_argument(
+        "--cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_calibration.jsonl",
+    )
+    e2e_eval_parser.add_argument(
+        "--capture",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_calibration_e2e.jsonl",
+    )
+    e2e_eval_parser.add_argument("--limit-cases", type=int)
+    e2e_eval_parser.add_argument("--output-json", type=Path)
+
     index_parser = subparsers.add_parser("build-index", help="Build a local Chroma vector index")
+    _add_profile_arg(index_parser)
     index_parser.add_argument("--corpus", dest="command_corpus", type=Path)
     index_parser.add_argument("--index-dir", type=Path, default=default_index_path())
     index_parser.add_argument("--chunk-size", type=int, default=650)
@@ -252,6 +561,7 @@ def main() -> None:
 
     model_config_parser = subparsers.add_parser("model-config", help="Show safe remote-model configuration")
     model_config_parser.add_argument("--provider", choices=["openai"], default="openai")
+    _add_profile_arg(model_config_parser)
     model_config_parser.add_argument("--env-file", type=Path)
 
     course_parser = subparsers.add_parser("normalize-course-corpus", help="Normalize markdown course corpus to JSONL")
@@ -260,6 +570,7 @@ def main() -> None:
     course_parser.add_argument("--course-id", default="python-intro")
 
     visualize_parser = subparsers.add_parser("visualize", help="Write a static HTML RAG pipeline visualization")
+    _add_profile_arg(visualize_parser)
     visualize_parser.add_argument("--corpus", dest="command_corpus", type=Path)
     visualize_parser.add_argument("--index-dir", type=Path, default=default_index_path())
     visualize_parser.add_argument("--course-id", default="guardrails-101")
@@ -275,6 +586,10 @@ def main() -> None:
     visualize_parser.add_argument("--output", type=Path, required=True)
 
     args = parser.parse_args()
+    try:
+        apply_model_profile(args)
+    except (InHouseEndpointError, ValueError) as exc:
+        parser.error(str(exc))
     corpus_path = getattr(args, "command_corpus", None) or args.corpus
 
     if args.command == "validate-corpus":
@@ -305,7 +620,10 @@ def main() -> None:
         return
 
     if args.command == "model-config":
-        print(json.dumps(openai_config_summary(args.env_file), indent=2))
+        if args.profile == "local":
+            print(json.dumps(openai_config_summary(args.env_file), indent=2))
+        else:
+            print(json.dumps(model_profile_summary(args.profile, args.env_file), indent=2))
         return
 
     if args.command == "benchmark-retrieval":
@@ -388,6 +706,178 @@ def main() -> None:
         print(json.dumps(manifest, indent=2))
         return
 
+    if args.command == "capture-v2-classifier":
+        try:
+            manifest = run_v2_classifier_capture(
+                config=OpenAIModelConfig(
+                    classifier_model=args.classifier_model or DEFAULT_OPENAI_CLASSIFIER_MODEL,
+                    allow_remote_models=args.allow_remote_models,
+                    env_file=args.env_file,
+                ),
+                development_cases_path=args.development_cases,
+                calibration_cases_path=args.calibration_cases,
+                corpus_path=args.course_corpus,
+                policy_path=args.policy,
+                output_path=args.output,
+                manifest_path=args.manifest,
+                limit_cases=args.limit_cases,
+                max_concurrency=args.max_concurrency,
+                retry_failures=args.retry_failures,
+            )
+        except (
+            OSError,
+            ValueError,
+            RemoteModelsNotAllowedError,
+            MissingModelCredentialError,
+        ) as exc:
+            parser.error(str(exc))
+        print(json.dumps(manifest, indent=2))
+        return
+
+    if args.command == "evaluate-v2-classifier":
+        try:
+            report = evaluate_v2_classifier_capture(
+                development_cases_path=args.development_cases,
+                calibration_cases_path=args.calibration_cases,
+                predictions_path=args.predictions,
+                limit_cases=args.limit_cases,
+            )
+        except (OSError, ValueError) as exc:
+            parser.error(str(exc))
+        if args.output_json:
+            args.output_json.parent.mkdir(parents=True, exist_ok=True)
+            args.output_json.write_text(
+                json.dumps(report, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        print(json.dumps(report, indent=2))
+        return
+
+    if args.command == "prepare-inhouse-bge":
+        try:
+            manifest = prepare_inhouse_bge(
+                config=OpenAIModelConfig(
+                    embedding_model=args.embedding_model,
+                    allow_remote_models=args.allow_remote_models,
+                    env_file=args.env_file,
+                ),
+                development_cases_path=args.development_cases,
+                calibration_cases_path=args.calibration_cases,
+                corpus_path=args.course_corpus,
+                policy_path=args.policy,
+                index_dir=args.index_dir,
+                cache_path=args.embedding_cache,
+                manifest_path=args.manifest,
+                chunk_size=args.chunk_size,
+                chunk_overlap=args.chunk_overlap,
+            )
+        except (
+            OSError,
+            ValueError,
+            VectorIndexError,
+            RemoteModelsNotAllowedError,
+            MissingModelCredentialError,
+            RemoteModelCallError,
+        ) as exc:
+            parser.error(str(exc))
+        print(json.dumps(manifest, indent=2))
+        return
+
+    if args.command == "calibrate-inhouse-bge":
+        try:
+            summary, details = run_bge_common_split_evaluation(
+                config=OpenAIModelConfig(
+                    embedding_model=args.embedding_model,
+                    allow_remote_models=args.allow_remote_models,
+                    env_file=args.env_file,
+                ),
+                development_cases_path=args.development_cases,
+                calibration_cases_path=args.calibration_cases,
+                corpus_path=args.course_corpus,
+                policy_path=args.policy,
+                bge_index_dir=args.bge_index_dir,
+                hashing_index_dir=args.hashing_index_dir,
+                cache_path=args.embedding_cache,
+                course_id=args.course_id,
+                top_k=args.top_k,
+            )
+        except (
+            OSError,
+            ValueError,
+            VectorIndexError,
+            RemoteModelsNotAllowedError,
+            MissingModelCredentialError,
+            RemoteModelCallError,
+        ) as exc:
+            parser.error(str(exc))
+        args.output_json.parent.mkdir(parents=True, exist_ok=True)
+        args.output_json.write_text(
+            json.dumps(summary, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        args.output_details_json.parent.mkdir(parents=True, exist_ok=True)
+        args.output_details_json.write_text(
+            json.dumps(details, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(json.dumps(summary, indent=2))
+        return
+
+    if args.command == "capture-inhouse-calibration":
+        try:
+            manifest = run_calibration_e2e_capture(
+                config=OpenAIModelConfig(
+                    embedding_model=args.embedding_model,
+                    answer_model=args.answer_model,
+                    classifier_model=args.classifier_model,
+                    entailment_model=args.entailment_model,
+                    allow_remote_models=args.allow_remote_models,
+                    env_file=args.env_file,
+                ),
+                calibration_cases_path=args.cases,
+                corpus_path=args.course_corpus,
+                policy_path=args.policy,
+                index_dir=args.index_dir,
+                cache_path=args.embedding_cache,
+                output_path=args.output,
+                manifest_path=args.manifest,
+                evidence_min_score=args.evidence_min_score,
+                entailment_min_confidence=args.entailment_min_confidence,
+                course_id=args.course_id,
+                limit_cases=args.limit_cases,
+                max_concurrency=args.max_concurrency,
+                retry_failures=args.retry_failures,
+            )
+        except (
+            OSError,
+            ValueError,
+            VectorIndexError,
+            RemoteModelsNotAllowedError,
+            MissingModelCredentialError,
+            RemoteModelCallError,
+        ) as exc:
+            parser.error(str(exc))
+        print(json.dumps(manifest, indent=2))
+        return
+
+    if args.command == "evaluate-inhouse-calibration":
+        try:
+            report = evaluate_calibration_e2e_capture(
+                calibration_cases_path=args.cases,
+                output_path=args.capture,
+                limit_cases=args.limit_cases,
+            )
+        except (OSError, ValueError) as exc:
+            parser.error(str(exc))
+        if args.output_json:
+            args.output_json.parent.mkdir(parents=True, exist_ok=True)
+            args.output_json.write_text(
+                json.dumps(report, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        print(json.dumps(report, indent=2))
+        return
+
     if args.command == "normalize-course-corpus":
         stats = normalize_course_corpus(args.source, args.output, course_id=args.course_id)
         print(
@@ -413,6 +903,7 @@ def main() -> None:
                 embedding_model=args.embedding_model,
                 allow_remote_models=args.allow_remote_models,
                 env_file=args.env_file,
+                embedding_cache_path=args.embedding_cache,
             )
         except (
             VectorIndexError,
@@ -440,10 +931,13 @@ def main() -> None:
                 embedding_model=args.embedding_model,
                 allow_remote_models=args.allow_remote_models,
                 env_file=args.env_file,
+                embedding_cache_path=args.embedding_cache,
                 generator=args.generator,
                 answer_model=args.answer_model,
                 guard_classifier=args.guard_classifier,
                 classifier_model=args.classifier_model,
+                classifier_strategy=args.classifier_strategy,
+                retrieval_top_k=args.retrieval_top_k,
                 evidence_min_score=args.evidence_min_score,
                 entailment_verifier=args.entailment_verifier,
                 entailment_model=args.entailment_model,
@@ -492,10 +986,16 @@ def main() -> None:
                     embedding_model=args.embedding_model,
                     allow_remote_models=args.allow_remote_models,
                     env_file=args.env_file,
+                    embedding_cache_path=args.embedding_cache,
                     generator=args.generator,
                     answer_model=args.answer_model,
                     guard_classifier=classifier,
                     classifier_model=args.classifier_model,
+                    classifier_strategy=profile.get(
+                        "classifier_strategy",
+                        "ambiguous",
+                    ),
+                    retrieval_top_k=args.retrieval_top_k,
                     evidence_min_score=args.evidence_min_score,
                     entailment_verifier=args.entailment_verifier,
                     entailment_model=args.entailment_model,
@@ -507,6 +1007,9 @@ def main() -> None:
                     asdict(result) for result in comparison_results
                 ]
                 comparison_summary = profile | summarize(comparison_results)
+                comparison_summary["confidence_intervals"] = (
+                    bootstrap_confidence_intervals(comparison_results)
+                )
                 comparison_summary["eval_split"] = args.case_split
                 preloads = {}
                 if retrieval_preload:
@@ -514,7 +1017,7 @@ def main() -> None:
                 if guard_preload and label in {
                     "similarity_plus_shared_controls",
                     "hybrid_policy_guardrails",
-                    "model_classifier_guardrails",
+                    "complete_inhouse_hybrid",
                 }:
                     preloads["guard_similarity"] = guard_preload
                 if preloads:
@@ -560,10 +1063,13 @@ def main() -> None:
             embedding_model=getattr(args, "embedding_model", None),
             allow_remote_models=getattr(args, "allow_remote_models", False),
             env_file=getattr(args, "env_file", None),
+            embedding_cache_path=getattr(args, "embedding_cache", None),
             generator=getattr(args, "generator", "extractive"),
             answer_model=getattr(args, "answer_model", None),
             guard_classifier=getattr(args, "guard_classifier", "none"),
             classifier_model=getattr(args, "classifier_model", None),
+            classifier_strategy=getattr(args, "classifier_strategy", "ambiguous"),
+            retrieval_top_k=getattr(args, "retrieval_top_k", 3),
             evidence_min_score=getattr(args, "evidence_min_score", None),
             entailment_verifier=getattr(args, "entailment_verifier", "none"),
             entailment_model=getattr(args, "entailment_model", None),
@@ -622,6 +1128,11 @@ def _add_embedding_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--embedding-model")
     parser.add_argument("--allow-remote-models", action="store_true")
     parser.add_argument("--env-file", type=Path)
+    parser.add_argument("--embedding-cache", type=Path)
+
+
+def _add_profile_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--profile", choices=MODEL_PROFILES, default="local")
 
 
 def _load_run_cases(
@@ -646,9 +1157,15 @@ def _add_generation_args(parser: argparse.ArgumentParser) -> None:
 def _add_guard_classifier_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--guard-classifier", choices=["none", "openai"], default="none")
     parser.add_argument("--classifier-model")
+    parser.add_argument(
+        "--classifier-strategy",
+        choices=["ambiguous", "always"],
+        default="ambiguous",
+    )
 
 
 def _add_grounding_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--retrieval-top-k", type=int, default=3)
     parser.add_argument("--evidence-min-score", type=_finite_float)
     parser.add_argument(
         "--entailment-verifier",
@@ -718,6 +1235,7 @@ def _load_guardrail_policy(args):
         model=args.guard_embedding_model,
         allow_remote_models=args.allow_remote_models,
         env_file=args.env_file,
+        cache_path=getattr(args, "embedding_cache", None),
     )
     return load_guardrail_policy(policy_path, similarity_embedder=similarity_embedder)
 
@@ -731,6 +1249,7 @@ def _preload_retrieval_embedder(args, cases):
             model=args.embedding_model,
             allow_remote_models=args.allow_remote_models,
             env_file=args.env_file,
+            cache_path=getattr(args, "embedding_cache", None),
         )
     )
     stats = _preload_embeddings(
@@ -751,6 +1270,7 @@ def _load_comparison_policy(args, cases):
             model=args.guard_embedding_model,
             allow_remote_models=args.allow_remote_models,
             env_file=args.env_file,
+            cache_path=getattr(args, "embedding_cache", None),
         )
     )
     policy = load_guardrail_policy(policy_path, similarity_embedder=embedder)
@@ -805,6 +1325,16 @@ def _comparison_scenarios(args, policy):
     similarity_policy = replace(
         policy,
         input_rules=(),
+        input_fuzzy_rules=(),
+        output_rules=(),
+        output_fuzzy_rules=(),
+        context_rules=(),
+        context_fuzzy_rules=(),
+    )
+    classifier_only_policy = replace(
+        policy,
+        input_rules=(),
+        input_similarity_rules=(),
         input_fuzzy_rules=(),
         output_rules=(),
         output_fuzzy_rules=(),
@@ -929,14 +1459,34 @@ def _comparison_scenarios(args, policy):
         ),
     ]
     if args.guard_classifier != "none":
-        scenarios.append(
+        scenarios.extend(
+            [
             (
-                "model_classifier_guardrails",
+                "qwen_classifier_only",
+                "guardrailed",
+                classifier_only_policy,
+                args.guard_classifier,
+                {
+                    "technique": "Qwen classifier with shared metadata and citation controls",
+                    "guardrail_layers": [
+                        "model_classifier",
+                        "metadata_filter",
+                        "citation_requirement",
+                    ],
+                    "classifier_strategy": "always",
+                    "latency_expected": "high",
+                    "robustness_expected": "model-dependent",
+                    "implementation_effort": "high",
+                    "shared_controls": shared_controls,
+                },
+            ),
+            (
+                "complete_inhouse_hybrid",
                 "guardrailed",
                 policy,
                 args.guard_classifier,
                 {
-                    "technique": "hybrid policy + model classifier for ambiguous prompts",
+                    "technique": "hybrid policy + model classifier for unresolved prompts",
                     "guardrail_layers": [
                         "policy_file",
                         "text_normalization",
@@ -952,8 +1502,10 @@ def _comparison_scenarios(args, policy):
                     "robustness_expected": "highest_on_paraphrases",
                     "implementation_effort": "high",
                     "shared_controls": shared_controls,
+                    "classifier_strategy": "always",
                 },
-            )
+            ),
+            ]
         )
     return scenarios
 

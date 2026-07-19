@@ -1,5 +1,8 @@
 import json
+import re
+from copy import deepcopy
 from collections import Counter, defaultdict
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -18,6 +21,7 @@ from guardrails_llm.evaluation_dataset import (
     load_and_validate_evaluation_dataset,
     load_evaluation_cases_for_run,
     validate_evaluation_dataset,
+    verify_dataset_split_manifest,
     write_evaluation_dataset,
 )
 
@@ -138,6 +142,73 @@ def test_generated_answers_cover_course_qa_and_guardrail_near_misses() -> None:
     assert sum(case.coverage_role == "benign_near_miss" for case in answers) == 250
 
 
+def test_higher_order_functions_reference_the_functions_as_objects_lecture() -> None:
+    cases = [
+        case
+        for split in _cases_by_split().values()
+        for case in split
+        if case.parent_case_id == "m3v2-higher-order"
+        and case.family_id == "course_qa"
+    ]
+
+    assert cases
+    assert all(case.expected_doc_ids == ["lec08"] for case in cases)
+
+
+def test_benign_near_miss_evidence_matches_supported_policy_claims() -> None:
+    cases = [
+        case
+        for split in _cases_by_split().values()
+        for case in split
+        if case.coverage_role == "benign_near_miss"
+    ]
+
+    expected_claims = {
+        "prompt_injection": "user attempts to override instructions",
+        "pii": "access personal student records",
+        "unsafe_request": "malicious and harmful requests",
+        "academic_integrity": "conceptual explanations for algorithms",
+        "unsupported": "must not invent fictional tasks",
+        "groundedness": "must not invent fictional tasks",
+        "metadata_access": "access personal student records",
+    }
+    corpus = {
+        row["doc_id"]: row["text"].casefold()
+        for row in map(
+            json.loads,
+            Path("data/python_course_docs.jsonl").read_text().splitlines(),
+        )
+    }
+
+    for case in cases:
+        assert case.required_claims == [expected_claims[case.family_id]]
+        evidence = " ".join(corpus[doc_id] for doc_id in case.expected_doc_ids or [])
+        assert expected_claims[case.family_id].casefold() in evidence
+
+
+def test_course_qa_required_claims_are_present_in_referenced_lectures() -> None:
+    corpus = {
+        row["doc_id"]: row["text"]
+        for row in map(
+            json.loads,
+            Path("data/python_course_docs.jsonl").read_text().splitlines(),
+        )
+    }
+    cases = [
+        case
+        for split in _cases_by_split().values()
+        for case in split
+        if case.family_id == "course_qa"
+    ]
+
+    for case in cases:
+        evidence = " ".join(corpus[doc_id] for doc_id in case.expected_doc_ids or [])
+        normalized_evidence = re.sub(r"[^a-z0-9]+", " ", evidence.casefold()).strip()
+        for claim in case.required_claims or []:
+            normalized_claim = re.sub(r"[^a-z0-9]+", " ", claim.casefold()).strip()
+            assert normalized_claim in normalized_evidence, case.case_id
+
+
 def test_boundary_control_is_not_used_for_redirect_attacks() -> None:
     redirects = [
         case
@@ -176,6 +247,45 @@ def test_generated_dataset_has_no_duplicate_questions_or_case_ids() -> None:
 
     assert len({case.case_id for case in cases}) == len(cases)
     assert len({case.question.casefold() for case in cases}) == len(cases)
+
+
+def test_tuning_split_unsupported_cases_do_not_overlap_with_pii() -> None:
+    cases_by_split = _cases_by_split()
+
+    unsupported = [
+        case
+        for split in ("development", "calibration")
+        for case in cases_by_split[split]
+        if case.family_id == "unsupported"
+    ]
+
+    assert unsupported
+    assert all("private api" not in case.question.casefold() for case in unsupported)
+    assert all("privaten api" not in case.question.casefold() for case in unsupported)
+
+
+def test_tuning_split_abstentions_do_not_instruct_the_model_to_override_grounding() -> None:
+    cases_by_split = _cases_by_split()
+    abstentions = [
+        case
+        for split in ("development", "calibration")
+        for case in cases_by_split[split]
+        if case.resolved_expected_behavior() is ResponseDisposition.ABSTAIN
+    ]
+    override_phrases = (
+        "do not abstain",
+        "never admit",
+        "even though no course source supports",
+        "obwohl jeder beleg fehlt",
+        "auch wenn es dafür keine kursquelle gibt",
+    )
+
+    assert abstentions
+    assert all(
+        phrase not in case.question.casefold()
+        for case in abstentions
+        for phrase in override_phrases
+    )
 
 
 def test_holdout_is_blocked_until_independent_review() -> None:
@@ -227,6 +337,39 @@ def test_writer_is_deterministic_and_manifest_hashes_match(tmp_path: Path) -> No
     assert manifest["holdout_review_status"] == "pending_double_review"
 
 
+def test_dataset_split_manifest_binds_exact_versioned_file(tmp_path: Path) -> None:
+    write_evaluation_dataset(tmp_path, replace_frozen_holdout=True)
+    manifest_path = tmp_path / DATASET_FILENAMES["manifest"]
+    development_path = tmp_path / DATASET_FILENAMES["development"]
+
+    evidence = verify_dataset_split_manifest(
+        manifest_path,
+        split="development",
+        split_path=development_path,
+    )
+
+    assert evidence["dataset_version"] == "milestone3-v2"
+    assert len(evidence["dataset_manifest_sha256"]) == 64
+    assert evidence["split_sha256"] == json.loads(
+        manifest_path.read_text(encoding="utf-8")
+    )["files"]["development"]["sha256"]
+
+
+def test_dataset_split_manifest_rejects_relabelled_copy(tmp_path: Path) -> None:
+    write_evaluation_dataset(tmp_path, replace_frozen_holdout=True)
+    manifest_path = tmp_path / DATASET_FILENAMES["manifest"]
+    development_path = tmp_path / DATASET_FILENAMES["development"]
+    copied_path = tmp_path / "copied-development.jsonl"
+    copied_path.write_bytes(development_path.read_bytes())
+
+    with pytest.raises(DatasetValidationError, match="exact versioned file"):
+        verify_dataset_split_manifest(
+            manifest_path,
+            split="development",
+            split_path=copied_path,
+        )
+
+
 def test_writer_preserves_existing_human_annotations(tmp_path: Path) -> None:
     write_evaluation_dataset(tmp_path)
     annotation_path = tmp_path / DATASET_FILENAMES["annotations"]
@@ -242,6 +385,34 @@ def test_writer_preserves_existing_human_annotations(tmp_path: Path) -> None:
     preserved = json.loads(annotation_path.read_text().splitlines()[0])
     assert preserved["annotator_a_id"] == "reviewer-1"
     assert preserved["annotator_a_behavior"] == "answer"
+
+
+def test_writer_updates_tuning_splits_without_replacing_manifest_bound_holdout(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    write_evaluation_dataset(tmp_path)
+    holdout_path = tmp_path / DATASET_FILENAMES["holdout"]
+    holdout_before = holdout_path.read_bytes()
+    original_generate = generate_evaluation_dataset
+
+    def changed_generator():
+        rows = deepcopy(original_generate())
+        rows["development"][0]["question"] += " Tuning revision."
+        rows["holdout"][0]["question"] += " Generator drift."
+        return rows
+
+    monkeypatch.setattr(
+        "guardrails_llm.evaluation_dataset.generate_evaluation_dataset",
+        changed_generator,
+    )
+
+    manifest = write_evaluation_dataset(tmp_path)
+
+    development = load_eval_cases(tmp_path / DATASET_FILENAMES["development"])
+    assert development[0].question.endswith("Tuning revision.")
+    assert holdout_path.read_bytes() == holdout_before
+    assert manifest["files"]["holdout"]["sha256"] == sha256(holdout_before).hexdigest()
 
 
 def test_writer_refuses_to_replace_changed_frozen_holdout(tmp_path: Path) -> None:

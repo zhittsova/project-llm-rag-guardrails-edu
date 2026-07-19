@@ -175,6 +175,11 @@ def test_classifier_capture_writes_replay_file_and_safe_manifest(
     assert manifest == stored_manifest
     assert manifest["evidence_scope"] == "live_remote_model_capture"
     assert manifest["endpoint_category"] == "custom_openai_compatible"
+    assert manifest["request_policy"] == {
+        "timeout_seconds": 90.0,
+        "max_transport_retries": 1,
+    }
+    assert manifest["prompt_versions"]["classifier"] == "guard-classifier-v3.4"
     assert manifest["classifier"] == {
         "model": "fake-classifier",
         "output_path": str(classifier_output),
@@ -199,7 +204,7 @@ def test_judge_capture_reconstructs_source_case_and_result(
     manifest_output = tmp_path / "manifest.json"
     judge = FakeJudge()
 
-    run_model_calibration_capture(
+    manifest = run_model_calibration_capture(
         component="judge",
         config=_test_config(tmp_path, monkeypatch),
         judge_cases_path=JUDGE_CASES,
@@ -227,6 +232,7 @@ def test_judge_capture_reconstructs_source_case_and_result(
     assert source_case.case_id == "normal-003"
     assert source_result.case_id == "normal-003"
     assert source_result.actual_behavior.value == "answer"
+    assert manifest["prompt_versions"]["judge"] == "guardrail-judge-v2.2"
 
 
 def test_both_capture_validates_all_inputs_before_model_calls(

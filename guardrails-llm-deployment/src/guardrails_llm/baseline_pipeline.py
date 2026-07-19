@@ -5,7 +5,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Protocol
 
-from .answering import AnswerGenerator
+from .answering import AnswerGenerator, unpack_generated_answer
 from .corpus import Chunk, chunk_documents, load_documents
 from .dispositions import ResponseDisposition
 from .embeddings import TextEmbedder
@@ -69,7 +69,9 @@ class BaselineRagAssistant:
 
         retrieved_chunks = [chunk for chunk, _score in retrieved]
         if self._answer_generator:
-            answer = self._answer_generator.generate(question, retrieved_chunks)
+            answer = unpack_generated_answer(
+                self._answer_generator.generate(question, retrieved_chunks)
+            ).text
         else:
             # Baseline generation is extractive and local by default: no LLM call.
             answer = synthesize_baseline_answer(retrieved_chunks)
@@ -115,6 +117,7 @@ def build_baseline_assistant(
     embedding_model: str | None = None,
     allow_remote_models: bool = False,
     env_file: Path | None = None,
+    embedding_cache_path: Path | None = None,
     answer_generator: AnswerGenerator | None = None,
     retrieval_embedder: TextEmbedder | None = None,
 ) -> BaselineRagAssistant:
@@ -135,7 +138,9 @@ def build_baseline_assistant(
             embedding_model=embedding_model,
             allow_remote_models=allow_remote_models,
             env_file=env_file,
+            embedding_cache_path=embedding_cache_path,
             embedder=retrieval_embedder,
+            corpus_path=Path(corpus_path),
         )
     else:
         raise ValueError("retriever_backend must be 'lexical', 'langchain', or 'vector'")

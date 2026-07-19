@@ -5,7 +5,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Protocol
 
-from .answering import AnswerGenerator
+from .answering import AnswerGenerator, unpack_generated_answer
 from .baseline_pipeline import BaselineRagAssistant, build_baseline_assistant
 from .corpus import Chunk, chunk_documents, load_documents
 from .dispositions import ResponseDisposition
@@ -14,7 +14,9 @@ from .guard_classifier import GuardClassifier, should_use_model_classifier
 from .guardrail_policy import GuardrailPolicy
 from .guards import input_guard, make_integrity_safe, output_guard, sanitize_untrusted_context
 from .grounding import EntailmentVerifier, select_relevant_evidence
+from .model_config import OpenAIModelConfig
 from .retrieval import LexicalRetriever
+from .retrieval_routing import route_retrieval_query
 
 
 @dataclass(frozen=True)
@@ -59,12 +61,18 @@ class LearningAssistant:
         guardrail_policy: GuardrailPolicy | None = None,
         answer_generator: AnswerGenerator | None = None,
         guard_classifier: GuardClassifier | None = None,
+        classifier_strategy: str = "ambiguous",
+        retrieval_top_k: int = 3,
         evidence_min_score: float | None = None,
         entailment_verifier: EntailmentVerifier | None = None,
         entailment_min_confidence: float = 0.80,
     ) -> None:
         if mode not in {"baseline", "guardrailed"}:
             raise ValueError("mode must be 'baseline' or 'guardrailed'")
+        if classifier_strategy not in {"ambiguous", "always"}:
+            raise ValueError("classifier_strategy must be 'ambiguous' or 'always'")
+        if retrieval_top_k <= 0:
+            raise ValueError("retrieval_top_k must be greater than zero")
         self._retriever = retriever
         self._mode = mode
         self._course_id = course_id
@@ -72,6 +80,8 @@ class LearningAssistant:
         self._guardrail_policy = guardrail_policy or GuardrailPolicy.default()
         self._answer_generator = answer_generator
         self._guard_classifier = guard_classifier
+        self._classifier_strategy = classifier_strategy
+        self._retrieval_top_k = retrieval_top_k
         self._evidence_min_score = evidence_min_score
         self._entailment_verifier = entailment_verifier
         self._entailment_min_confidence = entailment_min_confidence
@@ -84,7 +94,11 @@ class LearningAssistant:
         # Baseline RAG намеренно пропускает этот блок, чтобы показать, как
         # обычный RAG ведет себя без prompt-injection/PII/integrity защит.
         if self._mode == "guardrailed":
-            input_result = input_guard(question, self._guardrail_policy)
+            input_result = input_guard(
+                question,
+                self._guardrail_policy,
+                include_similarity=self._guard_classifier is None,
+            )
             triggers.extend(input_result.triggers)
             if not input_result.allowed:
                 return self._response(
@@ -95,8 +109,29 @@ class LearningAssistant:
                     started_at,
                     [],
                 )
-            if should_use_model_classifier(question, self._guardrail_policy, triggers) and self._guard_classifier:
+            similarity_candidates = (
+                self._guardrail_policy.input_similarity_triggers(question)
+                if self._guard_classifier is not None and not triggers
+                else []
+            )
+            should_classify = (
+                not triggers
+                and self._guard_classifier is not None
+                and (
+                    bool(similarity_candidates)
+                    or
+                    self._classifier_strategy == "always"
+                    or should_use_model_classifier(
+                        question,
+                        self._guardrail_policy,
+                        triggers,
+                    )
+                )
+            )
+            if should_classify:
                 classification = self._guard_classifier.classify(question)
+                if classification.explanation.startswith("model_classifier_error:"):
+                    triggers.append(classification.explanation)
                 if classification.label != "safe" and classification.confidence >= 0.65:
                     triggers.append(classification.label)
                     if classification.label == "unsupported":
@@ -127,6 +162,7 @@ class LearningAssistant:
             question,
             course_id=self._course_id if self._mode == "guardrailed" else None,
             allowed_visibility=visibility,
+            top_k=self._retrieval_top_k,
         )
         if self._mode == "guardrailed":
             # Retrieved context считается недоверенным: даже текст из corpus
@@ -149,9 +185,10 @@ class LearningAssistant:
             # Для cheating-запросов guardrailed режим не дает готовое решение,
             # а достает policy chunk и отвечает в формате помощи/скэффолдинга.
             retrieved = self._retriever.search(
-                "academic integrity graded work complete submissions hints similar examples",
+                route_retrieval_query(question, set(triggers)),
                 course_id=self._course_id,
                 allowed_visibility=visibility,
+                top_k=self._retrieval_top_k,
             )
             retrieved = [
                 (sanitize_chunk(chunk, self._guardrail_policy), score)
@@ -192,7 +229,24 @@ class LearningAssistant:
             # generation is gated by --allow-remote-models in the CLI.
             retrieved_chunks = [chunk for chunk, _score in retrieved]
             if self._answer_generator:
-                answer = self._answer_generator.generate(question, retrieved_chunks)
+                generated = unpack_generated_answer(
+                    self._answer_generator.generate(question, retrieved_chunks)
+                )
+                answer = generated.text
+                if generated.answerable is False:
+                    triggers.append("ungrounded")
+                    return self._response(
+                        answer,
+                        [],
+                        ResponseDisposition.ABSTAIN,
+                        triggers,
+                        started_at,
+                        [chunk.chunk_id for chunk, _score in retrieved],
+                        retrieved_doc_ids=[chunk.doc_id for chunk, _score in retrieved],
+                        retrieval_scores=retrieval_scores,
+                        retrieved_evidence=retrieved_evidence,
+                        grounding_supported=False,
+                    )
             else:
                 answer = synthesize_answer(question, retrieved_chunks)
             if self._entailment_verifier and retrieved_chunks:
@@ -362,21 +416,26 @@ def build_assistant(
     embedding_model: str | None = None,
     allow_remote_models: bool = False,
     env_file: Path | None = None,
+    embedding_cache_path: Path | None = None,
     generator: str = "extractive",
     answer_model: str | None = None,
     guard_classifier: str = "none",
     classifier_model: str | None = None,
+    classifier_strategy: str = "ambiguous",
+    retrieval_top_k: int = 3,
     evidence_min_score: float | None = None,
     entailment_verifier: str = "none",
     entailment_model: str | None = None,
     entailment_min_confidence: float = 0.80,
     retrieval_embedder: TextEmbedder | None = None,
+    model_config: OpenAIModelConfig | None = None,
 ) -> BaselineRagAssistant | LearningAssistant:
     answer_generator = _build_answer_generator(
         generator,
         answer_model=answer_model,
         allow_remote_models=allow_remote_models,
         env_file=env_file,
+        model_config=model_config,
     )
     if mode == "baseline":
         return build_baseline_assistant(
@@ -388,6 +447,7 @@ def build_assistant(
             embedding_model=embedding_model,
             allow_remote_models=allow_remote_models,
             env_file=env_file,
+            embedding_cache_path=embedding_cache_path,
             answer_generator=answer_generator,
             retrieval_embedder=retrieval_embedder,
         )
@@ -399,12 +459,14 @@ def build_assistant(
         classifier_model=classifier_model,
         allow_remote_models=allow_remote_models,
         env_file=env_file,
+        model_config=model_config,
     )
     verifier = _build_entailment_verifier(
         entailment_verifier,
         entailment_model=entailment_model,
         allow_remote_models=allow_remote_models,
         env_file=env_file,
+        model_config=model_config,
     )
     if retriever_backend == "lexical":
         documents = load_documents(corpus_path)
@@ -423,7 +485,9 @@ def build_assistant(
             embedding_model=embedding_model,
             allow_remote_models=allow_remote_models,
             env_file=env_file,
+            embedding_cache_path=embedding_cache_path,
             embedder=retrieval_embedder,
+            corpus_path=Path(corpus_path),
         )
     else:
         raise ValueError("retriever_backend must be 'lexical', 'langchain', or 'vector'")
@@ -435,6 +499,8 @@ def build_assistant(
         guardrail_policy=guardrail_policy,
         answer_generator=answer_generator,
         guard_classifier=classifier,
+        classifier_strategy=classifier_strategy,
+        retrieval_top_k=retrieval_top_k,
         evidence_min_score=evidence_min_score,
         entailment_verifier=verifier,
         entailment_min_confidence=entailment_min_confidence,
@@ -447,6 +513,7 @@ def _build_answer_generator(
     answer_model: str | None = None,
     allow_remote_models: bool = False,
     env_file: Path | None = None,
+    model_config: OpenAIModelConfig | None = None,
 ) -> AnswerGenerator | None:
     if generator == "extractive":
         return None
@@ -454,13 +521,19 @@ def _build_answer_generator(
         from .model_config import DEFAULT_OPENAI_ANSWER_MODEL, OpenAIModelConfig
         from .openai_models import OpenAIAnswerGenerator
 
-        return OpenAIAnswerGenerator(
-            OpenAIModelConfig(
+        config = (
+            replace(
+                model_config,
+                answer_model=answer_model or model_config.answer_model,
+            )
+            if model_config is not None
+            else OpenAIModelConfig(
                 answer_model=answer_model or DEFAULT_OPENAI_ANSWER_MODEL,
                 allow_remote_models=allow_remote_models,
                 env_file=env_file,
             )
         )
+        return OpenAIAnswerGenerator(config)
     raise ValueError("generator must be 'extractive' or 'openai'")
 
 
@@ -470,6 +543,7 @@ def _build_guard_classifier(
     classifier_model: str | None = None,
     allow_remote_models: bool = False,
     env_file: Path | None = None,
+    model_config: OpenAIModelConfig | None = None,
 ) -> GuardClassifier | None:
     if guard_classifier == "none":
         return None
@@ -477,13 +551,19 @@ def _build_guard_classifier(
         from .model_config import DEFAULT_OPENAI_CLASSIFIER_MODEL, OpenAIModelConfig
         from .openai_models import OpenAIGuardClassifier
 
-        return OpenAIGuardClassifier(
-            OpenAIModelConfig(
+        config = (
+            replace(
+                model_config,
+                classifier_model=classifier_model or model_config.classifier_model,
+            )
+            if model_config is not None
+            else OpenAIModelConfig(
                 classifier_model=classifier_model or DEFAULT_OPENAI_CLASSIFIER_MODEL,
                 allow_remote_models=allow_remote_models,
                 env_file=env_file,
             )
         )
+        return OpenAIGuardClassifier(config)
     raise ValueError("guard_classifier must be 'none' or 'openai'")
 
 
@@ -493,6 +573,7 @@ def _build_entailment_verifier(
     entailment_model: str | None = None,
     allow_remote_models: bool = False,
     env_file: Path | None = None,
+    model_config: OpenAIModelConfig | None = None,
 ) -> EntailmentVerifier | None:
     if entailment_verifier == "none":
         return None
@@ -500,8 +581,13 @@ def _build_entailment_verifier(
         from .model_config import DEFAULT_OPENAI_ENTAILMENT_MODEL, OpenAIModelConfig
         from .openai_models import OpenAIEntailmentVerifier
 
-        return OpenAIEntailmentVerifier(
-            OpenAIModelConfig(
+        config = (
+            replace(
+                model_config,
+                entailment_model=entailment_model or model_config.entailment_model,
+            )
+            if model_config is not None
+            else OpenAIModelConfig(
                 entailment_model=(
                     entailment_model or DEFAULT_OPENAI_ENTAILMENT_MODEL
                 ),
@@ -509,6 +595,7 @@ def _build_entailment_verifier(
                 env_file=env_file,
             )
         )
+        return OpenAIEntailmentVerifier(config)
     raise ValueError("entailment_verifier must be 'none' or 'openai'")
 
 
