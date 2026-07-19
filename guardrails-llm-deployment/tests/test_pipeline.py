@@ -160,6 +160,17 @@ def test_evidence_gate_uses_separate_policy_threshold() -> None:
     ]
 
 
+def test_policy_threshold_requires_policy_context_retrieval() -> None:
+    with pytest.raises(ValueError, match="policy_context_min_score requires"):
+        build_assistant(
+            DATA,
+            mode="guardrailed",
+            retriever_backend="vector",
+            policy_context_top_k=0,
+            policy_context_min_score=0.48,
+        )
+
+
 def test_guardrailed_assistant_answers_normal_question(guardrailed_assistant: LearningAssistant) -> None:
     response = guardrailed_assistant.answer("What risks do guardrails address?")
 

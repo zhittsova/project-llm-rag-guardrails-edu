@@ -438,6 +438,10 @@ def build_assistant(
     retrieval_embedder: TextEmbedder | None = None,
     model_config: OpenAIModelConfig | None = None,
 ) -> BaselineRagAssistant | LearningAssistant:
+    if policy_context_min_score is not None and policy_context_top_k == 0:
+        raise ValueError(
+            "policy_context_min_score requires policy_context_top_k greater than zero"
+        )
     answer_generator = _build_answer_generator(
         generator,
         answer_model=answer_model,
