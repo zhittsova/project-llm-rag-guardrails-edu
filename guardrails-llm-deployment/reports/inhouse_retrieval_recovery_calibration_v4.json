@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "evidence_scope": "inhouse_common_split_calibration",
+  "dataset_version": "milestone3-v2",
+  "cases_per_scenario": 400,
+  "cases_per_disposition": 100,
+  "holdout_used": false,
+  "capture": {
+    "expected_runs": 800,
+    "completed_runs": 800,
+    "failed_runs": 0,
+    "configuration_fingerprint": "f61cf97a346143da0996177ab820b96c1d097919a8de728063b5fed2416b5d79"
+  },
+  "models": {
+    "embedding": "BAAI/bge-m3",
+    "answer": "Qwen/Qwen3.6-35B-A3B",
+    "classifier": "Qwen/Qwen3.6-35B-A3B",
+    "entailment": "Qwen/Qwen3.6-35B-A3B"
+  },
+  "configuration": {
+    "answer_prompt": "rag-answer-v2.4",
+    "classifier_prompt": "guard-classifier-v3.4",
+    "entailment_prompt": "answer-entailment-v1.4",
+    "retrieval_top_k": 8,
+    "policy_context_top_k": 2,
+    "retrieval_evidence_threshold": 0.5203531980514526,
+    "policy_context_threshold": 0.51,
+    "entailment_confidence_threshold": 0.8
+  },
+  "scenarios": {
+    "qwen_classifier_only": {
+      "correct": 394,
+      "behavior_accuracy": 0.985,
+      "macro_f1": 0.985,
+      "answer_recall": 0.94,
+      "block_recall": 1.0,
+      "abstain_recall": 1.0,
+      "redirect_recall": 1.0,
+      "safe_false_refusal_rate": 0.03,
+      "false_unsafe_answer_rate": 0.0,
+      "retrieval_recall_at_3": 0.905,
+      "supported_answer_precision": 1.0,
+      "citation_entailment_precision": 1.0,
+      "expected_document_citation_precision": 0.758,
+      "row_accuracy_95ci": [0.9725, 0.995],
+      "family_accuracy_95ci": [0.9787, 0.9917]
+    },
+    "complete_inhouse_hybrid": {
+      "correct": 391,
+      "behavior_accuracy": 0.978,
+      "macro_f1": 0.978,
+      "answer_recall": 0.91,
+      "block_recall": 1.0,
+      "abstain_recall": 1.0,
+      "redirect_recall": 1.0,
+      "safe_false_refusal_rate": 0.045,
+      "false_unsafe_answer_rate": 0.0,
+      "retrieval_recall_at_3": 0.905,
+      "supported_answer_precision": 1.0,
+      "citation_entailment_precision": 1.0,
+      "expected_document_citation_precision": 0.752,
+      "row_accuracy_95ci": [0.9625, 0.9925],
+      "family_accuracy_95ci": [0.9631, 0.9942]
+    }
+  },
+  "comparison_to_previous_hybrid_calibration": {
+    "previous_correct": 388,
+    "current_correct": 391,
+    "previous_answer_recall": 0.88,
+    "current_answer_recall": 0.91,
+    "previous_safe_false_refusal_rate": 0.06,
+    "current_safe_false_refusal_rate": 0.045
+  },
+  "quality_gate_interpretation": {
+    "agreed_primary_gates_passed": true,
+    "extra_expected_document_citation_gate_passed": false,
+    "all_evaluator_gates_passed": false,
+    "reason": "Verifier-approved citations support the generated answer, but many cited documents are outside the generated expected_doc_ids labels."
+  },
+  "limitations": [
+    "This is calibration evidence; the frozen holdout remains unopened.",
+    "Evaluation labels and expected document IDs are generated and require independent human review.",
+    "The Qwen endpoint can produce different case-level outcomes even with temperature zero; scenario and version comparisons should be interpreted at aggregate level.",
+    "The expected-document citation diagnostic can penalize valid verifier-approved supporting documents when generated labels list only one expected source.",
+    "Latency was recorded automatically but was not a quality gate in this workstream."
+  ]
+}

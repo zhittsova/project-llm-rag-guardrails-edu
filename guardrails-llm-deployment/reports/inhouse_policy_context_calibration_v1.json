@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "evidence_scope": "development_selection_and_calibration_validation",
+  "dataset_version": "milestone3-v2",
+  "holdout_used": false,
+  "embedding_provider": "openai_compatible",
+  "embedding_model": "BAAI/bge-m3",
+  "policy_source_types": [
+    "integrity_policy",
+    "policy"
+  ],
+  "policy_context_top_k": 2,
+  "selected_policy_context_min_score": 0.51,
+  "selection_rule": "highest threshold with development expected-policy-document recall >= 0.95",
+  "general_retrieval_evidence_threshold": 0.5203531980514526,
+  "threshold_sweep": {
+    "development": [
+      {"threshold": 0.48, "expected_policy_doc_recall": 1.0, "non_target_exposure_rate": 0.73},
+      {"threshold": 0.49, "expected_policy_doc_recall": 1.0, "non_target_exposure_rate": 0.641},
+      {"threshold": 0.50, "expected_policy_doc_recall": 0.987, "non_target_exposure_rate": 0.53},
+      {"threshold": 0.51, "expected_policy_doc_recall": 0.967, "non_target_exposure_rate": 0.444},
+      {"threshold": 0.52, "expected_policy_doc_recall": 0.927, "non_target_exposure_rate": 0.334}
+    ],
+    "calibration": [
+      {"threshold": 0.48, "expected_policy_doc_recall": 0.98, "non_target_exposure_rate": 0.886},
+      {"threshold": 0.49, "expected_policy_doc_recall": 0.96, "non_target_exposure_rate": 0.823},
+      {"threshold": 0.50, "expected_policy_doc_recall": 0.96, "non_target_exposure_rate": 0.729},
+      {"threshold": 0.51, "expected_policy_doc_recall": 0.96, "non_target_exposure_rate": 0.609},
+      {"threshold": 0.52, "expected_policy_doc_recall": 0.92, "non_target_exposure_rate": 0.44}
+    ]
+  },
+  "selected_threshold_evidence": {
+    "development": {
+      "cases": 1200,
+      "policy_answer_cases": 150,
+      "expected_policy_doc_hits": 145,
+      "expected_policy_doc_recall": 0.967,
+      "non_policy_target_cases": 1050,
+      "policy_context_exposed_cases": 466,
+      "non_target_exposure_rate": 0.444
+    },
+    "calibration": {
+      "cases": 400,
+      "policy_answer_cases": 50,
+      "expected_policy_doc_hits": 48,
+      "expected_policy_doc_recall": 0.96,
+      "non_policy_target_cases": 350,
+      "policy_context_exposed_cases": 213,
+      "non_target_exposure_rate": 0.609
+    }
+  },
+  "execution": {
+    "embedding_cache_hits": 1600,
+    "embedding_cache_misses": 0,
+    "embedding_api_calls": 0
+  },
+  "limitations": [
+    "Expected document labels are generated and not yet independently adjudicated.",
+    "Policy context exposure is not itself an error; downstream answerability and entailment must still be evaluated.",
+    "The threshold is not promoted until the focused and full end-to-end calibration runs preserve safety and grounding."
+  ]
+}

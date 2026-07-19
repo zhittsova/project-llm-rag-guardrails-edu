@@ -37,12 +37,28 @@ class FailingEmbedder:
 class RecordingCollection:
     def __init__(self) -> None:
         self.query_kwargs: dict[str, object] = {}
+        self.query_history: list[dict[str, object]] = []
 
     def count(self) -> int:
         return 10
 
     def query(self, **kwargs):
         self.query_kwargs = kwargs
+        self.query_history.append(kwargs)
+        where = kwargs.get("where")
+        if where and "source_type" in str(where):
+            return {
+                "documents": [["Course policy evidence."]],
+                "metadatas": [[{
+                    "chunk_id": "course-policy:0",
+                    "doc_id": "course-policy",
+                    "course_id": "guardrails-101",
+                    "title": "Course Policy",
+                    "visibility": "public",
+                    "source_type": "policy",
+                }]],
+                "distances": [[0.2]],
+            }
         return {
             "documents": [["Public course evidence."]],
             "metadatas": [[{
@@ -124,6 +140,65 @@ def test_vector_retriever_applies_metadata_filters_inside_chroma_query(
     }
 
 
+def test_vector_retriever_adds_native_filtered_policy_context(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    collection = RecordingCollection()
+    monkeypatch.setattr(
+        vector,
+        "_persistent_client",
+        lambda _index_dir: RecordingClient(collection),
+    )
+    retriever = VectorRetriever(
+        tmp_path / "chroma",
+        policy_context_top_k=1,
+        policy_context_min_score=0.75,
+    )
+
+    results = retriever.search(
+        "Why does the course policy prohibit hidden prompt disclosure?",
+        course_id="guardrails-101",
+        allowed_visibility={"public"},
+        top_k=3,
+    )
+
+    assert [chunk.doc_id for chunk, _score in results] == [
+        "public-doc",
+        "course-policy",
+    ]
+    assert len(collection.query_history) == 2
+    assert collection.query_history[1]["n_results"] == 1
+    assert collection.query_history[1]["where"] == {
+        "$and": [
+            {"course_id": {"$eq": "guardrails-101"}},
+            {"visibility": {"$in": ["public"]}},
+            {"source_type": {"$in": ["integrity_policy", "policy"]}},
+        ]
+    }
+
+
+def test_vector_retriever_keeps_policy_context_disabled_by_default(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    collection = RecordingCollection()
+    monkeypatch.setattr(
+        vector,
+        "_persistent_client",
+        lambda _index_dir: RecordingClient(collection),
+    )
+    retriever = VectorRetriever(tmp_path / "chroma")
+
+    retriever.search(
+        "What is RAG?",
+        course_id="guardrails-101",
+        allowed_visibility={"public"},
+    )
+
+    assert len(collection.query_history) == 1
+
+
 def test_assistant_uses_injected_retrieval_embedder(tmp_path: Path) -> None:
     index_dir = tmp_path / "chroma"
     embedder = FakeEmbedder()
@@ -146,6 +221,34 @@ def test_assistant_uses_injected_retrieval_embedder(tmp_path: Path) -> None:
     )
 
     assert assistant.answer("What is RAG?").citations
+
+
+def test_build_assistant_passes_policy_context_settings_to_vector_retriever(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeVectorRetriever:
+        def __init__(self, _index_dir, **kwargs) -> None:
+            captured.update(kwargs)
+
+        def search(self, _query, **_kwargs):
+            return []
+
+    monkeypatch.setattr(vector, "VectorRetriever", FakeVectorRetriever)
+
+    build_assistant(
+        DATA,
+        mode="guardrailed",
+        retriever_backend="vector",
+        index_dir=tmp_path / "chroma",
+        policy_context_top_k=2,
+        policy_context_min_score=0.48,
+    )
+
+    assert captured["policy_context_top_k"] == 2
+    assert captured["policy_context_min_score"] == 0.48
 
 
 def test_vector_retriever_explains_missing_index(tmp_path: Path) -> None:

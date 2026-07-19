@@ -225,6 +225,8 @@ def test_openai_answer_generator_uses_retrieved_context_with_fake_client(tmp_pat
     assert "translation or paraphrase" in instructions
     assert "incidental topic or scenario framing" in instructions
     assert "Decide answerable from the claims in your answer" in instructions
+    assert "unrelated topic with a supported policy question" in instructions
+    assert "does not establish a relationship" in instructions
     assert "rag-basics:0" in prompt
     assert "What is RAG?" in prompt
     assert "You are a course-material assistant" not in prompt

@@ -9,6 +9,7 @@ from guardrails_llm.corpus import Chunk, chunk_documents, load_documents
 from guardrails_llm.dispositions import ResponseDisposition
 from guardrails_llm.guard_classifier import GuardClassification
 from guardrails_llm.guardrail_policy import GuardrailPolicy, SimilarityRule
+from guardrails_llm.grounding import select_relevant_evidence
 from guardrails_llm.model_config import RemoteModelsNotAllowedError
 from guardrails_llm.pipeline import LearningAssistant, build_assistant
 from guardrails_llm.retrieval import LexicalRetriever
@@ -109,14 +110,20 @@ class FixedVerifier:
         return self.result
 
 
-def _chunk(chunk_id: str, doc_id: str, text: str) -> Chunk:
+def _chunk(
+    chunk_id: str,
+    doc_id: str,
+    text: str,
+    *,
+    source_type: str = "lecture",
+) -> Chunk:
     return Chunk(
         chunk_id=chunk_id,
         doc_id=doc_id,
         course_id="guardrails-101",
         title=doc_id.replace("-", " ").title(),
         visibility="public",
-        source_type="lecture",
+        source_type=source_type,
         text=text,
     )
 
@@ -124,6 +131,44 @@ def _chunk(chunk_id: str, doc_id: str, text: str) -> Chunk:
 @pytest.fixture
 def guardrailed_assistant() -> LearningAssistant:
     return build_assistant(DATA, mode="guardrailed")
+
+
+def test_evidence_gate_uses_separate_policy_threshold() -> None:
+    lecture = _chunk("lecture:0", "lecture", "Lecture evidence.")
+    policy = _chunk(
+        "course-policy:0",
+        "course-policy",
+        "Policy evidence.",
+        source_type="policy",
+    )
+    weak_policy = _chunk(
+        "academic-integrity:0",
+        "academic-integrity",
+        "Weak policy evidence.",
+        source_type="integrity_policy",
+    )
+
+    selected = select_relevant_evidence(
+        [(lecture, 0.70), (policy, 0.49), (weak_policy, 0.47)],
+        0.52,
+        policy_min_score=0.48,
+    )
+
+    assert [chunk.chunk_id for chunk, _score in selected] == [
+        "lecture:0",
+        "course-policy:0",
+    ]
+
+
+def test_policy_threshold_requires_policy_context_retrieval() -> None:
+    with pytest.raises(ValueError, match="policy_context_min_score requires"):
+        build_assistant(
+            DATA,
+            mode="guardrailed",
+            retriever_backend="vector",
+            policy_context_top_k=0,
+            policy_context_min_score=0.48,
+        )
 
 
 def test_guardrailed_assistant_answers_normal_question(guardrailed_assistant: LearningAssistant) -> None:
@@ -521,6 +566,8 @@ def test_visualization_writes_html_report(tmp_path: Path) -> None:
         retriever_backend="langchain",
         index_dir=None,
         course_id="guardrails-101",
+        policy_context_top_k=2,
+        policy_context_min_score=0.48,
     )
     html = output.read_text(encoding="utf-8")
 

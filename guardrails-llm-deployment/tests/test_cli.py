@@ -597,8 +597,10 @@ def test_capture_inhouse_calibration_uses_frozen_threshold_by_default(
             "guardrails-llm",
             "capture-inhouse-calibration",
             "--allow-remote-models",
-            "--limit-cases",
-            "2",
+            "--case-id",
+            "m3v2-break-c03-a04",
+            "--case-id",
+            "m3v2-plotting-c03-a04",
             "--max-concurrency",
             "2",
             "--retry-failures",
@@ -617,6 +619,10 @@ def test_capture_inhouse_calibration_uses_frozen_threshold_by_default(
     assert config.classifier_model == "Qwen/Qwen3.6-35B-A3B"
     assert config.entailment_model == "Qwen/Qwen3.6-35B-A3B"
     assert captured_kwargs["evidence_min_score"] == 0.5203531980514526
+    assert captured_kwargs["case_ids"] == [
+        "m3v2-break-c03-a04",
+        "m3v2-plotting-c03-a04",
+    ]
     assert captured_kwargs["max_concurrency"] == 2
     assert captured_kwargs["retry_failures"] is True
     assert json.loads(capsys.readouterr().out)["completed_runs"] == 4
@@ -649,6 +655,10 @@ def test_query_wires_grounded_evidence_options(monkeypatch, capsys) -> None:
             "What is RAG?",
             "--evidence-min-score",
             "7.3",
+            "--policy-context-top-k",
+            "2",
+            "--policy-context-min-score",
+            "0.48",
             "--entailment-verifier",
             "openai",
             "--entailment-model",
@@ -662,6 +672,8 @@ def test_query_wires_grounded_evidence_options(monkeypatch, capsys) -> None:
     main()
 
     assert captured_kwargs["evidence_min_score"] == 7.3
+    assert captured_kwargs["policy_context_top_k"] == 2
+    assert captured_kwargs["policy_context_min_score"] == 0.48
     assert captured_kwargs["entailment_verifier"] == "openai"
     assert captured_kwargs["entailment_model"] == "Qwen/Qwen3.6-35B-A3B"
     assert captured_kwargs["entailment_min_confidence"] == 0.88

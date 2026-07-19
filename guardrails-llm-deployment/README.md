@@ -1,111 +1,143 @@
 # Guardrails in LLM Deployment
 
-Prototype for the AMT project: develop and evaluate best practices for guardrails in an LLM-based learning assistant.
+Python package for implementing and evaluating guardrails in a
+retrieval-augmented course assistant. Python 3.11 or newer and `uv` are
+required.
 
-The first implementation is deliberately local and deterministic. It models the deployment pipeline from the Workshop 1 presentation without requiring an API key:
+## What Is Implemented
 
-- baseline RAG assistant over a small course corpus
-- guardrailed RAG assistant with input, retrieval, output, and logging controls
-- JSONL evaluation set with normal and adversarial cases
-- quantitative comparison between baseline and guardrailed runs
+- baseline RAG without guardrails;
+- normalized JSONL corpus validation and LangChain chunking;
+- lexical, hashing-vector, and BGE-M3/Chroma retrieval;
+- native course, visibility, and policy source-type filters;
+- configurable regex, fuzzy, and embedding-similarity checks;
+- optional Qwen input classification through an OpenAI-compatible API;
+- BGE evidence sufficiency and policy-context retrieval gates;
+- optional Qwen answer generation and entailment verification;
+- verifier-selected citations, abstention, PII, injection, and academic-
+  integrity handling;
+- versioned evaluation splits, resumable model captures, confidence intervals,
+  and compact reports.
 
-## Project Structure
+## Structure
 
 ```text
 src/guardrails_llm/
-  baseline_pipeline.py  baseline RAG without guardrails
-  cli.py          command line interface
-  corpus.py       document loading and chunking
-  retrieval.py    lexical retrieval baseline
-  course_corpus.py markdown course corpus normalization
-  vector.py       local Chroma vector retrieval
-  visualization.py static HTML RAG pipeline reports
-  guards.py       input/output guardrails
-  pipeline.py     guardrailed assistant and assistant factory
-  evaluation.py   JSONL test runner and metrics
-data/
-  course_docs.jsonl
-  eval_cases.jsonl
-  python_course_docs.jsonl
-docs/
-  corpus_contract.md
-  project_plan.md
-  workshop2_demo.md
-  workshop2_rag_slides.html
-  workshop2_requirements.md
-  workshop2_slides.html
-tests/
-  test_guards.py
-  test_pipeline.py
+  pipeline.py              guardrailed runtime cascade
+  baseline_pipeline.py     baseline RAG without guardrails
+  vector.py                Chroma indexing and native-filtered retrieval
+  guardrail_policy.py      TOML-backed rules and similarity policy
+  openai_models.py         gated OpenAI-compatible model adapters
+  model_profiles.py        local and Fraunhofer in-house profiles
+  evaluation.py            behavior and grounding metrics
+  e2e_capture.py           resumable common-split model experiments
+data/                      corpus, policy, and versioned evaluation files
+reports/                   compact calibration evidence
+tests/                     deterministic tests with fake model clients
 ```
 
-## Quick Start
+## Install and Verify
 
-The Python import package uses underscores: `guardrails_llm`.
-The installed console script uses hyphens: `guardrails-llm`.
-
-From the repository root:
+From this package directory:
 
 ```bash
-./scripts/run_workshop2_demo.sh
-uv --directory guardrails-llm-deployment run guardrails-llm query --mode guardrailed --retriever langchain --question "What is retrieval augmented generation?"
-uv --directory guardrails-llm-deployment run guardrails-llm validate-corpus --corpus data/course_docs.jsonl
-uv --directory guardrails-llm-deployment run guardrails-llm build-index --corpus data/course_docs.jsonl --index-dir indexes/chroma
-uv --directory guardrails-llm-deployment run guardrails-llm query --mode guardrailed --retriever vector --index-dir indexes/chroma --question "What is retrieval augmented generation?"
-uv --directory guardrails-llm-deployment run guardrails-llm build-index --corpus data/python_course_docs.jsonl --index-dir indexes/python-course-chroma
-uv --directory guardrails-llm-deployment run guardrails-llm visualize --corpus data/python_course_docs.jsonl --course-id python-intro --retriever vector --index-dir indexes/python-course-chroma --mode guardrailed --question "What is declarative knowledge?" --output reports/python_course_rag_demo.html
-uv --directory guardrails-llm-deployment run guardrails-llm evaluate --mode baseline --retriever langchain
-uv --directory guardrails-llm-deployment run guardrails-llm evaluate --mode guardrailed --retriever langchain --show-results
-```
-
-From this package folder:
-
-```bash
-./scripts/run_workshop2_demo.sh
-uv run python -m guardrails_llm.cli query --mode guardrailed --retriever langchain --question "What is retrieval augmented generation?"
-uv run python -m guardrails_llm.cli validate-corpus --corpus data/course_docs.jsonl
-uv run python -m guardrails_llm.cli build-index --corpus data/course_docs.jsonl --index-dir indexes/chroma
-uv run python -m guardrails_llm.cli query --mode guardrailed --retriever vector --index-dir indexes/chroma --question "What is retrieval augmented generation?"
-uv run python -m guardrails_llm.cli normalize-course-corpus --source ../course_corpus/datainmd --output data/python_course_docs.jsonl --course-id python-intro
-uv run python -m guardrails_llm.cli build-index --corpus data/python_course_docs.jsonl --index-dir indexes/python-course-chroma
-uv run python -m guardrails_llm.cli visualize --corpus data/python_course_docs.jsonl --course-id python-intro --retriever vector --index-dir indexes/python-course-chroma --mode guardrailed --question "What is declarative knowledge?" --output reports/python_course_rag_demo.html
-uv run python -m guardrails_llm.cli evaluate --mode baseline --retriever langchain
-uv run python -m guardrails_llm.cli evaluate --mode guardrailed --retriever langchain --show-results
-```
-
-You can also use the installed console script:
-
-```bash
-uv run guardrails-llm evaluate --mode guardrailed --retriever langchain
-```
-
-Run the local tests:
-
-```bash
+uv sync --dev
 uv run pytest
+uv build
 ```
 
-The `--retriever lexical` backend is a dependency-light fallback. The
-`--retriever langchain` backend uses LangChain document objects and recursive
-text splitting while keeping deterministic local scoring for reproducible
-evaluation. The `--retriever vector` backend uses local deterministic hashing
-embeddings with a persisted Chroma index for the Workshop 2 baseline demo.
+## Offline Workflow
 
-The expected collaborator corpus handoff is normalized JSONL. See
-`docs/corpus_contract.md` and validate any delivered corpus before indexing.
-The markdown course corpus can be regenerated with `normalize-course-corpus`;
-raw PDF/source drops are kept out of git.
+No API key is needed for the default local profile:
 
-## Workshop 2 Status
+```bash
+uv run guardrails-llm validate-corpus --corpus data/course_docs.jsonl
+uv run guardrails-llm build-index \
+  --corpus data/course_docs.jsonl \
+  --index-dir indexes/chroma
+uv run guardrails-llm query \
+  --mode guardrailed \
+  --retriever vector \
+  --index-dir indexes/chroma \
+  --question "What is retrieval augmented generation?"
+```
 
-Current status: the repository has a deterministic toy-corpus prototype, a
-normalized Python course corpus, a local Chroma vector index path, and static
-HTML visualization for the RAG pipeline.
+This path uses deterministic hashing embeddings and extractive answers. It is
+useful for development and regression tests, but it is not the semantic
+Milestone 3 configuration.
 
-## Next Implementation Steps
+## Fraunhofer In-House Workflow
 
-1. Replace the demo corpus with real or self-created course material.
-2. Rebuild the Chroma index and refresh vector evaluation reports.
-3. Add an optional real LLM adapter.
-4. Expand the adversarial JSONL set for prompt injection, privacy, hallucination, and academic-integrity misuse.
-5. Use the evaluator output in the Workshop 2 failure analysis.
+Store the endpoint and key only in the ignored `.env` file:
+
+```text
+OPENAI_API_URL=<Fraunhofer OpenAI-compatible v1 URL>
+OPENAI_API_KEY=<secret>
+```
+
+Inspect configuration without making a model call:
+
+```bash
+uv run guardrails-llm model-config --profile inhouse
+```
+
+Prepare cached BGE-M3 vectors and the real-course index only after approving
+remote use:
+
+```bash
+uv run guardrails-llm prepare-inhouse-bge --allow-remote-models
+```
+
+Run one complete model-backed query:
+
+```bash
+uv run guardrails-llm query \
+  --profile inhouse \
+  --allow-remote-models \
+  --question "What is declarative knowledge?"
+```
+
+The profile uses:
+
+- embeddings: `BAAI/bge-m3`;
+- classifier, answer model, entailment verifier: `Qwen/Qwen3.6-35B-A3B`;
+- retrieval: top 8 course chunks plus up to 2 native-filtered policy chunks;
+- general evidence threshold: `0.5203531980514526`;
+- policy-context candidate threshold: `0.51`.
+
+Every remote command requires `--allow-remote-models`. The endpoint host,
+models, prompt versions, thresholds, and input hashes are stored in manifests;
+credentials and raw prompt text are not stored in embedding caches.
+
+Use `guardrails-llm --help` and the evaluation commands below for the complete
+capture sequence.
+
+## Evaluation Status
+
+The versioned v2 dataset has 2,000 generated cases:
+
+- 1,200 development;
+- 400 calibration;
+- 400 frozen holdout.
+
+The latest identical-split calibration evidence is in
+[`reports/inhouse_retrieval_recovery_calibration_v4.json`](reports/inhouse_retrieval_recovery_calibration_v4.json).
+The model-backed hybrid reached `391/400`, `0.978` behavior accuracy and
+macro-F1, `0.91` answer recall, and `0.045` false-refusal rate. It produced no
+unsafe answers, and verifier-conditioned citation-entailment precision was
+`1.0`.
+
+The additional expected-document citation diagnostic remains below its gate at
+`0.752`. Generated expected-document labels can omit other valid supporting
+documents, so this failure remains visible and requires independent human
+review rather than being silently reclassified as success.
+
+The holdout remains unopened until double human review and adjudication are
+complete. Generated labels are not treated as final human ground truth.
+
+## Contribution Rules
+
+Use feature branches, small conventional commits, tests, and PRs. Remote model
+paths must stay explicitly gated, secrets must never be committed, and each PR
+must review both READMEs and contributor documentation. The complete checklist
+is in [`../CONTRIBUTING.md`](../CONTRIBUTING.md).

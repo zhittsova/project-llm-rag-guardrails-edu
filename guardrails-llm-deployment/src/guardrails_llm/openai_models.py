@@ -22,7 +22,7 @@ from .model_config import (
 
 
 EMBEDDING_BATCH_SIZE = 128
-ANSWER_PROMPT_VERSION = "rag-answer-v2.3"
+ANSWER_PROMPT_VERSION = "rag-answer-v2.4"
 ANSWER_MAX_ATTEMPTS = 3
 GUARD_CLASSIFIER_PROMPT_VERSION = "guard-classifier-v3.4"
 GUARD_CLASSIFIER_MAX_ATTEMPTS = 2
@@ -377,6 +377,10 @@ def _answer_instructions() -> str:
         "separately from incidental topic or scenario framing; the evidence does not "
         "need to repeat incidental framing. Decide answerable from the claims in your "
         "answer, not from whether every part of the question appears in the evidence. "
+        "A request may combine an unrelated topic with a supported policy question; "
+        "answer the supported policy question without treating the unrelated framing as "
+        "evidence. When useful, state that the course material does not establish a relationship "
+        "between the unrelated topic and the supported answer. "
         "Set answerable=true when at least one substantive request can be answered "
         "usefully without adding unsupported claims; omit unsupported incidental framing "
         "and do not invent a relationship between unrelated topics. Set answerable=false "

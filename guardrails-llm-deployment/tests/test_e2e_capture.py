@@ -132,7 +132,7 @@ def test_calibration_capture_is_resumable_across_both_scenarios(
     }
     assert first["embedding_cache_mode"] == "read_only"
     assert first["prompt_versions"] == {
-        "answer": "rag-answer-v2.3",
+        "answer": "rag-answer-v2.4",
         "classifier": "guard-classifier-v3.4",
         "entailment": "answer-entailment-v1.4",
     }
@@ -147,7 +147,11 @@ def test_calibration_capture_is_resumable_across_both_scenarios(
             "policy": "hybrid",
         },
     }
-    assert first["retrieval"] == {"top_k": 8}
+    assert first["retrieval"] == {
+        "top_k": 8,
+        "policy_context_top_k": 2,
+        "policy_context_min_score": 0.51,
+    }
     assert first["dataset_version"] == "milestone3-v2"
     assert len(first["dataset_manifest_sha256"]) == 64
     assert first["expected_disposition_counts"] == {
@@ -159,6 +163,73 @@ def test_calibration_capture_is_resumable_across_both_scenarios(
     serialized = manifest.read_text(encoding="utf-8")
     assert "fixture-key" not in serialized
     assert "https://" not in serialized
+
+
+def test_calibration_capture_selects_explicit_case_ids(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _env(monkeypatch)
+    qwen = FakeAssistant()
+    hybrid = FakeAssistant()
+    selected_ids = ["m3v2-break-c03-a04", "m3v2-plotting-c03-a04"]
+
+    manifest = run_calibration_e2e_capture(
+        config=_config(),
+        calibration_cases_path=CALIBRATION,
+        corpus_path=CORPUS,
+        policy_path=POLICY,
+        index_dir=tmp_path / "unused-index",
+        cache_path=tmp_path / "unused-cache.jsonl",
+        output_path=tmp_path / "e2e.jsonl",
+        manifest_path=tmp_path / "manifest.json",
+        evidence_min_score=0.42,
+        case_ids=selected_ids,
+        assistants={
+            "qwen_classifier_only": qwen,
+            "complete_inhouse_hybrid": hybrid,
+        },
+    )
+
+    assert manifest["selected_case_ids"] == selected_ids
+    assert manifest["selected_cases"] == 2
+    assert manifest["completed_runs"] == 4
+    assert qwen.calls == 2
+    assert hybrid.calls == 2
+
+    report = evaluate_calibration_e2e_capture(
+        calibration_cases_path=CALIBRATION,
+        output_path=tmp_path / "e2e.jsonl",
+        manifest_path=tmp_path / "manifest.json",
+    )
+
+    assert report["qwen_classifier_only"]["expected_cases"] == 2
+    assert report["complete_inhouse_hybrid"]["expected_cases"] == 2
+
+
+def test_calibration_capture_rejects_unknown_explicit_case_id(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _env(monkeypatch)
+
+    with pytest.raises(ValueError, match="unknown calibration case ID"):
+        run_calibration_e2e_capture(
+            config=_config(),
+            calibration_cases_path=CALIBRATION,
+            corpus_path=CORPUS,
+            policy_path=POLICY,
+            index_dir=tmp_path / "unused-index",
+            cache_path=tmp_path / "unused-cache.jsonl",
+            output_path=tmp_path / "e2e.jsonl",
+            manifest_path=tmp_path / "manifest.json",
+            evidence_min_score=0.42,
+            case_ids=["not-a-real-case"],
+            assistants={
+                "qwen_classifier_only": FakeAssistant(),
+                "complete_inhouse_hybrid": FakeAssistant(),
+            },
+        )
 
 
 def test_quality_gates_require_expected_document_citation_precision() -> None:
@@ -283,6 +354,8 @@ def test_calibration_capture_uses_separate_assistants_for_bounded_concurrency(
         output_path=tmp_path / "e2e.jsonl",
         manifest_path=tmp_path / "manifest.json",
         evidence_min_score=0.42,
+        policy_context_top_k=2,
+        policy_context_min_score=0.51,
         limit_cases=2,
         max_concurrency=2,
     )
@@ -331,6 +404,8 @@ def test_build_assistants_propagates_remote_request_policy(
         index_dir=tmp_path / "index",
         cache_path=tmp_path / "cache.jsonl",
         evidence_min_score=0.42,
+        policy_context_top_k=2,
+        policy_context_min_score=0.51,
         entailment_min_confidence=0.8,
         course_id="python-intro",
     )
@@ -339,6 +414,8 @@ def test_build_assistants_propagates_remote_request_policy(
     assert len(assistant_calls) == 2
     assert all(call["model_config"] is config for call in assistant_calls)
     assert all(call["classifier_strategy"] == "always" for call in assistant_calls)
+    assert all(call["policy_context_top_k"] == 2 for call in assistant_calls)
+    assert all(call["policy_context_min_score"] == 0.51 for call in assistant_calls)
 
 
 def test_e2e_capture_checkpoints_workers_in_completion_order(
