@@ -78,6 +78,7 @@ def run_calibration_e2e_capture(
     course_id: str = "python-intro",
     limit_cases: int | None = None,
     max_concurrency: int = 1,
+    retry_failures: bool = False,
     assistants: dict[str, object] | None = None,
     dataset_manifest_path: Path = DEFAULT_DATASET_MANIFEST_PATH,
 ) -> dict[str, object]:
@@ -158,6 +159,16 @@ def run_calibration_e2e_capture(
     unknown = set(rows) - expected_keys
     if unknown:
         raise ValueError("end-to-end output contains unknown scenario or case IDs")
+    retried_runs = 0
+    if retry_failures:
+        retried_runs = sum(row["status"] == "error" for row in rows.values())
+        if retried_runs:
+            rows = {
+                key: row
+                for key, row in rows.items()
+                if row["status"] == "success"
+            }
+            _write_rows(output_path, rows.values())
 
     assistant_sets = (
         [assistants]
@@ -205,6 +216,7 @@ def run_calibration_e2e_capture(
                 manifest = _manifest(configuration, fingerprint, started_at, rows)
                 _write_manifest(manifest_path, manifest)
     manifest["resumed_runs"] = resumed_runs
+    manifest["retried_runs"] = retried_runs
     _write_manifest(manifest_path, manifest)
     return manifest
 
@@ -551,6 +563,16 @@ def _append_row(path: Path, row: dict[str, object]) -> None:
         handle.write(json.dumps(row, separators=(",", ":")) + "\n")
         handle.flush()
         os.fsync(handle.fileno())
+
+
+def _write_rows(path: Path, rows) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        "".join(json.dumps(row, separators=(",", ":")) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+    temporary.replace(path)
 
 
 def _load_manifest(path: Path) -> dict[str, object] | None:

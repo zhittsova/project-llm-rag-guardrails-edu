@@ -40,6 +40,17 @@ class FakeAssistant:
         )
 
 
+class FailedModelAssistant(FakeAssistant):
+    def answer(self, question: str) -> AssistantResponse:
+        response = super().answer(question)
+        return AssistantResponse(
+            **(
+                response.__dict__
+                | {"grounding_error": "entailment_verifier_error:TimeoutError"}
+            )
+        )
+
+
 class ConcurrentAssistant(FakeAssistant):
     def __init__(self, barrier: threading.Barrier, active: list[int]) -> None:
         super().__init__()
@@ -135,6 +146,53 @@ def test_calibration_capture_is_resumable_across_both_scenarios(
     serialized = manifest.read_text(encoding="utf-8")
     assert "fixture-key" not in serialized
     assert "https://" not in serialized
+
+
+def test_calibration_capture_retries_only_failed_rows(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _env(monkeypatch)
+    output = tmp_path / "e2e.jsonl"
+    manifest = tmp_path / "manifest.json"
+    common = {
+        "config": _config(),
+        "calibration_cases_path": CALIBRATION,
+        "corpus_path": CORPUS,
+        "policy_path": POLICY,
+        "index_dir": tmp_path / "unused-index",
+        "cache_path": tmp_path / "unused-cache.jsonl",
+        "output_path": output,
+        "manifest_path": manifest,
+        "evidence_min_score": 0.42,
+        "limit_cases": 2,
+    }
+    first = run_calibration_e2e_capture(
+        **common,
+        assistants={
+            "qwen_classifier_only": FailedModelAssistant(),
+            "complete_inhouse_hybrid": FakeAssistant(),
+        },
+    )
+    qwen_retry = FakeAssistant()
+    hybrid_retry = FakeAssistant()
+
+    second = run_calibration_e2e_capture(
+        **common,
+        retry_failures=True,
+        assistants={
+            "qwen_classifier_only": qwen_retry,
+            "complete_inhouse_hybrid": hybrid_retry,
+        },
+    )
+
+    assert first["failed_runs"] == 2
+    assert second["failed_runs"] == 0
+    assert second["retried_runs"] == 2
+    assert second["resumed_runs"] == 2
+    assert qwen_retry.calls == 2
+    assert hybrid_retry.calls == 0
+    assert len(output.read_text(encoding="utf-8").splitlines()) == 4
 
 
 def test_calibration_capture_rejects_holdout_dataset(tmp_path: Path, monkeypatch) -> None:
