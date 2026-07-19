@@ -5,7 +5,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Protocol
 
-from .answering import AnswerGenerator
+from .answering import AnswerGenerator, unpack_generated_answer
 from .corpus import Chunk, chunk_documents, load_documents
 from .dispositions import ResponseDisposition
 from .embeddings import TextEmbedder
@@ -69,7 +69,9 @@ class BaselineRagAssistant:
 
         retrieved_chunks = [chunk for chunk, _score in retrieved]
         if self._answer_generator:
-            answer = self._answer_generator.generate(question, retrieved_chunks)
+            answer = unpack_generated_answer(
+                self._answer_generator.generate(question, retrieved_chunks)
+            ).text
         else:
             # Baseline generation is extractive and local by default: no LLM call.
             answer = synthesize_baseline_answer(retrieved_chunks)

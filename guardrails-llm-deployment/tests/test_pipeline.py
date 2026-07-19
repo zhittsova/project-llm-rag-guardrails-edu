@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from guardrails_llm.answering import GeneratedAnswer
 from guardrails_llm.baseline_pipeline import BaselineRagAssistant, build_baseline_assistant
 from guardrails_llm.corpus import Chunk, chunk_documents, load_documents
 from guardrails_llm.dispositions import ResponseDisposition
@@ -46,6 +47,23 @@ class CountingGenerator:
     def generate(self, _question: str, _chunks: list[Chunk]) -> str:
         self.calls += 1
         return self.answer
+
+
+class AnswerabilityGenerator(CountingGenerator):
+    def __init__(self, *, answerable: bool) -> None:
+        super().__init__()
+        self.answerable = answerable
+
+    def generate(self, _question: str, _chunks: list[Chunk]) -> GeneratedAnswer:
+        self.calls += 1
+        return GeneratedAnswer(
+            text=(
+                "Supported answer."
+                if self.answerable
+                else "I do not know based on the available course material."
+            ),
+            answerable=self.answerable,
+        )
 
 
 class FixedVerifier:
@@ -300,6 +318,32 @@ def test_evidence_gate_abstains_before_generation_when_scores_are_weak() -> None
     assert response.retrieved_chunks == ["rag:0"]
     assert response.retrieval_scores == {"rag:0": 0.42}
     assert generator.calls == 0
+
+
+def test_model_answerability_abstains_before_entailment() -> None:
+    chunk = _chunk("unrelated:0", "unrelated", "Unrelated course evidence.")
+    generator = AnswerabilityGenerator(answerable=False)
+    verifier = FixedVerifier(
+        supported=True,
+        supporting_chunk_ids=["unrelated:0"],
+    )
+    assistant = LearningAssistant(
+        StaticRetriever([(chunk, 0.91)]),
+        mode="guardrailed",
+        answer_generator=generator,
+        evidence_min_score=0.70,
+        entailment_verifier=verifier,
+    )
+
+    response = assistant.answer("What is RAG?")
+
+    assert response.disposition is ResponseDisposition.ABSTAIN
+    assert response.answer == "I do not know based on the available course material."
+    assert response.citations == []
+    assert response.guard_triggers == ["ungrounded"]
+    assert response.grounding_supported is False
+    assert generator.calls == 1
+    assert verifier.calls == 0
 
 
 def test_entailment_keeps_only_citations_for_supporting_chunks() -> None:

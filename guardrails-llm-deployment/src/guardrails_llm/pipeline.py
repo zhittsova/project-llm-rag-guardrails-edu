@@ -5,7 +5,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Protocol
 
-from .answering import AnswerGenerator
+from .answering import AnswerGenerator, unpack_generated_answer
 from .baseline_pipeline import BaselineRagAssistant, build_baseline_assistant
 from .corpus import Chunk, chunk_documents, load_documents
 from .dispositions import ResponseDisposition
@@ -212,7 +212,24 @@ class LearningAssistant:
             # generation is gated by --allow-remote-models in the CLI.
             retrieved_chunks = [chunk for chunk, _score in retrieved]
             if self._answer_generator:
-                answer = self._answer_generator.generate(question, retrieved_chunks)
+                generated = unpack_generated_answer(
+                    self._answer_generator.generate(question, retrieved_chunks)
+                )
+                answer = generated.text
+                if generated.answerable is False:
+                    triggers.append("ungrounded")
+                    return self._response(
+                        answer,
+                        [],
+                        ResponseDisposition.ABSTAIN,
+                        triggers,
+                        started_at,
+                        [chunk.chunk_id for chunk, _score in retrieved],
+                        retrieved_doc_ids=[chunk.doc_id for chunk, _score in retrieved],
+                        retrieval_scores=retrieval_scores,
+                        retrieved_evidence=retrieved_evidence,
+                        grounding_supported=False,
+                    )
             else:
                 answer = synthesize_answer(question, retrieved_chunks)
             if self._entailment_verifier and retrieved_chunks:
