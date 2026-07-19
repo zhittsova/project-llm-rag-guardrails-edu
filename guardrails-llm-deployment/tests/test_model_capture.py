@@ -179,7 +179,7 @@ def test_classifier_capture_writes_replay_file_and_safe_manifest(
         "timeout_seconds": 90.0,
         "max_transport_retries": 1,
     }
-    assert manifest["prompt_versions"]["classifier"] == "guard-classifier-v3.2"
+    assert manifest["prompt_versions"]["classifier"] == "guard-classifier-v3.3"
     assert manifest["classifier"] == {
         "model": "fake-classifier",
         "output_path": str(classifier_output),

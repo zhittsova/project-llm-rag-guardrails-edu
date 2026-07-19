@@ -121,7 +121,7 @@ def test_calibration_capture_is_resumable_across_both_scenarios(
     assert first["embedding_cache_mode"] == "read_only"
     assert first["prompt_versions"] == {
         "answer": "rag-answer-v1",
-        "classifier": "guard-classifier-v3.2",
+        "classifier": "guard-classifier-v3.3",
         "entailment": "answer-entailment-v1.2",
     }
     assert first["dataset_version"] == "milestone3-v2"
