@@ -25,6 +25,12 @@ from .evaluation import (
     write_results_csv,
 )
 from .evaluation_dataset import DatasetValidationError, load_evaluation_cases_for_run
+from .final_evidence import (
+    FinalEvidenceError,
+    assess_final_readiness_from_files,
+    seal_runtime_configuration,
+    write_calibration_evidence,
+)
 from .guardrail_policy import GuardrailPolicy, default_policy_path, load_guardrail_policy
 from .guard_text import normalize_guard_text
 from .inhouse_experiment import (
@@ -634,6 +640,70 @@ def main() -> None:
     )
     judge_evaluate_parser.add_argument("--output-json", type=Path, required=True)
 
+    final_evidence_parser = subparsers.add_parser(
+        "build-final-evidence",
+        help="Build the final common-split calibration report",
+    )
+    final_evidence_parser.add_argument(
+        "--deterministic-report",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_common_split_calibration_v3.json",
+    )
+    final_evidence_parser.add_argument(
+        "--model-report",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_retrieval_recovery_calibration_v4.json",
+    )
+    final_evidence_parser.add_argument(
+        "--failure-report",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_calibration_failure_analysis_v4.json",
+    )
+    final_evidence_parser.add_argument(
+        "--output-json",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "final_calibration_evidence.json",
+    )
+    final_evidence_parser.add_argument(
+        "--output-markdown",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "final_calibration_evidence.md",
+    )
+
+    final_freeze_parser = subparsers.add_parser(
+        "seal-final-config",
+        help="Seal runtime artifacts after holdout annotation is complete",
+    )
+    final_freeze_parser.add_argument("--dataset-manifest", type=Path, required=True)
+    final_freeze_parser.add_argument("--calibration-report", type=Path, required=True)
+    final_freeze_parser.add_argument("--policy", type=Path, required=True)
+    final_freeze_parser.add_argument("--course-corpus", type=Path, required=True)
+    final_freeze_parser.add_argument("--index-manifest", type=Path, required=True)
+    final_freeze_parser.add_argument("--output-json", type=Path, required=True)
+
+    final_readiness_parser = subparsers.add_parser(
+        "check-final-readiness",
+        help="Verify human, judge, calibration, and configuration gates",
+    )
+    final_readiness_parser.add_argument("--dataset-manifest", type=Path, required=True)
+    final_readiness_parser.add_argument("--judge-report", type=Path, required=True)
+    final_readiness_parser.add_argument("--selected-judge-model", required=True)
+    final_readiness_parser.add_argument("--calibration-report", type=Path, required=True)
+    final_readiness_parser.add_argument(
+        "--configuration-manifest", type=Path, required=True
+    )
+    final_readiness_parser.add_argument("--output-json", type=Path)
+
     index_parser = subparsers.add_parser("build-index", help="Build a local Chroma vector index")
     _add_profile_arg(index_parser)
     index_parser.add_argument("--corpus", dest="command_corpus", type=Path)
@@ -1059,6 +1129,52 @@ def main() -> None:
         except (OSError, TypeError, ValueError) as exc:
             parser.error(str(exc))
         print(json.dumps(report, indent=2))
+        return
+
+    if args.command == "build-final-evidence":
+        try:
+            report = write_calibration_evidence(
+                deterministic_path=args.deterministic_report,
+                model_path=args.model_report,
+                failure_path=args.failure_report,
+                output_json=args.output_json,
+                output_markdown=args.output_markdown,
+            )
+        except FinalEvidenceError as exc:
+            parser.error(str(exc))
+        print(json.dumps(report, indent=2))
+        return
+
+    if args.command == "seal-final-config":
+        try:
+            report = seal_runtime_configuration(
+                dataset_manifest_path=args.dataset_manifest,
+                calibration_report_path=args.calibration_report,
+                policy_path=args.policy,
+                corpus_path=args.course_corpus,
+                index_manifest_path=args.index_manifest,
+                output_path=args.output_json,
+            )
+        except FinalEvidenceError as exc:
+            parser.error(str(exc))
+        print(json.dumps(report, indent=2))
+        return
+
+    if args.command == "check-final-readiness":
+        try:
+            report = assess_final_readiness_from_files(
+                dataset_manifest_path=args.dataset_manifest,
+                judge_report_path=args.judge_report,
+                selected_judge_model=args.selected_judge_model,
+                calibration_report_path=args.calibration_report,
+                configuration_manifest_path=args.configuration_manifest,
+                output_path=args.output_json,
+            )
+        except FinalEvidenceError as exc:
+            parser.error(str(exc))
+        print(json.dumps(report, indent=2))
+        if not report["ready"]:
+            raise SystemExit(1)
         return
 
     if args.command == "normalize-course-corpus":
