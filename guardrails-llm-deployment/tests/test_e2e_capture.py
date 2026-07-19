@@ -132,10 +132,22 @@ def test_calibration_capture_is_resumable_across_both_scenarios(
     }
     assert first["embedding_cache_mode"] == "read_only"
     assert first["prompt_versions"] == {
-        "answer": "rag-answer-v2",
+        "answer": "rag-answer-v2.3",
         "classifier": "guard-classifier-v3.4",
         "entailment": "answer-entailment-v1.4",
     }
+    assert first["schema_version"] == 2
+    assert first["scenario_configuration"] == {
+        "qwen_classifier_only": {
+            "classifier_strategy": "always",
+            "policy": "classifier_only",
+        },
+        "complete_inhouse_hybrid": {
+            "classifier_strategy": "always",
+            "policy": "hybrid",
+        },
+    }
+    assert first["retrieval"] == {"top_k": 8}
     assert first["dataset_version"] == "milestone3-v2"
     assert len(first["dataset_manifest_sha256"]) == 64
     assert first["expected_disposition_counts"] == {
@@ -326,6 +338,7 @@ def test_build_assistants_propagates_remote_request_policy(
     assert embedder_calls[0]["model_config"] is config
     assert len(assistant_calls) == 2
     assert all(call["model_config"] is config for call in assistant_calls)
+    assert all(call["classifier_strategy"] == "always" for call in assistant_calls)
 
 
 def test_e2e_capture_checkpoints_workers_in_completion_order(

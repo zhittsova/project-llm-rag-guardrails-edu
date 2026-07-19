@@ -25,7 +25,7 @@ from .model_config import (
     ensure_remote_models_allowed,
     openai_request_policy,
 )
-from .model_profiles import ensure_inhouse_endpoint
+from .model_profiles import INHOUSE_RETRIEVAL_TOP_K, ensure_inhouse_endpoint
 from .openai_models import (
     ANSWER_PROMPT_VERSION,
     ENTAILMENT_PROMPT_VERSION,
@@ -35,7 +35,7 @@ from .pipeline import build_assistant
 
 
 E2E_SCENARIOS = ("qwen_classifier_only", "complete_inhouse_hybrid")
-_CAPTURE_CONFIGURATION_KEYS = (
+_CAPTURE_CONFIGURATION_KEYS_V1 = (
     "schema_version",
     "experiment",
     "profile",
@@ -48,6 +48,7 @@ _CAPTURE_CONFIGURATION_KEYS = (
     "dataset_manifest_sha256",
     "embedding_cache_mode",
     "prompt_versions",
+    "retrieval",
     "thresholds",
     "corpus_sha256",
     "calibration_split_sha256",
@@ -60,6 +61,9 @@ _CAPTURE_CONFIGURATION_KEYS = (
     "expected_disposition_counts",
     "expected_runs",
     "holdout_used",
+)
+_CAPTURE_CONFIGURATION_KEYS_V2 = _CAPTURE_CONFIGURATION_KEYS_V1 + (
+    "scenario_configuration",
 )
 
 
@@ -107,12 +111,22 @@ def run_calibration_e2e_capture(
         cases = _select_stratified_cases(cases, limit_cases)
 
     configuration = {
-        "schema_version": 1,
+        "schema_version": 2,
         "experiment": "inhouse_calibration_end_to_end",
         "profile": "inhouse",
         "provider": "openai_compatible",
         "endpoint_host": endpoint_host,
         "scenarios": list(E2E_SCENARIOS),
+        "scenario_configuration": {
+            "qwen_classifier_only": {
+                "classifier_strategy": "always",
+                "policy": "classifier_only",
+            },
+            "complete_inhouse_hybrid": {
+                "classifier_strategy": "always",
+                "policy": "hybrid",
+            },
+        },
         "models": {
             "embedding": config.embedding_model,
             "answer": config.answer_model,
@@ -128,6 +142,7 @@ def run_calibration_e2e_capture(
             "classifier": GUARD_CLASSIFIER_PROMPT_VERSION,
             "entailment": ENTAILMENT_PROMPT_VERSION,
         },
+        "retrieval": {"top_k": INHOUSE_RETRIEVAL_TOP_K},
         "thresholds": {
             "retrieval_evidence": evidence_min_score,
             "entailment_confidence": entailment_min_confidence,
@@ -364,6 +379,7 @@ def _build_assistants(
         "answer_model": config.answer_model,
         "guard_classifier": "openai",
         "classifier_model": config.classifier_model,
+        "retrieval_top_k": INHOUSE_RETRIEVAL_TOP_K,
         "evidence_min_score": evidence_min_score,
         "entailment_verifier": "openai",
         "entailment_model": config.entailment_model,
@@ -381,7 +397,7 @@ def _build_assistants(
         "complete_inhouse_hybrid": build_assistant(
             corpus_path,
             guardrail_policy=hybrid_policy,
-            classifier_strategy="ambiguous",
+            classifier_strategy="always",
             **common,
         ),
     }
@@ -470,11 +486,18 @@ def _validate_capture_manifest(
     cases: list[EvalCase],
     dataset_evidence: dict[str, str],
 ) -> None:
-    if any(key not in manifest for key in _CAPTURE_CONFIGURATION_KEYS):
+    schema_version = manifest.get("schema_version")
+    if schema_version == 1:
+        configuration_keys = _CAPTURE_CONFIGURATION_KEYS_V1
+    elif schema_version == 2:
+        configuration_keys = _CAPTURE_CONFIGURATION_KEYS_V2
+    else:
+        raise ValueError("capture manifest has an unsupported schema version")
+    if any(key not in manifest for key in configuration_keys):
         raise ValueError("capture manifest is missing configuration fields")
     configuration = {
         key: manifest[key]
-        for key in _CAPTURE_CONFIGURATION_KEYS
+        for key in configuration_keys
     }
     if manifest.get("configuration_fingerprint") != _json_sha256(configuration):
         raise ValueError("capture manifest configuration fingerprint does not match")
