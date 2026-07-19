@@ -62,11 +62,8 @@ def build_vector_index(
     embedding_cache_path: Path | None = None,
     embedder: TextEmbedder | None = None,
 ) -> VectorIndexStats:
-    # build-index pipeline:
-    # 1. загрузить JSONL corpus;
-    # 2. разрезать documents на chunks через LangChain splitter;
-    # 3. превратить каждый chunk в embedding;
-    # 4. сохранить chunks + metadata в persistent Chroma collection.
+    # Indexing loads the JSONL corpus, splits documents with LangChain, embeds
+    # each chunk, and stores the chunks and metadata in persistent Chroma.
     resolved_model = resolve_embedding_model(embedding_provider, embedding_model)
     embedder = embedder or create_embedder(
         embedding_provider,
@@ -185,8 +182,8 @@ class VectorRetriever:
         if count == 0:
             return []
 
-        # Query проходит через ту же embedding-функцию, что и chunks при
-        # build-index. Chroma возвращает ближайшие chunks по cosine distance.
+        # Embed the query with the same function used at indexing time. Chroma
+        # returns the chunks with the smallest cosine distance.
         query_embedding = self._embedder.embed(query)
         matches = self._query(
             query_embedding,

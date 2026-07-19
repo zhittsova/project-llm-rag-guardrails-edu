@@ -8,9 +8,8 @@ from .retrieval import LexicalRetriever
 
 
 def langchain_chunk_documents(documents: list[Document], *, chunk_size: int = 650, chunk_overlap: int = 80) -> list[Chunk]:
-    # LangChain здесь не используется как LLM. Он нужен как готовая обвязка для
-    # Document objects и RecursiveCharacterTextSplitter, чтобы аккуратно резать
-    # длинные course documents на chunks с overlap.
+    # LangChain is not used as an LLM here. Its document objects and recursive
+    # text splitter divide long course documents into overlapping chunks.
     splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     langchain_documents = [
         LangChainDocument(
@@ -34,9 +33,8 @@ def langchain_chunk_documents(documents: list[Document], *, chunk_size: int = 65
         doc_id = str(metadata["doc_id"])
         index = per_doc_counts.get(doc_id, 0)
         per_doc_counts[doc_id] = index + 1
-        # После LangChain split возвращаемся к нашему собственному Chunk type.
-        # Так pipeline не зависит напрямую от LangChain и может работать с
-        # lexical или vector retriever через один интерфейс.
+        # Convert each LangChain split back to the project's Chunk type so the
+        # pipeline can use lexical and vector retrievers through one interface.
         chunks.append(
             Chunk(
                 chunk_id=f"{doc_id}:lc:{index}",
