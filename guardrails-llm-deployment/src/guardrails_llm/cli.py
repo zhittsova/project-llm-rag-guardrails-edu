@@ -1486,7 +1486,7 @@ def _comparison_scenarios(args, policy):
                 policy,
                 args.guard_classifier,
                 {
-                    "technique": "hybrid policy + model classifier for ambiguous prompts",
+                    "technique": "hybrid policy + model classifier for unresolved prompts",
                     "guardrail_layers": [
                         "policy_file",
                         "text_normalization",
@@ -1502,7 +1502,7 @@ def _comparison_scenarios(args, policy):
                     "robustness_expected": "highest_on_paraphrases",
                     "implementation_effort": "high",
                     "shared_controls": shared_controls,
-                    "classifier_strategy": "ambiguous",
+                    "classifier_strategy": "always",
                 },
             ),
             ]

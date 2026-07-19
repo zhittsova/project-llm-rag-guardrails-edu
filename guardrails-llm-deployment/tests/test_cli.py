@@ -196,7 +196,7 @@ def test_comparison_scenarios_include_qwen_only_and_complete_hybrid() -> None:
         "complete_inhouse_hybrid"
     ]
     assert hybrid_classifier == "openai"
-    assert hybrid_profile["classifier_strategy"] == "ambiguous"
+    assert hybrid_profile["classifier_strategy"] == "always"
     assert hybrid_policy.input_rules
     assert hybrid_policy.input_fuzzy_rules
     assert hybrid_policy.input_similarity_rules

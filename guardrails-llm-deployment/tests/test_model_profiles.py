@@ -30,6 +30,7 @@ def _runtime_args() -> Namespace:
         answer_model=None,
         guard_classifier="none",
         classifier_model=None,
+        classifier_strategy="ambiguous",
         entailment_verifier="none",
         entailment_model=None,
         retrieval_top_k=3,
@@ -62,6 +63,7 @@ def test_inhouse_profile_selects_bge_and_qwen(monkeypatch) -> None:
     assert args.answer_model == INHOUSE_LLM_MODEL
     assert args.guard_classifier == "openai"
     assert args.classifier_model == INHOUSE_LLM_MODEL
+    assert args.classifier_strategy == "always"
     assert args.entailment_verifier == "openai"
     assert args.entailment_model == INHOUSE_LLM_MODEL
     assert args.retrieval_top_k == INHOUSE_RETRIEVAL_TOP_K

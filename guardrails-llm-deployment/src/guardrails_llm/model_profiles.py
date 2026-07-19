@@ -62,6 +62,7 @@ def apply_model_profile(args: Namespace) -> None:
     _set_if_present(args, "answer_model", INHOUSE_LLM_MODEL)
     _set_if_present(args, "guard_classifier", "openai")
     _set_if_present(args, "classifier_model", INHOUSE_LLM_MODEL)
+    _set_if_present(args, "classifier_strategy", "always")
     _set_if_present(args, "entailment_verifier", "openai")
     _set_if_present(args, "entailment_model", INHOUSE_LLM_MODEL)
     _set_if_present(args, "retrieval_top_k", INHOUSE_RETRIEVAL_TOP_K)
