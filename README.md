@@ -80,10 +80,17 @@ must not be committed.
 
 ## Evidence Status
 
-The complete in-house hybrid reached `388/400` behavior decisions on the
-generated calibration split (`0.97` accuracy, `0.9699` macro-F1), with no unsafe
-answers. Answer recall (`0.88`) and safe false-refusal rate (`0.06`) still missed
-their gates, so this is calibration evidence rather than a final result.
+The complete in-house hybrid reached `391/400` behavior decisions on the
+generated calibration split (`0.978` accuracy and macro-F1), with no unsafe
+answers. Answer recall improved from `0.88` to `0.91`, and safe false-refusal
+rate improved from `0.06` to `0.045`, so the agreed primary calibration gates
+now pass.
+
+The result is still not final. Expected-document citation precision is `0.752`,
+below its additional `0.95` diagnostic gate, although verifier-conditioned
+citation-entailment precision is `1.0`. The generated expected-document labels
+need independent human review before that difference can be interpreted as a
+runtime citation defect.
 
 The frozen 400-case holdout has not been run. It requires two independent human
 reviews, adjudication, and configuration freeze first.

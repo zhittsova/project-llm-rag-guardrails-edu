@@ -120,12 +120,17 @@ The versioned v2 dataset has 2,000 generated cases:
 - 400 calibration;
 - 400 frozen holdout.
 
-The latest identical-split calibration comparison is in
-[`reports/inhouse_common_split_calibration_v3.json`](reports/inhouse_common_split_calibration_v3.json).
-The model-backed hybrid reached `0.97` behavior accuracy and `0.9699` macro-F1,
-but answer recall and false-refusal gates still failed. Policy-aware retrieval
-is a calibration candidate and must pass focused and full end-to-end reruns
-before it is presented as an improvement.
+The latest identical-split calibration evidence is in
+[`reports/inhouse_retrieval_recovery_calibration_v4.json`](reports/inhouse_retrieval_recovery_calibration_v4.json).
+The model-backed hybrid reached `391/400`, `0.978` behavior accuracy and
+macro-F1, `0.91` answer recall, and `0.045` false-refusal rate. It produced no
+unsafe answers, and verifier-conditioned citation-entailment precision was
+`1.0`.
+
+The additional expected-document citation diagnostic remains below its gate at
+`0.752`. Generated expected-document labels can omit other valid supporting
+documents, so this failure remains visible and requires independent human
+review rather than being silently reclassified as success.
 
 The holdout remains unopened until double human review and adjudication are
 complete. Generated labels are not treated as final human ground truth.
