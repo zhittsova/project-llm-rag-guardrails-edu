@@ -135,6 +135,47 @@ review rather than being silently reclassified as success.
 The holdout remains unopened until double human review and adjudication are
 complete. Generated labels are not treated as final human ground truth.
 
+### Human-Calibrated LLM Judge
+
+Prepare two blinded, family-disjoint 200-output annotation sets from a common
+calibration result file:
+
+```bash
+uv run guardrails-llm prepare-judge-study \
+  --source-results path/to/common_split_results.json \
+  --output-dir path/to/human_judge_study
+```
+
+Check reviewer progress and reconcile two completed reviews locally:
+
+```bash
+uv run guardrails-llm judge-study-status \
+  --study-dir path/to/human_judge_study
+uv run guardrails-llm reconcile-judge-study \
+  --study-dir path/to/human_judge_study
+uv run guardrails-llm finalize-judge-study \
+  --study-dir path/to/human_judge_study
+```
+
+Judge predictions are captured without reading human labels. Repeat the command
+with `Qwen/Qwen3.6-35B-A3B` and `MiniMaxAI/MiniMax-M2.5`, using separate output
+and manifest paths:
+
+```bash
+uv run guardrails-llm capture-judge-study \
+  --study-dir path/to/human_judge_study \
+  --source-results path/to/common_split_results.json \
+  --judge-model Qwen/Qwen3.6-35B-A3B \
+  --output path/to/judge_qwen_predictions.jsonl \
+  --manifest path/to/judge_qwen_manifest.json \
+  --max-concurrency 4 \
+  --allow-remote-models
+```
+
+After adjudication, compare both prediction files with `evaluate-judge-study`.
+The report keeps judge calibration and judge validation separate and applies
+the structured-validity, per-dimension, exact-match, and groundedness gates.
+
 ## Contribution Rules
 
 Use feature branches, small conventional commits, tests, and PRs. Remote model

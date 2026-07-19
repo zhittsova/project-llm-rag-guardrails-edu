@@ -95,6 +95,10 @@ runtime citation defect.
 The frozen 400-case holdout has not been run. It requires two independent human
 reviews, adjudication, and configuration freeze first.
 
+The LLM-judge study uses two blinded, family-disjoint 200-output sets. Qwen and
+MiniMax predictions can be captured without labels, but agreement metrics are
+reported only after two independent reviews and disagreement adjudication.
+
 ## Development
 
 The import package is `guardrails_llm`; the installed command is

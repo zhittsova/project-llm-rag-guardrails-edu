@@ -236,7 +236,7 @@ def _capture_judge_predictions(
     cases_by_id = {case.case_id: case for case in source_cases}
     results_by_scenario = {
         scenario: {
-            str(payload.get("case_id")): _eval_result_from_payload(payload)
+            str(payload.get("case_id")): eval_result_from_payload(payload)
             for payload in results
         }
         for scenario, results in source_results.items()
@@ -341,7 +341,7 @@ def _load_source_results(path: Path) -> dict[str, list[dict[str, object]]]:
     return payload
 
 
-def _eval_result_from_payload(payload: dict[str, object]) -> EvalResult:
+def eval_result_from_payload(payload: dict[str, object]) -> EvalResult:
     allowed_fields = {field.name for field in fields(EvalResult)}
     return EvalResult(
         **{key: value for key, value in payload.items() if key in allowed_fields}
