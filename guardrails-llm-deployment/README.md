@@ -31,6 +31,7 @@ src/guardrails_llm/
   model_profiles.py        local and Fraunhofer in-house profiles
   evaluation.py            behavior and grounding metrics
   e2e_capture.py           resumable common-split model experiments
+  final_evidence.py        calibration packaging and final-run release gates
 data/                      corpus, policy, and versioned evaluation files
 reports/                   compact calibration evidence
 tests/                     deterministic tests with fake model clients
@@ -175,6 +176,52 @@ uv run guardrails-llm capture-judge-study \
 After adjudication, compare both prediction files with `evaluate-judge-study`.
 The report keeps judge calibration and judge validation separate and applies
 the structured-validity, per-dimension, exact-match, and groundedness gates.
+
+### Final Evidence and Holdout Release Gate
+
+Build the consolidated seven-technique calibration report from the checked-in
+400-case common-split evidence:
+
+```bash
+uv run guardrails-llm build-final-evidence
+```
+
+This writes `reports/final_calibration_evidence.json` and
+`reports/final_calibration_evidence.md`. It rejects holdout-derived or
+incomplete inputs and keeps failed diagnostics visible.
+
+Only after holdout annotations are independently reviewed, adjudicated, and
+sealed, freeze the exact artifacts selected during calibration:
+
+```bash
+uv run guardrails-llm seal-final-config \
+  --dataset-manifest path/to/dataset_manifest.json \
+  --calibration-report reports/final_calibration_evidence.json \
+  --policy data/guardrail_policy.toml \
+  --course-corpus data/python_course_docs.jsonl \
+  --index-manifest path/to/bge_index_manifest.json \
+  --output-json path/to/final_configuration.json
+```
+
+The configuration manifest records SHA-256 hashes for the dataset manifest,
+calibration evidence, policy, corpus, and index manifest. It does not include
+credentials.
+
+Before the one-time frozen-holdout run, verify every human, judge, calibration,
+and configuration gate:
+
+```bash
+uv run guardrails-llm check-final-readiness \
+  --dataset-manifest path/to/dataset_manifest.json \
+  --judge-report path/to/judge_evaluation.json \
+  --selected-judge-model Qwen/Qwen3.6-35B-A3B \
+  --calibration-report reports/final_calibration_evidence.json \
+  --configuration-manifest path/to/final_configuration.json \
+  --output-json path/to/final_readiness.json
+```
+
+The readiness command exits nonzero and lists every failed condition until all
+required evidence is present. It does not execute the holdout itself.
 
 ## Contribution Rules
 
