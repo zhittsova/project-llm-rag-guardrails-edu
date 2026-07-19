@@ -517,6 +517,7 @@ def main() -> None:
     )
     e2e_capture_parser.add_argument("--course-id", default="python-intro")
     e2e_capture_parser.add_argument("--limit-cases", type=int)
+    e2e_capture_parser.add_argument("--case-id", dest="case_ids", action="append")
     e2e_capture_parser.add_argument("--max-concurrency", type=int, default=1)
     e2e_capture_parser.add_argument("--retry-failures", action="store_true")
     e2e_capture_parser.add_argument(
@@ -859,6 +860,7 @@ def main() -> None:
                 entailment_min_confidence=args.entailment_min_confidence,
                 course_id=args.course_id,
                 limit_cases=args.limit_cases,
+                case_ids=args.case_ids,
                 max_concurrency=args.max_concurrency,
                 retry_failures=args.retry_failures,
             )

@@ -88,6 +88,7 @@ def run_calibration_e2e_capture(
     entailment_min_confidence: float = 0.80,
     course_id: str = "python-intro",
     limit_cases: int | None = None,
+    case_ids: list[str] | None = None,
     max_concurrency: int = 1,
     retry_failures: bool = False,
     assistants: dict[str, object] | None = None,
@@ -103,6 +104,8 @@ def run_calibration_e2e_capture(
         raise ValueError("entailment_min_confidence must be between zero and one")
     if limit_cases is not None and limit_cases < 0:
         raise ValueError("limit_cases must be zero or greater")
+    if limit_cases is not None and case_ids:
+        raise ValueError("limit_cases and case_ids cannot be used together")
     if max_concurrency <= 0:
         raise ValueError("max_concurrency must be greater than zero")
     if assistants is not None and max_concurrency != 1:
@@ -118,7 +121,9 @@ def run_calibration_e2e_capture(
         split="calibration",
         split_path=calibration_cases_path,
     )
-    if limit_cases is not None:
+    if case_ids:
+        cases = _select_explicit_cases(cases, case_ids)
+    elif limit_cases is not None:
         cases = _select_stratified_cases(cases, limit_cases)
 
     configuration = {
@@ -681,6 +686,19 @@ def _select_stratified_cases(cases, limit: int):
             break
         index += 1
     return selected
+
+
+def _select_explicit_cases(
+    cases: list[EvalCase],
+    case_ids: list[str],
+) -> list[EvalCase]:
+    if len(case_ids) != len(set(case_ids)):
+        raise ValueError("explicit calibration case IDs must be unique")
+    by_id = {case.case_id: case for case in cases}
+    unknown = [case_id for case_id in case_ids if case_id not in by_id]
+    if unknown:
+        raise ValueError(f"unknown calibration case ID: {unknown[0]}")
+    return [by_id[case_id] for case_id in case_ids]
 
 
 def _json_sha256(payload: object) -> str:

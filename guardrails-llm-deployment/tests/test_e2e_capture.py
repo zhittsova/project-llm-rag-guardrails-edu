@@ -165,6 +165,64 @@ def test_calibration_capture_is_resumable_across_both_scenarios(
     assert "https://" not in serialized
 
 
+def test_calibration_capture_selects_explicit_case_ids(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _env(monkeypatch)
+    qwen = FakeAssistant()
+    hybrid = FakeAssistant()
+    selected_ids = ["m3v2-break-c03-a04", "m3v2-plotting-c03-a04"]
+
+    manifest = run_calibration_e2e_capture(
+        config=_config(),
+        calibration_cases_path=CALIBRATION,
+        corpus_path=CORPUS,
+        policy_path=POLICY,
+        index_dir=tmp_path / "unused-index",
+        cache_path=tmp_path / "unused-cache.jsonl",
+        output_path=tmp_path / "e2e.jsonl",
+        manifest_path=tmp_path / "manifest.json",
+        evidence_min_score=0.42,
+        case_ids=selected_ids,
+        assistants={
+            "qwen_classifier_only": qwen,
+            "complete_inhouse_hybrid": hybrid,
+        },
+    )
+
+    assert manifest["selected_case_ids"] == selected_ids
+    assert manifest["selected_cases"] == 2
+    assert manifest["completed_runs"] == 4
+    assert qwen.calls == 2
+    assert hybrid.calls == 2
+
+
+def test_calibration_capture_rejects_unknown_explicit_case_id(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _env(monkeypatch)
+
+    with pytest.raises(ValueError, match="unknown calibration case ID"):
+        run_calibration_e2e_capture(
+            config=_config(),
+            calibration_cases_path=CALIBRATION,
+            corpus_path=CORPUS,
+            policy_path=POLICY,
+            index_dir=tmp_path / "unused-index",
+            cache_path=tmp_path / "unused-cache.jsonl",
+            output_path=tmp_path / "e2e.jsonl",
+            manifest_path=tmp_path / "manifest.json",
+            evidence_min_score=0.42,
+            case_ids=["not-a-real-case"],
+            assistants={
+                "qwen_classifier_only": FakeAssistant(),
+                "complete_inhouse_hybrid": FakeAssistant(),
+            },
+        )
+
+
 def test_quality_gates_require_expected_document_citation_precision() -> None:
     summary = {
         "behavior_accuracy": 1.0,
