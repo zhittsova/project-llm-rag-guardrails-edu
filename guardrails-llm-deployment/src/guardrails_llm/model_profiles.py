@@ -21,6 +21,8 @@ INHOUSE_EMBEDDING_MODEL = "BAAI/bge-m3"
 INHOUSE_LLM_MODEL = "Qwen/Qwen3.6-35B-A3B"
 INHOUSE_EVIDENCE_MIN_SCORE = 0.5203531980514526
 INHOUSE_RETRIEVAL_TOP_K = 8
+INHOUSE_POLICY_CONTEXT_TOP_K = 2
+INHOUSE_POLICY_CONTEXT_MIN_SCORE = 0.51
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 INHOUSE_EMBEDDING_CACHE = PROJECT_ROOT / "indexes" / "cache" / "bge-m3.jsonl"
 INHOUSE_INDEX_DIR = PROJECT_ROOT / "indexes" / "python-course-bge-m3"
@@ -66,6 +68,8 @@ def apply_model_profile(args: Namespace) -> None:
     _set_if_present(args, "entailment_verifier", "openai")
     _set_if_present(args, "entailment_model", INHOUSE_LLM_MODEL)
     _set_if_present(args, "retrieval_top_k", INHOUSE_RETRIEVAL_TOP_K)
+    _set_if_present(args, "policy_context_top_k", INHOUSE_POLICY_CONTEXT_TOP_K)
+    _set_if_present(args, "policy_context_min_score", INHOUSE_POLICY_CONTEXT_MIN_SCORE)
     if (
         hasattr(args, "evidence_min_score")
         and args.evidence_min_score is None
@@ -110,6 +114,8 @@ def model_profile_summary(
         "remote_calls_require_explicit_allowance": True,
         "retrieval_top_k": INHOUSE_RETRIEVAL_TOP_K,
         "retrieval_evidence_threshold": INHOUSE_EVIDENCE_MIN_SCORE,
+        "policy_context_top_k": INHOUSE_POLICY_CONTEXT_TOP_K,
+        "policy_context_min_score": INHOUSE_POLICY_CONTEXT_MIN_SCORE,
     }
 
 

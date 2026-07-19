@@ -6,6 +6,9 @@ from typing import Protocol
 from .corpus import Chunk
 
 
+POLICY_SOURCE_TYPES = frozenset({"integrity_policy", "policy"})
+
+
 @dataclass(frozen=True)
 class EntailmentResult:
     supported: bool
@@ -30,7 +33,17 @@ class EntailmentVerifier(Protocol):
 def select_relevant_evidence(
     retrieved: list[tuple[Chunk, float]],
     min_score: float | None,
+    *,
+    policy_min_score: float | None = None,
 ) -> list[tuple[Chunk, float]]:
     if min_score is None:
         return retrieved
-    return [(chunk, score) for chunk, score in retrieved if score >= min_score]
+    return [
+        (chunk, score)
+        for chunk, score in retrieved
+        if score >= (
+            policy_min_score
+            if policy_min_score is not None and chunk.source_type in POLICY_SOURCE_TYPES
+            else min_score
+        )
+    ]

@@ -59,6 +59,8 @@ from .model_config import (
 )
 from .model_profiles import (
     INHOUSE_EVIDENCE_MIN_SCORE,
+    INHOUSE_POLICY_CONTEXT_MIN_SCORE,
+    INHOUSE_POLICY_CONTEXT_TOP_K,
     InHouseEndpointError,
     MODEL_PROFILES,
     apply_model_profile,
@@ -499,6 +501,16 @@ def main() -> None:
         default=INHOUSE_EVIDENCE_MIN_SCORE,
     )
     e2e_capture_parser.add_argument(
+        "--policy-context-top-k",
+        type=int,
+        default=INHOUSE_POLICY_CONTEXT_TOP_K,
+    )
+    e2e_capture_parser.add_argument(
+        "--policy-context-min-score",
+        type=_finite_float,
+        default=INHOUSE_POLICY_CONTEXT_MIN_SCORE,
+    )
+    e2e_capture_parser.add_argument(
         "--entailment-min-confidence",
         type=_unit_float,
         default=0.80,
@@ -842,6 +854,8 @@ def main() -> None:
                 output_path=args.output,
                 manifest_path=args.manifest,
                 evidence_min_score=args.evidence_min_score,
+                policy_context_top_k=args.policy_context_top_k,
+                policy_context_min_score=args.policy_context_min_score,
                 entailment_min_confidence=args.entailment_min_confidence,
                 course_id=args.course_id,
                 limit_cases=args.limit_cases,
@@ -939,6 +953,8 @@ def main() -> None:
                 classifier_strategy=args.classifier_strategy,
                 retrieval_top_k=args.retrieval_top_k,
                 evidence_min_score=args.evidence_min_score,
+                policy_context_top_k=args.policy_context_top_k,
+                policy_context_min_score=args.policy_context_min_score,
                 entailment_verifier=args.entailment_verifier,
                 entailment_model=args.entailment_model,
                 entailment_min_confidence=args.entailment_min_confidence,
@@ -997,6 +1013,8 @@ def main() -> None:
                     ),
                     retrieval_top_k=args.retrieval_top_k,
                     evidence_min_score=args.evidence_min_score,
+                    policy_context_top_k=args.policy_context_top_k,
+                    policy_context_min_score=args.policy_context_min_score,
                     entailment_verifier=args.entailment_verifier,
                     entailment_model=args.entailment_model,
                     entailment_min_confidence=args.entailment_min_confidence,
@@ -1071,6 +1089,12 @@ def main() -> None:
             classifier_strategy=getattr(args, "classifier_strategy", "ambiguous"),
             retrieval_top_k=getattr(args, "retrieval_top_k", 3),
             evidence_min_score=getattr(args, "evidence_min_score", None),
+            policy_context_top_k=getattr(args, "policy_context_top_k", 0),
+            policy_context_min_score=getattr(
+                args,
+                "policy_context_min_score",
+                None,
+            ),
             entailment_verifier=getattr(args, "entailment_verifier", "none"),
             entailment_model=getattr(args, "entailment_model", None),
             entailment_min_confidence=getattr(
@@ -1167,6 +1191,8 @@ def _add_guard_classifier_args(parser: argparse.ArgumentParser) -> None:
 def _add_grounding_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--retrieval-top-k", type=int, default=3)
     parser.add_argument("--evidence-min-score", type=_finite_float)
+    parser.add_argument("--policy-context-top-k", type=int, default=0)
+    parser.add_argument("--policy-context-min-score", type=_finite_float)
     parser.add_argument(
         "--entailment-verifier",
         choices=["none", "openai"],

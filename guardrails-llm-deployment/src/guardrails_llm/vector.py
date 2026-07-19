@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
@@ -10,6 +11,7 @@ import chromadb
 
 from .corpus import Chunk, JsonMetadata, load_documents
 from .embeddings import HASHING_EMBEDDING_MODEL, TextEmbedder, create_embedder, resolve_embedding_model
+from .grounding import POLICY_SOURCE_TYPES
 from .langchain_rag import langchain_chunk_documents
 from .retrieval import tokenize
 
@@ -131,7 +133,13 @@ class VectorRetriever:
         embedding_cache_path: Path | None = None,
         embedder: TextEmbedder | None = None,
         corpus_path: Path | None = None,
+        policy_context_top_k: int = 0,
+        policy_context_min_score: float = 0.0,
     ) -> None:
+        if policy_context_top_k < 0:
+            raise ValueError("policy_context_top_k must be non-negative")
+        if not math.isfinite(policy_context_min_score):
+            raise ValueError("policy_context_min_score must be finite")
         resolved_model = resolve_embedding_model(embedding_provider, embedding_model)
         _assert_manifest_matches(
             index_dir,
@@ -155,6 +163,8 @@ class VectorRetriever:
             cache_path=embedding_cache_path,
         )
         self._min_score = min_score
+        self._policy_context_top_k = policy_context_top_k
+        self._policy_context_min_score = policy_context_min_score
 
     @property
     def indexed_chunks(self) -> int:
@@ -177,12 +187,45 @@ class VectorRetriever:
 
         # Query проходит через ту же embedding-функцию, что и chunks при
         # build-index. Chroma возвращает ближайшие chunks по cosine distance.
+        query_embedding = self._embedder.embed(query)
+        matches = self._query(
+            query_embedding,
+            where=_chroma_where(course_id, allowed_visibility),
+            top_k=top_k,
+            min_score=self._min_score,
+        )
+        if self._policy_context_top_k and allowed_visibility is not None:
+            policy_matches = self._query(
+                query_embedding,
+                where=_chroma_where(
+                    course_id,
+                    allowed_visibility,
+                    allowed_source_types=POLICY_SOURCE_TYPES,
+                ),
+                top_k=self._policy_context_top_k,
+                min_score=max(self._min_score, self._policy_context_min_score),
+            )
+            seen = {chunk.chunk_id for chunk, _score in matches}
+            matches.extend(
+                (chunk, score)
+                for chunk, score in policy_matches
+                if chunk.chunk_id not in seen
+            )
+        return matches
+
+    def _query(
+        self,
+        query_embedding: list[float],
+        *,
+        where: dict[str, object] | None,
+        top_k: int,
+        min_score: float,
+    ) -> list[tuple[Chunk, float]]:
         query_options: dict[str, object] = {
-            "query_embeddings": [self._embedder.embed(query)],
-            "n_results": min(top_k, count),
+            "query_embeddings": [query_embedding],
+            "n_results": min(top_k, self.indexed_chunks),
             "include": ["documents", "metadatas", "distances"],
         }
-        where = _chroma_where(course_id, allowed_visibility)
         if where:
             query_options["where"] = where
         results = self._collection.query(**query_options)
@@ -194,14 +237,8 @@ class VectorRetriever:
             if metadata is None:
                 continue
             chunk = _chunk_from_chroma(text or "", metadata)
-            # Фильтры оставлены на уровне retriever interface, чтобы lexical,
-            # LangChain и vector backends вели себя одинаково для pipeline.
-            if course_id and chunk.course_id != course_id:
-                continue
-            if allowed_visibility and chunk.visibility not in allowed_visibility:
-                continue
             score = 1.0 - float(distance)
-            if score >= self._min_score:
+            if score >= min_score:
                 matches.append((chunk, score))
             if len(matches) == top_k:
                 break
@@ -211,12 +248,15 @@ class VectorRetriever:
 def _chroma_where(
     course_id: str | None,
     allowed_visibility: set[str] | None,
+    allowed_source_types: set[str] | frozenset[str] | None = None,
 ) -> dict[str, object] | None:
     filters: list[dict[str, object]] = []
     if course_id:
         filters.append({"course_id": {"$eq": course_id}})
     if allowed_visibility:
         filters.append({"visibility": {"$in": sorted(allowed_visibility)}})
+    if allowed_source_types:
+        filters.append({"source_type": {"$in": sorted(allowed_source_types)}})
     if not filters:
         return None
     if len(filters) == 1:

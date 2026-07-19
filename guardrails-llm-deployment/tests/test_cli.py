@@ -649,6 +649,10 @@ def test_query_wires_grounded_evidence_options(monkeypatch, capsys) -> None:
             "What is RAG?",
             "--evidence-min-score",
             "7.3",
+            "--policy-context-top-k",
+            "2",
+            "--policy-context-min-score",
+            "0.48",
             "--entailment-verifier",
             "openai",
             "--entailment-model",
@@ -662,6 +666,8 @@ def test_query_wires_grounded_evidence_options(monkeypatch, capsys) -> None:
     main()
 
     assert captured_kwargs["evidence_min_score"] == 7.3
+    assert captured_kwargs["policy_context_top_k"] == 2
+    assert captured_kwargs["policy_context_min_score"] == 0.48
     assert captured_kwargs["entailment_verifier"] == "openai"
     assert captured_kwargs["entailment_model"] == "Qwen/Qwen3.6-35B-A3B"
     assert captured_kwargs["entailment_min_confidence"] == 0.88

@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from guardrails_llm import model_profiles as profiles
 from guardrails_llm.model_profiles import (
     INHOUSE_EMBEDDING_MODEL,
     INHOUSE_EVIDENCE_MIN_SCORE,
@@ -35,6 +36,8 @@ def _runtime_args() -> Namespace:
         entailment_model=None,
         retrieval_top_k=3,
         evidence_min_score=None,
+        policy_context_top_k=0,
+        policy_context_min_score=None,
         guard_embedding_provider="hashing",
         guard_embedding_model=None,
         policy=None,
@@ -68,6 +71,8 @@ def test_inhouse_profile_selects_bge_and_qwen(monkeypatch) -> None:
     assert args.entailment_model == INHOUSE_LLM_MODEL
     assert args.retrieval_top_k == INHOUSE_RETRIEVAL_TOP_K
     assert args.evidence_min_score == INHOUSE_EVIDENCE_MIN_SCORE
+    assert args.policy_context_top_k == profiles.INHOUSE_POLICY_CONTEXT_TOP_K
+    assert args.policy_context_min_score == profiles.INHOUSE_POLICY_CONTEXT_MIN_SCORE
     assert args.policy.name == "guardrail_policy_bge_m3.toml"
 
 
@@ -110,6 +115,8 @@ def test_profile_summary_never_contains_url_or_key(monkeypatch) -> None:
     assert summary["endpoint_host"] == "learning-services4.fokus.fraunhofer.de"
     assert summary["retrieval_evidence_threshold"] == INHOUSE_EVIDENCE_MIN_SCORE
     assert summary["retrieval_top_k"] == INHOUSE_RETRIEVAL_TOP_K
+    assert summary["policy_context_top_k"] == profiles.INHOUSE_POLICY_CONTEXT_TOP_K
+    assert summary["policy_context_min_score"] == profiles.INHOUSE_POLICY_CONTEXT_MIN_SCORE
     serialized = str(summary)
     assert "not-for-output" not in serialized
     assert "https://" not in serialized

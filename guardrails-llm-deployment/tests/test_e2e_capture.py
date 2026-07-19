@@ -147,7 +147,11 @@ def test_calibration_capture_is_resumable_across_both_scenarios(
             "policy": "hybrid",
         },
     }
-    assert first["retrieval"] == {"top_k": 8}
+    assert first["retrieval"] == {
+        "top_k": 8,
+        "policy_context_top_k": 2,
+        "policy_context_min_score": 0.51,
+    }
     assert first["dataset_version"] == "milestone3-v2"
     assert len(first["dataset_manifest_sha256"]) == 64
     assert first["expected_disposition_counts"] == {
@@ -283,6 +287,8 @@ def test_calibration_capture_uses_separate_assistants_for_bounded_concurrency(
         output_path=tmp_path / "e2e.jsonl",
         manifest_path=tmp_path / "manifest.json",
         evidence_min_score=0.42,
+        policy_context_top_k=2,
+        policy_context_min_score=0.51,
         limit_cases=2,
         max_concurrency=2,
     )
@@ -331,6 +337,8 @@ def test_build_assistants_propagates_remote_request_policy(
         index_dir=tmp_path / "index",
         cache_path=tmp_path / "cache.jsonl",
         evidence_min_score=0.42,
+        policy_context_top_k=2,
+        policy_context_min_score=0.51,
         entailment_min_confidence=0.8,
         course_id="python-intro",
     )
@@ -339,6 +347,8 @@ def test_build_assistants_propagates_remote_request_policy(
     assert len(assistant_calls) == 2
     assert all(call["model_config"] is config for call in assistant_calls)
     assert all(call["classifier_strategy"] == "always" for call in assistant_calls)
+    assert all(call["policy_context_top_k"] == 2 for call in assistant_calls)
+    assert all(call["policy_context_min_score"] == 0.51 for call in assistant_calls)
 
 
 def test_e2e_capture_checkpoints_workers_in_completion_order(

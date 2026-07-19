@@ -25,7 +25,12 @@ from .model_config import (
     ensure_remote_models_allowed,
     openai_request_policy,
 )
-from .model_profiles import INHOUSE_RETRIEVAL_TOP_K, ensure_inhouse_endpoint
+from .model_profiles import (
+    INHOUSE_POLICY_CONTEXT_MIN_SCORE,
+    INHOUSE_POLICY_CONTEXT_TOP_K,
+    INHOUSE_RETRIEVAL_TOP_K,
+    ensure_inhouse_endpoint,
+)
 from .openai_models import (
     ANSWER_PROMPT_VERSION,
     ENTAILMENT_PROMPT_VERSION,
@@ -78,6 +83,8 @@ def run_calibration_e2e_capture(
     output_path: Path,
     manifest_path: Path,
     evidence_min_score: float,
+    policy_context_top_k: int = INHOUSE_POLICY_CONTEXT_TOP_K,
+    policy_context_min_score: float = INHOUSE_POLICY_CONTEXT_MIN_SCORE,
     entailment_min_confidence: float = 0.80,
     course_id: str = "python-intro",
     limit_cases: int | None = None,
@@ -88,6 +95,10 @@ def run_calibration_e2e_capture(
 ) -> dict[str, object]:
     if not math.isfinite(evidence_min_score):
         raise ValueError("evidence_min_score must be finite")
+    if policy_context_top_k < 0:
+        raise ValueError("policy_context_top_k must be non-negative")
+    if not math.isfinite(policy_context_min_score):
+        raise ValueError("policy_context_min_score must be finite")
     if not 0.0 <= entailment_min_confidence <= 1.0:
         raise ValueError("entailment_min_confidence must be between zero and one")
     if limit_cases is not None and limit_cases < 0:
@@ -142,7 +153,11 @@ def run_calibration_e2e_capture(
             "classifier": GUARD_CLASSIFIER_PROMPT_VERSION,
             "entailment": ENTAILMENT_PROMPT_VERSION,
         },
-        "retrieval": {"top_k": INHOUSE_RETRIEVAL_TOP_K},
+        "retrieval": {
+            "top_k": INHOUSE_RETRIEVAL_TOP_K,
+            "policy_context_top_k": policy_context_top_k,
+            "policy_context_min_score": policy_context_min_score,
+        },
         "thresholds": {
             "retrieval_evidence": evidence_min_score,
             "entailment_confidence": entailment_min_confidence,
@@ -196,6 +211,8 @@ def run_calibration_e2e_capture(
                 index_dir=index_dir,
                 cache_path=cache_path,
                 evidence_min_score=evidence_min_score,
+                policy_context_top_k=policy_context_top_k,
+                policy_context_min_score=policy_context_min_score,
                 entailment_min_confidence=entailment_min_confidence,
                 course_id=course_id,
             )
@@ -343,6 +360,8 @@ def _build_assistants(
     index_dir: Path,
     cache_path: Path,
     evidence_min_score: float,
+    policy_context_top_k: int,
+    policy_context_min_score: float,
     entailment_min_confidence: float,
     course_id: str,
 ) -> dict[str, object]:
@@ -381,6 +400,8 @@ def _build_assistants(
         "classifier_model": config.classifier_model,
         "retrieval_top_k": INHOUSE_RETRIEVAL_TOP_K,
         "evidence_min_score": evidence_min_score,
+        "policy_context_top_k": policy_context_top_k,
+        "policy_context_min_score": policy_context_min_score,
         "entailment_verifier": "openai",
         "entailment_model": config.entailment_model,
         "entailment_min_confidence": entailment_min_confidence,

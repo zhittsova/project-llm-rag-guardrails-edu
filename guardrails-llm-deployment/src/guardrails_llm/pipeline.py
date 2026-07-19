@@ -64,6 +64,7 @@ class LearningAssistant:
         classifier_strategy: str = "ambiguous",
         retrieval_top_k: int = 3,
         evidence_min_score: float | None = None,
+        policy_context_min_score: float | None = None,
         entailment_verifier: EntailmentVerifier | None = None,
         entailment_min_confidence: float = 0.80,
     ) -> None:
@@ -83,6 +84,7 @@ class LearningAssistant:
         self._classifier_strategy = classifier_strategy
         self._retrieval_top_k = retrieval_top_k
         self._evidence_min_score = evidence_min_score
+        self._policy_context_min_score = policy_context_min_score
         self._entailment_verifier = entailment_verifier
         self._entailment_min_confidence = entailment_min_confidence
 
@@ -204,7 +206,11 @@ class LearningAssistant:
             cited_doc_ids = [chunk.doc_id for chunk, _score in retrieved[:1]]
             disposition = ResponseDisposition.REDIRECT
         else:
-            evidence = select_relevant_evidence(retrieved, self._evidence_min_score)
+            evidence = select_relevant_evidence(
+                retrieved,
+                self._evidence_min_score,
+                policy_min_score=self._policy_context_min_score,
+            )
             if self._evidence_min_score is not None and not evidence:
                 triggers.append("ungrounded")
                 return self._response(
@@ -424,6 +430,8 @@ def build_assistant(
     classifier_strategy: str = "ambiguous",
     retrieval_top_k: int = 3,
     evidence_min_score: float | None = None,
+    policy_context_top_k: int = 0,
+    policy_context_min_score: float | None = None,
     entailment_verifier: str = "none",
     entailment_model: str | None = None,
     entailment_min_confidence: float = 0.80,
@@ -488,6 +496,12 @@ def build_assistant(
             embedding_cache_path=embedding_cache_path,
             embedder=retrieval_embedder,
             corpus_path=Path(corpus_path),
+            policy_context_top_k=policy_context_top_k,
+            policy_context_min_score=(
+                policy_context_min_score
+                if policy_context_min_score is not None
+                else 0.0
+            ),
         )
     else:
         raise ValueError("retriever_backend must be 'lexical', 'langchain', or 'vector'")
@@ -502,6 +516,7 @@ def build_assistant(
         classifier_strategy=classifier_strategy,
         retrieval_top_k=retrieval_top_k,
         evidence_min_score=evidence_min_score,
+        policy_context_min_score=policy_context_min_score,
         entailment_verifier=verifier,
         entailment_min_confidence=entailment_min_confidence,
     )
