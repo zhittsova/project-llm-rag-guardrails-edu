@@ -97,7 +97,9 @@ runtime citation defect.
 The frozen 400-case holdout has not been run. It requires two independent human
 reviews, adjudication, judge validation, and configuration freeze first. The
 package provides fail-closed commands to build calibration evidence, seal the
-approved runtime configuration, and check final-run readiness.
+approved runtime configuration, and check final-run readiness. Separate
+holdout reviewer files and explicit reconciliation preserve independent human
+labeling before canonical annotations are written.
 
 The LLM-judge study uses two blinded, family-disjoint 200-output sets. Qwen and
 MiniMax predictions can be captured without labels, but agreement metrics are
