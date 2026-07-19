@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from hashlib import sha256
+from math import ceil
 from pathlib import Path
 
 from .dispositions import ResponseDisposition
@@ -22,6 +23,9 @@ from .model_config import (
 from .model_profiles import ensure_inhouse_endpoint
 from .retrieval_routing import route_retrieval_query
 from .vector import DEFAULT_VECTOR_MIN_SCORE, VectorRetriever, build_vector_index
+
+
+DOCUMENT_RECALL_TARGET = 0.95
 
 
 def run_bge_common_split_evaluation(
@@ -192,6 +196,14 @@ def _score_cases(
                 "expected_doc_ids": list(case.expected_doc_ids or []),
                 "retrieved_doc_ids": retrieved_doc_ids,
                 "ranked_doc_ids": ranked_doc_ids,
+                "retrieved_chunks": [
+                    {
+                        "chunk_id": chunk.chunk_id,
+                        "doc_id": chunk.doc_id,
+                        "score": float(score),
+                    }
+                    for chunk, score in runtime_matches
+                ],
                 "document_ranking_candidate_limit": (
                     retriever.indexed_chunks if retrieval_attempted else 0
                 ),
@@ -230,6 +242,10 @@ def _summarize_technique(rows: list[dict[str, object]]) -> dict[str, object]:
         [float(row["top_retrieval_score"]) for row in retrieval_development],
         [bool(row["evidence_available"]) for row in retrieval_development],
     )
+    document_recall_threshold = _select_document_recall_threshold(
+        retrieval_development,
+        target_recall=DOCUMENT_RECALL_TARGET,
+    )
     guard_triggers = tuple(development[0]["guard_similarity_scores"]) if development else ()
     guard_summary = {}
     for trigger in guard_triggers:
@@ -253,6 +269,8 @@ def _summarize_technique(rows: list[dict[str, object]]) -> dict[str, object]:
     return {
         "retrieval": {
             "selected_threshold": retrieval_threshold,
+            "document_recall_target": DOCUMENT_RECALL_TARGET,
+            "document_recall_threshold": document_recall_threshold,
             "development": _retrieval_metrics(
                 retrieval_development,
                 retrieval_threshold,
@@ -260,6 +278,16 @@ def _summarize_technique(rows: list[dict[str, object]]) -> dict[str, object]:
             "calibration": _retrieval_metrics(
                 retrieval_calibration,
                 retrieval_threshold,
+            ),
+            "development_at_document_recall_threshold": (
+                _retrieval_metrics(retrieval_development, document_recall_threshold)
+                if document_recall_threshold is not None
+                else None
+            ),
+            "calibration_at_document_recall_threshold": (
+                _retrieval_metrics(retrieval_calibration, document_recall_threshold)
+                if document_recall_threshold is not None
+                else None
             ),
         },
         "guard_similarity": guard_summary,
@@ -288,6 +316,18 @@ def _retrieval_metrics(
         / len(set(row["expected_doc_ids"]))
         for row in evaluable
     ]
+    thresholded_recalls = [
+        len(
+            {
+                str(chunk["doc_id"])
+                for chunk in row.get("retrieved_chunks", [])
+                if float(chunk["score"]) >= threshold
+            }
+            & set(row["expected_doc_ids"])
+        )
+        / len(set(row["expected_doc_ids"]))
+        for row in evaluable
+    ]
     metrics["retrieval_evaluable_cases"] = len(evaluable)
     metrics["document_recall_within_top_k_chunks"] = (
         round(sum(chunk_budget_recalls) / len(chunk_budget_recalls), 4)
@@ -301,6 +341,20 @@ def _retrieval_metrics(
             4,
         )
         if chunk_budget_recalls
+        else 0.0
+    )
+    metrics["document_recall_after_evidence_threshold"] = (
+        round(sum(thresholded_recalls) / len(thresholded_recalls), 4)
+        if thresholded_recalls
+        else 0.0
+    )
+    metrics["document_hit_rate_after_evidence_threshold"] = (
+        round(
+            sum(recall > 0 for recall in thresholded_recalls)
+            / len(thresholded_recalls),
+            4,
+        )
+        if thresholded_recalls
         else 0.0
     )
     metrics["document_recall_at_k"] = (
@@ -342,6 +396,39 @@ def _select_threshold(scores: list[float], targets: list[bool]) -> float:
             )
         )
     return max(ranked)[-1]
+
+
+def _select_document_recall_threshold(
+    rows: list[dict[str, object]],
+    *,
+    target_recall: float,
+) -> float | None:
+    if not 0.0 < target_recall <= 1.0:
+        raise ValueError("target document recall must be greater than zero and at most one")
+    evaluable = [
+        row
+        for row in rows
+        if row["evidence_available"] is True and row["expected_doc_ids"]
+    ]
+    if not evaluable:
+        raise ValueError("document threshold selection requires evidence-labelled rows")
+    required_hits = ceil(target_recall * len(evaluable))
+    expected_scores: list[float | None] = []
+    for row in evaluable:
+        expected_doc_ids = set(row["expected_doc_ids"])
+        scores = [
+            float(chunk["score"])
+            for chunk in row.get("retrieved_chunks", [])
+            if chunk["doc_id"] in expected_doc_ids
+        ]
+        expected_scores.append(max(scores) if scores else None)
+    available = sorted(
+        (score for score in expected_scores if score is not None),
+        reverse=True,
+    )
+    if len(available) < required_hits:
+        return None
+    return available[required_hits - 1]
 
 
 def _binary_metrics(

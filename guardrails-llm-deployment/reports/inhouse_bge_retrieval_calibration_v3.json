@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "evidence_scope": "development_and_calibration_only",
+  "dataset_version": "milestone3-v2",
+  "holdout_used": false,
+  "models": {
+    "primary": "BAAI/bge-m3",
+    "local_comparator": "hashing-blake2b-384"
+  },
+  "case_counts": {
+    "development": 1200,
+    "calibration": 400
+  },
+  "runtime_retrieval": {
+    "top_k": 8,
+    "evidence_min_score": 0.5203531980514526,
+    "selection_objective": "at_least_0.95_expected_document_recall_on_development"
+  },
+  "threshold_tradeoff": {
+    "previous_threshold": 0.5618841052055359,
+    "previous_objective": "binary_evidence_macro_f1_at_top_3",
+    "current_objective": "expected_document_recall_at_top_8",
+    "reason": "Retrieval is a candidate-generation stage. Downstream model gates recover precision."
+  },
+  "bge_m3": {
+    "development_document_recall_after_gate": 0.95,
+    "calibration_document_recall_after_gate": 0.96,
+    "development_evidence_precision_after_gate": 0.7732,
+    "calibration_evidence_precision_after_gate": 0.6897,
+    "calibration_raw_document_recall_at_8": 0.975
+  },
+  "hashing": {
+    "met_0.95_document_recall_target_at_8": false,
+    "calibration_raw_document_recall_at_8": 0.865
+  },
+  "interpretation": {
+    "promotion_status": "selected_for_inhouse_calibration",
+    "precision_guard": "Qwen classifier, structured answerability, and Qwen entailment verification",
+    "expected_document_labels": "generated_not_human_adjudicated",
+    "final_holdout_status": "not_run"
+  }
+}

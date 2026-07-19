@@ -102,19 +102,27 @@ class GuardrailPolicy:
         return DEFAULT_POLICY
 
     def input_triggers(self, text: str) -> list[str]:
+        return _unique(
+            self.input_deterministic_triggers(text)
+            + self.input_similarity_triggers(text)
+        )
+
+    def input_deterministic_triggers(self, text: str) -> list[str]:
         candidates = guard_text_candidates(text)
         triggers = [
             rule.trigger
             for rule in self.input_rules
             if any(rule.matches(candidate) for candidate in candidates)
         ]
-        triggers.extend(
+        triggers.extend(rule.trigger for rule in self.input_fuzzy_rules if rule.matches(text))
+        return _unique(triggers)
+
+    def input_similarity_triggers(self, text: str) -> list[str]:
+        return _unique([
             rule.trigger
             for rule, score in self._similarity_scores(text)
             if score >= rule.threshold
-        )
-        triggers.extend(rule.trigger for rule in self.input_fuzzy_rules if rule.matches(text))
-        return _unique(triggers)
+        ])
 
     def has_near_similarity_trigger(self, text: str, *, margin: float = 0.08) -> bool:
         return any(

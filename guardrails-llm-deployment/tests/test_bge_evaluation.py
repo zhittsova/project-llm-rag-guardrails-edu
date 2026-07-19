@@ -1,7 +1,12 @@
 from pathlib import Path
 
 import guardrails_llm.bge_evaluation as bge_evaluation
-from guardrails_llm.bge_evaluation import _select_threshold, run_bge_common_split_evaluation
+from guardrails_llm.bge_evaluation import (
+    _retrieval_metrics,
+    _select_document_recall_threshold,
+    _select_threshold,
+    run_bge_common_split_evaluation,
+)
 from guardrails_llm.inhouse_experiment import prepare_inhouse_bge
 from guardrails_llm.model_config import OpenAIModelConfig
 
@@ -58,6 +63,61 @@ def test_threshold_selection_ranks_candidates_with_unrounded_metrics(monkeypatch
 
     assert round_modes
     assert all(mode is False for mode in round_modes)
+
+
+def test_retrieval_metrics_report_expected_docs_after_evidence_threshold() -> None:
+    rows = [
+        {
+            "top_retrieval_score": 0.90,
+            "evidence_available": True,
+            "expected_doc_ids": ["course-policy"],
+            "retrieved_doc_ids": ["lecture", "course-policy"],
+            "ranked_doc_ids": ["lecture", "course-policy"],
+            "retrieved_chunks": [
+                {"doc_id": "lecture", "score": 0.90},
+                {"doc_id": "course-policy", "score": 0.55},
+            ],
+        }
+    ]
+
+    metrics = _retrieval_metrics(rows, threshold=0.60)
+
+    assert metrics["document_recall_within_top_k_chunks"] == 1.0
+    assert metrics["document_recall_after_evidence_threshold"] == 0.0
+
+
+def test_document_threshold_selects_highest_value_meeting_recall_target() -> None:
+    rows = [
+        {
+            "evidence_available": True,
+            "expected_doc_ids": ["expected"],
+            "retrieved_chunks": [{"doc_id": "expected", "score": score}],
+        }
+        for score in (0.90, 0.80, 0.70, 0.60)
+    ]
+
+    threshold = _select_document_recall_threshold(rows, target_recall=0.75)
+
+    assert threshold == 0.70
+
+
+def test_document_threshold_is_unavailable_when_rank_budget_misses_target() -> None:
+    rows = [
+        {
+            "evidence_available": True,
+            "expected_doc_ids": ["expected"],
+            "retrieved_chunks": [],
+        },
+        {
+            "evidence_available": True,
+            "expected_doc_ids": ["expected"],
+            "retrieved_chunks": [{"doc_id": "expected", "score": 0.80}],
+        },
+    ]
+
+    threshold = _select_document_recall_threshold(rows, target_recall=0.75)
+
+    assert threshold is None
 
 
 def test_bge_evaluation_uses_common_dev_and_calibration_splits(

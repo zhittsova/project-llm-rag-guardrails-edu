@@ -19,7 +19,8 @@ MODEL_PROFILES = (LOCAL_PROFILE, INHOUSE_PROFILE)
 INHOUSE_ENDPOINT_HOST = "learning-services4.fokus.fraunhofer.de"
 INHOUSE_EMBEDDING_MODEL = "BAAI/bge-m3"
 INHOUSE_LLM_MODEL = "Qwen/Qwen3.6-35B-A3B"
-INHOUSE_EVIDENCE_MIN_SCORE = 0.5618841052055359
+INHOUSE_EVIDENCE_MIN_SCORE = 0.5203531980514526
+INHOUSE_RETRIEVAL_TOP_K = 8
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 INHOUSE_EMBEDDING_CACHE = PROJECT_ROOT / "indexes" / "cache" / "bge-m3.jsonl"
 INHOUSE_INDEX_DIR = PROJECT_ROOT / "indexes" / "python-course-bge-m3"
@@ -63,6 +64,7 @@ def apply_model_profile(args: Namespace) -> None:
     _set_if_present(args, "classifier_model", INHOUSE_LLM_MODEL)
     _set_if_present(args, "entailment_verifier", "openai")
     _set_if_present(args, "entailment_model", INHOUSE_LLM_MODEL)
+    _set_if_present(args, "retrieval_top_k", INHOUSE_RETRIEVAL_TOP_K)
     if (
         hasattr(args, "evidence_min_score")
         and args.evidence_min_score is None
@@ -105,6 +107,7 @@ def model_profile_summary(
         "entailment_model": INHOUSE_LLM_MODEL,
         "api_key_present": _api_key_present(config),
         "remote_calls_require_explicit_allowance": True,
+        "retrieval_top_k": INHOUSE_RETRIEVAL_TOP_K,
         "retrieval_evidence_threshold": INHOUSE_EVIDENCE_MIN_SCORE,
     }
 

@@ -616,7 +616,7 @@ def test_capture_inhouse_calibration_uses_frozen_threshold_by_default(
     assert config.answer_model == "Qwen/Qwen3.6-35B-A3B"
     assert config.classifier_model == "Qwen/Qwen3.6-35B-A3B"
     assert config.entailment_model == "Qwen/Qwen3.6-35B-A3B"
-    assert captured_kwargs["evidence_min_score"] == 0.5618841052055359
+    assert captured_kwargs["evidence_min_score"] == 0.5203531980514526
     assert captured_kwargs["max_concurrency"] == 2
     assert captured_kwargs["retry_failures"] is True
     assert json.loads(capsys.readouterr().out)["completed_runs"] == 4

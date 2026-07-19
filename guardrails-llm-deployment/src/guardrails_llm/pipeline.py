@@ -62,6 +62,7 @@ class LearningAssistant:
         answer_generator: AnswerGenerator | None = None,
         guard_classifier: GuardClassifier | None = None,
         classifier_strategy: str = "ambiguous",
+        retrieval_top_k: int = 3,
         evidence_min_score: float | None = None,
         entailment_verifier: EntailmentVerifier | None = None,
         entailment_min_confidence: float = 0.80,
@@ -70,6 +71,8 @@ class LearningAssistant:
             raise ValueError("mode must be 'baseline' or 'guardrailed'")
         if classifier_strategy not in {"ambiguous", "always"}:
             raise ValueError("classifier_strategy must be 'ambiguous' or 'always'")
+        if retrieval_top_k <= 0:
+            raise ValueError("retrieval_top_k must be greater than zero")
         self._retriever = retriever
         self._mode = mode
         self._course_id = course_id
@@ -78,6 +81,7 @@ class LearningAssistant:
         self._answer_generator = answer_generator
         self._guard_classifier = guard_classifier
         self._classifier_strategy = classifier_strategy
+        self._retrieval_top_k = retrieval_top_k
         self._evidence_min_score = evidence_min_score
         self._entailment_verifier = entailment_verifier
         self._entailment_min_confidence = entailment_min_confidence
@@ -90,7 +94,11 @@ class LearningAssistant:
         # Baseline RAG намеренно пропускает этот блок, чтобы показать, как
         # обычный RAG ведет себя без prompt-injection/PII/integrity защит.
         if self._mode == "guardrailed":
-            input_result = input_guard(question, self._guardrail_policy)
+            input_result = input_guard(
+                question,
+                self._guardrail_policy,
+                include_similarity=self._guard_classifier is None,
+            )
             triggers.extend(input_result.triggers)
             if not input_result.allowed:
                 return self._response(
@@ -101,10 +109,17 @@ class LearningAssistant:
                     started_at,
                     [],
                 )
+            similarity_candidates = (
+                self._guardrail_policy.input_similarity_triggers(question)
+                if self._guard_classifier is not None and not triggers
+                else []
+            )
             should_classify = (
                 not triggers
                 and self._guard_classifier is not None
                 and (
+                    bool(similarity_candidates)
+                    or
                     self._classifier_strategy == "always"
                     or should_use_model_classifier(
                         question,
@@ -147,6 +162,7 @@ class LearningAssistant:
             question,
             course_id=self._course_id if self._mode == "guardrailed" else None,
             allowed_visibility=visibility,
+            top_k=self._retrieval_top_k,
         )
         if self._mode == "guardrailed":
             # Retrieved context считается недоверенным: даже текст из corpus
@@ -172,6 +188,7 @@ class LearningAssistant:
                 route_retrieval_query(question, set(triggers)),
                 course_id=self._course_id,
                 allowed_visibility=visibility,
+                top_k=self._retrieval_top_k,
             )
             retrieved = [
                 (sanitize_chunk(chunk, self._guardrail_policy), score)
@@ -405,6 +422,7 @@ def build_assistant(
     guard_classifier: str = "none",
     classifier_model: str | None = None,
     classifier_strategy: str = "ambiguous",
+    retrieval_top_k: int = 3,
     evidence_min_score: float | None = None,
     entailment_verifier: str = "none",
     entailment_model: str | None = None,
@@ -482,6 +500,7 @@ def build_assistant(
         answer_generator=answer_generator,
         guard_classifier=classifier,
         classifier_strategy=classifier_strategy,
+        retrieval_top_k=retrieval_top_k,
         evidence_min_score=evidence_min_score,
         entailment_verifier=verifier,
         entailment_min_confidence=entailment_min_confidence,

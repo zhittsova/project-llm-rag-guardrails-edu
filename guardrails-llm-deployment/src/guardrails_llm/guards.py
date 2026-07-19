@@ -13,9 +13,17 @@ class GuardResult:
     message: str | None = None
 
 
-def input_guard(question: str, policy: GuardrailPolicy | None = None) -> GuardResult:
+def input_guard(
+    question: str,
+    policy: GuardrailPolicy | None = None,
+    *,
+    include_similarity: bool = True,
+) -> GuardResult:
     policy = policy or GuardrailPolicy.default()
-    triggers = policy.input_triggers(question)
+    triggers = policy.input_deterministic_triggers(question)
+    if include_similarity:
+        triggers.extend(policy.input_similarity_triggers(question))
+        triggers = list(dict.fromkeys(triggers))
 
     if policy.blocking_triggers.intersection(triggers):
         return GuardResult(

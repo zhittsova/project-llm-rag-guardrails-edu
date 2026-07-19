@@ -937,6 +937,7 @@ def main() -> None:
                 guard_classifier=args.guard_classifier,
                 classifier_model=args.classifier_model,
                 classifier_strategy=args.classifier_strategy,
+                retrieval_top_k=args.retrieval_top_k,
                 evidence_min_score=args.evidence_min_score,
                 entailment_verifier=args.entailment_verifier,
                 entailment_model=args.entailment_model,
@@ -994,6 +995,7 @@ def main() -> None:
                         "classifier_strategy",
                         "ambiguous",
                     ),
+                    retrieval_top_k=args.retrieval_top_k,
                     evidence_min_score=args.evidence_min_score,
                     entailment_verifier=args.entailment_verifier,
                     entailment_model=args.entailment_model,
@@ -1067,6 +1069,7 @@ def main() -> None:
             guard_classifier=getattr(args, "guard_classifier", "none"),
             classifier_model=getattr(args, "classifier_model", None),
             classifier_strategy=getattr(args, "classifier_strategy", "ambiguous"),
+            retrieval_top_k=getattr(args, "retrieval_top_k", 3),
             evidence_min_score=getattr(args, "evidence_min_score", None),
             entailment_verifier=getattr(args, "entailment_verifier", "none"),
             entailment_model=getattr(args, "entailment_model", None),
@@ -1162,6 +1165,7 @@ def _add_guard_classifier_args(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_grounding_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--retrieval-top-k", type=int, default=3)
     parser.add_argument("--evidence-min-score", type=_finite_float)
     parser.add_argument(
         "--entailment-verifier",
