@@ -47,8 +47,8 @@
     },
     "complete_inhouse_hybrid": {
       "correct": 391,
-      "behavior_accuracy": 0.9775,
-      "macro_f1": 0.9775,
+      "behavior_accuracy": 0.978,
+      "macro_f1": 0.978,
       "answer_recall": 0.91,
       "block_recall": 1.0,
       "abstain_recall": 1.0,
