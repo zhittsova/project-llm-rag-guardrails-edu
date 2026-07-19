@@ -33,6 +33,15 @@ from .inhouse_experiment import (
     run_v2_classifier_capture,
 )
 from .judging import judge_results, judgments_to_json, summarize_judgments
+from .judge_study import (
+    JUDGE_SPLITS,
+    evaluate_judge_study_models,
+    finalize_human_ground_truth,
+    prepare_judge_study,
+    reconcile_human_annotations,
+    validate_annotation_file,
+)
+from .judge_study_capture import run_judge_study_capture
 from .model_calibration import (
     DEFAULT_CALIBRATION_SOURCE_CASES,
     DEFAULT_CALIBRATION_SOURCE_RESULTS,
@@ -558,6 +567,73 @@ def main() -> None:
     e2e_eval_parser.add_argument("--limit-cases", type=int)
     e2e_eval_parser.add_argument("--output-json", type=Path)
 
+    judge_study_parser = subparsers.add_parser(
+        "prepare-judge-study",
+        help="Prepare blinded 200/200 human judge annotation sets",
+    )
+    judge_study_parser.add_argument(
+        "--cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_calibration.jsonl",
+    )
+    judge_study_parser.add_argument("--source-results", type=Path, required=True)
+    judge_study_parser.add_argument("--output-dir", type=Path, required=True)
+    judge_study_parser.add_argument("--seed", default="milestone3-judge-v1")
+
+    judge_status_parser = subparsers.add_parser(
+        "judge-study-status",
+        help="Report completion of human judge annotation templates",
+    )
+    judge_status_parser.add_argument("--study-dir", type=Path, required=True)
+
+    judge_reconcile_parser = subparsers.add_parser(
+        "reconcile-judge-study",
+        help="Measure reviewer agreement and prepare adjudication items",
+    )
+    judge_reconcile_parser.add_argument("--study-dir", type=Path, required=True)
+
+    judge_finalize_parser = subparsers.add_parser(
+        "finalize-judge-study",
+        help="Compile reviewer consensus and adjudications into human labels",
+    )
+    judge_finalize_parser.add_argument("--study-dir", type=Path, required=True)
+
+    judge_capture_parser = subparsers.add_parser(
+        "capture-judge-study",
+        help="Capture resumable in-house judge predictions without human labels",
+    )
+    judge_capture_parser.add_argument("--study-dir", type=Path, required=True)
+    judge_capture_parser.add_argument(
+        "--source-cases",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "eval_cases_milestone3_v2_calibration.jsonl",
+    )
+    judge_capture_parser.add_argument("--source-results", type=Path, required=True)
+    judge_capture_parser.add_argument("--judge-model", required=True)
+    judge_capture_parser.add_argument("--output", type=Path, required=True)
+    judge_capture_parser.add_argument("--manifest", type=Path, required=True)
+    judge_capture_parser.add_argument("--max-concurrency", type=int, default=1)
+    judge_capture_parser.add_argument("--retry-failures", action="store_true")
+    judge_capture_parser.add_argument("--allow-remote-models", action="store_true")
+    judge_capture_parser.add_argument("--env-file", type=Path)
+
+    judge_evaluate_parser = subparsers.add_parser(
+        "evaluate-judge-study",
+        help="Compare saved judge predictions against adjudicated human labels",
+    )
+    judge_evaluate_parser.add_argument("--study-dir", type=Path, required=True)
+    judge_evaluate_parser.add_argument(
+        "--predictions",
+        type=Path,
+        action="append",
+        required=True,
+    )
+    judge_evaluate_parser.add_argument("--output-json", type=Path, required=True)
+
     index_parser = subparsers.add_parser("build-index", help="Build a local Chroma vector index")
     _add_profile_arg(index_parser)
     index_parser.add_argument("--corpus", dest="command_corpus", type=Path)
@@ -891,6 +967,97 @@ def main() -> None:
                 json.dumps(report, indent=2) + "\n",
                 encoding="utf-8",
             )
+        print(json.dumps(report, indent=2))
+        return
+
+    if args.command == "prepare-judge-study":
+        try:
+            manifest = prepare_judge_study(
+                cases_path=args.cases,
+                source_results_path=args.source_results,
+                output_dir=args.output_dir,
+                seed=args.seed,
+            )
+        except (OSError, ValueError) as exc:
+            parser.error(str(exc))
+        print(json.dumps(manifest, indent=2))
+        return
+
+    if args.command == "judge-study-status":
+        try:
+            status = _judge_study_status(args.study_dir)
+        except (OSError, TypeError, ValueError) as exc:
+            parser.error(str(exc))
+        print(json.dumps(status, indent=2))
+        return
+
+    if args.command == "reconcile-judge-study":
+        try:
+            report = reconcile_human_annotations(
+                items_paths=[
+                    args.study_dir / f"{split}_items.jsonl"
+                    for split in JUDGE_SPLITS
+                ],
+                reviewer_a_paths=[
+                    args.study_dir / f"{split}_reviewer_a.jsonl"
+                    for split in JUDGE_SPLITS
+                ],
+                reviewer_b_paths=[
+                    args.study_dir / f"{split}_reviewer_b.jsonl"
+                    for split in JUDGE_SPLITS
+                ],
+                disagreements_output=args.study_dir / "judge_disagreements.jsonl",
+                report_output=args.study_dir / "judge_human_agreement.json",
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            parser.error(str(exc))
+        print(json.dumps(report, indent=2))
+        return
+
+    if args.command == "finalize-judge-study":
+        try:
+            report = finalize_human_ground_truth(study_dir=args.study_dir)
+        except (OSError, TypeError, ValueError) as exc:
+            parser.error(str(exc))
+        print(json.dumps(report, indent=2))
+        return
+
+    if args.command == "capture-judge-study":
+        try:
+            manifest = run_judge_study_capture(
+                config=OpenAIModelConfig(
+                    judge_model=args.judge_model,
+                    allow_remote_models=args.allow_remote_models,
+                    env_file=args.env_file,
+                ),
+                study_dir=args.study_dir,
+                source_cases_path=args.source_cases,
+                source_results_path=args.source_results,
+                output_path=args.output,
+                manifest_path=args.manifest,
+                max_concurrency=args.max_concurrency,
+                retry_failures=args.retry_failures,
+            )
+        except (
+            OSError,
+            ValueError,
+            InHouseEndpointError,
+            RemoteModelsNotAllowedError,
+            MissingModelCredentialError,
+        ) as exc:
+            parser.error(str(exc))
+        print(json.dumps(manifest, indent=2))
+        return
+
+    if args.command == "evaluate-judge-study":
+        try:
+            report = evaluate_judge_study_models(
+                study_dir=args.study_dir,
+                prediction_paths=args.predictions,
+                output_path=args.output_json,
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            parser.error(str(exc))
         print(json.dumps(report, indent=2))
         return
 
@@ -1536,6 +1703,32 @@ def _comparison_scenarios(args, policy):
             ]
         )
     return scenarios
+
+
+def _judge_study_status(study_dir: Path) -> dict[str, object]:
+    summaries: dict[str, object] = {}
+    for split in JUDGE_SPLITS:
+        items_path = study_dir / f"{split}_items.jsonl"
+        item_ids = {
+            str(json.loads(line)["item_id"])
+            for line in items_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        }
+        for reviewer in ("reviewer_a", "reviewer_b"):
+            _annotations, summary = validate_annotation_file(
+                study_dir / f"{split}_{reviewer}.jsonl",
+                expected_item_ids=item_ids,
+                complete=False,
+            )
+            summaries[f"{split}:{reviewer}"] = summary
+    return {
+        "study_dir": str(study_dir),
+        "human_ground_truth_ready": all(
+            bool(summary["complete"])
+            for summary in summaries.values()
+        ),
+        "annotation_files": summaries,
+    }
 
 
 if __name__ == "__main__":
