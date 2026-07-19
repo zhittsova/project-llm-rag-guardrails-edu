@@ -32,6 +32,7 @@ src/guardrails_llm/
   evaluation.py            behavior and grounding metrics
   e2e_capture.py           resumable common-split model experiments
   final_evidence.py        calibration packaging and final-run release gates
+  holdout_review.py        blinded double review and adjudication workflow
 data/                      corpus, policy, and versioned evaluation files
 reports/                   compact calibration evidence
 tests/                     deterministic tests with fake model clients
@@ -176,6 +177,46 @@ uv run guardrails-llm capture-judge-study \
 After adjudication, compare both prediction files with `evaluate-judge-study`.
 The report keeps judge calibration and judge validation separate and applies
 the structured-validity, per-dimension, exact-match, and groundedness gates.
+
+### Independent Frozen-Holdout Review
+
+Do not start this workflow until the two human reviewers are assigned. Prepare
+separate blinded reviewer files without exposing generated expected labels:
+
+```bash
+uv run guardrails-llm prepare-holdout-review \
+  --output-dir path/to/holdout_review
+```
+
+Each reviewer edits only their assigned `holdout_reviewer_*.jsonl` file. Check
+completion, then create the agreement report and disagreement-only
+adjudication file:
+
+```bash
+uv run guardrails-llm holdout-review-status \
+  --study-dir path/to/holdout_review
+uv run guardrails-llm reconcile-holdout-review \
+  --study-dir path/to/holdout_review
+```
+
+After every disagreement is adjudicated, compile the canonical annotation
+schema. Replacing the tracked annotation template requires the explicit
+`--replace` flag:
+
+```bash
+uv run guardrails-llm finalize-holdout-review \
+  --study-dir path/to/holdout_review \
+  --output-annotations data/eval_cases_milestone3_v2_holdout_annotations.jsonl \
+  --replace
+uv run python scripts/finalize_eval_dataset_milestone3_v2.py \
+  --corpus data/python_course_docs.jsonl
+```
+
+Preparation fingerprints the frozen source and blinded items. Reconciliation
+requires complete files with distinct reviewer identities. Matching labels are
+recorded as reviewer consensus; only disagreements require a separate human
+adjudication. Dataset sealing still validates all 400 canonical annotations
+and updates the dataset manifest before evaluation is permitted.
 
 ### Final Evidence and Holdout Release Gate
 
