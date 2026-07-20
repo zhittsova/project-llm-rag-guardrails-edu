@@ -1,0 +1,112 @@
+{
+  "schema_version": 2,
+  "evidence_scope": "inhouse_common_split_calibration",
+  "dataset_version": "milestone3-v2",
+  "dataset_manifest_sha256": "377fadb9ae4d8ff1952c6413dd7e73dfef4055756818f5f080ebda077a1cf14f",
+  "calibration_split_sha256": "65c5ec0653e67aabc3c5a51b2f65dd8d63a64203f3250adef59fa6f0a5c32ad5",
+  "runtime_config_sha256": "65f3dc73b7c85ad543ec23617e29d261506183a1913b736c4583df434f5299a8",
+  "source_report_sha256": "c8fa1f5e54ea0594b4b3f2e00f44b8d1e7fa3bffabff02988d3fc281fdd63343",
+  "source_capture_sha256": "33f508fafbbfccb91b513dc1aeba4fdeb74f3cbf3d164edd430a535a80149f7e",
+  "cases_per_scenario": 400,
+  "cases_per_disposition": 100,
+  "holdout_used": false,
+  "models": {
+    "embedding": "BAAI/bge-m3",
+    "answer": "Qwen/Qwen3.6-35B-A3B",
+    "classifier": "Qwen/Qwen3.6-35B-A3B",
+    "entailment": "Qwen/Qwen3.6-35B-A3B"
+  },
+  "configuration": {
+    "prompt_versions": {
+      "answer": "rag-answer-v2.4",
+      "classifier": "guard-classifier-v3.4",
+      "entailment": "answer-entailment-v1.4"
+    },
+    "retrieval": {
+      "top_k": 8,
+      "policy_context_top_k": 2,
+      "policy_context_min_score": 0.51
+    },
+    "thresholds": {
+      "retrieval_evidence": 0.5203531980514526,
+      "classifier_confidence": 0.65,
+      "entailment_confidence": 0.8
+    },
+    "runtime_config_sha256": "65f3dc73b7c85ad543ec23617e29d261506183a1913b736c4583df434f5299a8"
+  },
+  "capture": {
+    "expected_runs": 800,
+    "completed_runs": 800,
+    "failed_runs": 0,
+    "configuration_fingerprint": "162acbcd233e665f45502e9f883c547faef4fd96246665e5dcb0b6891f35117e"
+  },
+  "scenarios": {
+    "qwen_classifier_only": {
+      "correct": 389,
+      "behavior_accuracy": 0.973,
+      "macro_f1": 0.972,
+      "answer_recall": 0.89,
+      "block_recall": 1.0,
+      "abstain_recall": 1.0,
+      "redirect_recall": 1.0,
+      "safe_false_refusal_rate": 0.055,
+      "false_unsafe_answer_rate": 0.0,
+      "retrieval_recall_at_3": 0.925,
+      "supported_answer_precision": 1.0,
+      "supported_answer_total": 89,
+      "citation_entailment_precision": 1.0,
+      "citation_entailment_total": 282,
+      "citation_entailment_scope": "model_verifier_conditioned",
+      "expected_document_citation_precision": 0.784,
+      "expected_document_citation_total": 282,
+      "claim_support_rate": 1.0,
+      "claim_support_total": 89,
+      "row_accuracy_95ci": [
+        0.955,
+        0.9875
+      ],
+      "family_accuracy_95ci": [
+        0.9614,
+        0.99
+      ]
+    },
+    "complete_inhouse_hybrid": {
+      "correct": 392,
+      "behavior_accuracy": 0.98,
+      "macro_f1": 0.98,
+      "answer_recall": 0.92,
+      "block_recall": 1.0,
+      "abstain_recall": 1.0,
+      "redirect_recall": 1.0,
+      "safe_false_refusal_rate": 0.04,
+      "false_unsafe_answer_rate": 0.0,
+      "retrieval_recall_at_3": 0.925,
+      "supported_answer_precision": 1.0,
+      "supported_answer_total": 92,
+      "citation_entailment_precision": 1.0,
+      "citation_entailment_total": 303,
+      "citation_entailment_scope": "model_verifier_conditioned",
+      "expected_document_citation_precision": 0.766,
+      "expected_document_citation_total": 303,
+      "claim_support_rate": 1.0,
+      "claim_support_total": 92,
+      "row_accuracy_95ci": [
+        0.965,
+        0.9925
+      ],
+      "family_accuracy_95ci": [
+        0.9667,
+        0.9964
+      ]
+    }
+  },
+  "quality_gate_interpretation": {
+    "agreed_primary_gates_passed": true,
+    "extra_expected_document_citation_gate_passed": false
+  },
+  "limitations": [
+    "Calibration evidence is not a frozen-holdout result.",
+    "Expected-document labels remain generated until independent human review.",
+    "LLM-judge agreement remains unavailable until human adjudication."
+  ]
+}

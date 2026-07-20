@@ -130,8 +130,10 @@ Expected-document citation precision is `0.766`, below its additional `0.95`
 diagnostic gate, although verifier-conditioned citation-entailment precision is
 `1.0`. Generated expected-document labels can omit other valid evidence and
 therefore require independent human review before this difference is treated
-as a runtime citation defect. The consolidated final report will be refreshed
-from these versioned captures in the next workstream.
+as a runtime citation defect. The `1.0` entailment figure is consistency with
+the runtime model verifier, not independent human entailment validation. The
+current provenance-checked seven-technique report is published in
+[`reports/final_calibration_evidence.md`](guardrails-llm-deployment/reports/final_calibration_evidence.md).
 
 The frozen 400-case holdout has not been run. It requires two independent human
 reviews, adjudication, judge validation, and configuration freeze first. The

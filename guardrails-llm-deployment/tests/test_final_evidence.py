@@ -26,6 +26,8 @@ def _deterministic_report() -> dict[str, object]:
     return {
         "schema_version": 1,
         "dataset_version": "milestone3-v2",
+        "dataset_manifest_sha256": "a" * 64,
+        "calibration_split_sha256": "b" * 64,
         "cases": 400,
         "cases_per_disposition": 100,
         "holdout_used": False,
@@ -68,6 +70,8 @@ def _model_report() -> dict[str, object]:
     return {
         "schema_version": 1,
         "dataset_version": "milestone3-v2",
+        "dataset_manifest_sha256": "a" * 64,
+        "calibration_split_sha256": "b" * 64,
         "cases_per_scenario": 400,
         "cases_per_disposition": 100,
         "holdout_used": False,
@@ -86,6 +90,8 @@ def _model_report() -> dict[str, object]:
                 "retrieval_recall_at_3": 0.905,
                 "supported_answer_precision": 1.0,
                 "citation_entailment_precision": 1.0,
+                "citation_entailment_total": 282,
+                "citation_entailment_scope": "model_verifier_conditioned",
                 "expected_document_citation_precision": 0.758,
                 "row_accuracy_95ci": [0.9725, 0.995],
                 "family_accuracy_95ci": [0.9787, 0.9917],
@@ -103,6 +109,8 @@ def _model_report() -> dict[str, object]:
                 "retrieval_recall_at_3": 0.905,
                 "supported_answer_precision": 1.0,
                 "citation_entailment_precision": 1.0,
+                "citation_entailment_total": 282,
+                "citation_entailment_scope": "model_verifier_conditioned",
                 "expected_document_citation_precision": 0.752,
                 "row_accuracy_95ci": [0.9625, 0.9925],
                 "family_accuracy_95ci": [0.9631, 0.9942],
@@ -138,11 +146,13 @@ def _failure_report() -> dict[str, object]:
         "dataset_version": "milestone3-v2",
         "cases": 400,
         "failed_cases": 9,
-        "failure_disposition": "false_abstention",
+        "failure_dispositions": {"answer_to_abstain": 9},
+        "attack_types": {"benign_guardrail_near_miss": 9},
         "stage_counts": {
             "expected_policy_document_not_retrieved": 2,
             "answerability_rejected_with_expected_document_present": 3,
             "entailment_rejected_unsupported_extra_claims": 4,
+            "other": 0,
         },
         "holdout_used": False,
     }
@@ -198,6 +208,20 @@ def test_build_calibration_evidence_rejects_holdout_or_mismatched_dataset(
         )
 
 
+def test_build_calibration_evidence_rejects_mismatched_split_provenance(
+    tmp_path: Path,
+) -> None:
+    model = _model_report()
+    model["calibration_split_sha256"] = "c" * 64
+
+    with pytest.raises(FinalEvidenceError, match="calibration provenance"):
+        build_calibration_evidence(
+            deterministic_path=_write_json(
+                tmp_path / "deterministic.json", _deterministic_report()
+            ),
+            model_path=_write_json(tmp_path / "model.json", model),
+        )
+
 def test_build_calibration_evidence_rejects_invalid_capture_fingerprint(
     tmp_path: Path,
 ) -> None:
@@ -229,10 +253,42 @@ def test_render_calibration_report_keeps_failed_diagnostic_visible(tmp_path: Pat
     assert "Calibration evidence" in markdown
     assert "frozen holdout remains unopened" in markdown
     assert "2 retrieval misses" in markdown
-    assert "3 evidence-gate rejects" in markdown
+    assert "3 answerability abstentions" in markdown
     assert "4 entailment rejects" in markdown
+    assert "model-verifier-conditioned" in markdown
     assert "Row-level accuracy 95% CI" in markdown
     assert "Family-level accuracy 95% CI" in markdown
+
+
+def test_render_calibration_report_exposes_unsafe_and_other_failures(
+    tmp_path: Path,
+) -> None:
+    failures = _failure_report()
+    failures["failed_cases"] = 3
+    failures["failure_dispositions"] = {
+        "answer_to_abstain": 1,
+        "block_to_answer": 2,
+    }
+    failures["stage_counts"] = {
+        "expected_policy_document_not_retrieved": 0,
+        "answerability_rejected_with_expected_document_present": 1,
+        "entailment_rejected_unsupported_extra_claims": 0,
+        "other": 2,
+    }
+    report = build_calibration_evidence(
+        deterministic_path=_write_json(
+            tmp_path / "deterministic.json", _deterministic_report()
+        ),
+        model_path=_write_json(tmp_path / "model.json", _model_report()),
+        failure_path=_write_json(tmp_path / "failures.json", failures),
+    )
+
+    markdown = render_calibration_report(report)
+
+    assert "block -> answer: 2" in markdown
+    assert "answer -> abstain: 1" in markdown
+    assert "2 unclassified stage failures" in markdown
+    assert "All 3 behavior errors are false abstentions" not in markdown
 
 
 def test_build_calibration_evidence_rejects_holdout_failure_analysis(
