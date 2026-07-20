@@ -59,6 +59,15 @@ def test_reconciliation_shows_three_reviews_and_flushes_adjudication(
     restarted = ReconciliationStore(study_dir, section_size=1)
     assert restarted.item(item_id)["adjudication"]["adjudicator_id"] == "kate"
 
+    reviewer_b_path = study_dir / "judge_calibration_reviewer_b.jsonl"
+    reviewer_b = _read_jsonl(reviewer_b_path)
+    reviewer_b[0]["grounded"] = True
+    reviewer_b[0]["privacy_safe"] = False
+    _write_jsonl(reviewer_b_path, reviewer_b)
+    changed = ReconciliationStore(study_dir, section_size=1)
+    changed_item = changed.item(item_id)
+    assert changed_item["adjudication"]["adjudicator_id"] == ""
+
 
 def _study_dir(tmp_path: Path, *, complete: bool) -> Path:
     study_dir = tmp_path / "study"

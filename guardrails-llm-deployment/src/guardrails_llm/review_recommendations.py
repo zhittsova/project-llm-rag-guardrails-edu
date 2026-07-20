@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
@@ -10,18 +12,24 @@ from .judge_study import JUDGE_SPLITS
 from .model_calibration import JUDGE_DIMENSIONS
 
 
-RECOMMENDATION_GENERATOR = "codex-rubric-recommendation-v1"
+RECOMMENDATION_GENERATOR = "rubric-prefill-v1"
 
 
 class RecommendationStore:
     def __init__(self, study_dir: Path) -> None:
         self.study_dir = study_dir.resolve()
-        self._recommendations = {
-            str(row["item_id"]): row
+        rows = [
+            row
             for split in JUDGE_SPLITS
             for row in _load_jsonl(
                 self.study_dir / f"{split}_recommendation.jsonl"
             )
+        ]
+        recommendation_ids = [str(row["item_id"]) for row in rows]
+        if len(recommendation_ids) != len(set(recommendation_ids)):
+            raise ValueError("recommendation item IDs must be unique")
+        self._recommendations = {
+            str(row["item_id"]): row for row in rows
         }
         expected_ids = {
             str(row["item_id"])
@@ -238,7 +246,21 @@ def _load_jsonl(path: Path) -> list[dict[str, object]]:
 
 
 def _write_jsonl(path: Path, rows: Iterable[dict[str, object]]) -> None:
-    path.write_text(
-        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
-        encoding="utf-8",
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
     )
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            for row in rows:
+                handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_name, path)
+    except BaseException:
+        try:
+            os.unlink(temporary_name)
+        except FileNotFoundError:
+            pass
+        raise

@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from guardrails_llm.review_recommendations import (
     RecommendationStore,
     prepare_review_recommendations,
@@ -34,7 +36,7 @@ def test_preparation_keeps_human_files_unchanged_and_explains_every_item(
     for item in recommendations.items():
         assert all(isinstance(item[dimension], bool) for dimension in DIMENSIONS)
         assert item["rationale"].strip()
-        assert item["generator"] == "codex-rubric-recommendation-v1"
+        assert item["generator"] == "rubric-prefill-v1"
 
 
 def test_reveal_and_copy_are_recorded_as_assisted_review(tmp_path: Path) -> None:
@@ -105,6 +107,21 @@ def test_section_and_all_reveals_are_audited(tmp_path: Path) -> None:
         "section_recommendations_revealed",
         "all_recommendations_revealed",
     ]
+
+
+def test_recommendation_store_rejects_duplicate_item_ids(tmp_path: Path) -> None:
+    study_dir = _study_dir(tmp_path)
+    prepare_review_recommendations(study_dir)
+    path = study_dir / "judge_calibration_recommendation.jsonl"
+    rows = [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+    ]
+    rows[1]["item_id"] = rows[0]["item_id"]
+    _write_jsonl(path, rows)
+
+    with pytest.raises(ValueError, match="unique"):
+        RecommendationStore(study_dir)
 
 
 def _study_dir(tmp_path: Path) -> Path:

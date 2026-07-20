@@ -356,7 +356,7 @@ REVIEW_UI_HTML = r"""<!doctype html>
       const labels = dimensions.map(([key, label]) =>
         `<span>${escapeHtml(label)}: ${recommendation[key] ? "Yes" : "No"}</span>`
       ).join("");
-      return `<strong>Codex rubric recommendation</strong><div class="recommendation-labels">${labels}</div><pre>${escapeHtml(recommendation.rationale)}</pre>`;
+      return `<strong>Rubric recommendation</strong><div class="recommendation-labels">${labels}</div><pre>${escapeHtml(recommendation.rationale)}</pre>`;
     }
 
     function renderQuestions() {

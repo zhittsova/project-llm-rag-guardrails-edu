@@ -99,6 +99,12 @@ class ReconciliationStore:
         for item_id, old_row in previous.items():
             if item_id not in self._disagreements:
                 continue
+            current = self._disagreements[item_id]
+            if (
+                old_row.get("reviewer_a") != current.get("reviewer_a")
+                or old_row.get("reviewer_b") != current.get("reviewer_b")
+            ):
+                continue
             self._disagreements[item_id].update(
                 {
                     key: old_row[key]

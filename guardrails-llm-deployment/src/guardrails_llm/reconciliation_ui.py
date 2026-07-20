@@ -137,7 +137,7 @@ RECONCILIATION_UI_HTML = r"""<!doctype html>
         if (only && !item.requires_adjudication) return "";
         return `<details class="item" data-item="${escapeHtml(item.item_id)}" open><summary>${escapeHtml(item.question)} · expected ${escapeHtml(item.expected_behavior)} / actual ${escapeHtml(item.actual_behavior)}</summary>
           <div class="item-body"><div class="context"><div><strong>System answer</strong><pre>${escapeHtml(item.answer)}</pre></div><div>${evidence(item)}</div></div>
-          <div class="reviews">${reviewCard("Reviewer A", item.reviewer_a)}${reviewCard("Reviewer B", item.reviewer_b)}${reviewCard("Codex recommendation (not ground truth)", item.recommendation)}</div>
+          <div class="reviews">${reviewCard("Reviewer A", item.reviewer_a)}${reviewCard("Reviewer B", item.reviewer_b)}${reviewCard("Rubric recommendation (not ground truth)", item.recommendation)}</div>
           ${adjudication(item)}</div></details>`;
       }).join("") || "<p>No items match this filter.</p>";
       bind();
