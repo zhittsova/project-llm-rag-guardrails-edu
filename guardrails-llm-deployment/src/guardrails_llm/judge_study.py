@@ -395,12 +395,16 @@ def evaluate_judge_study_models(
     study_dir: Path,
     prediction_paths: list[Path],
     output_path: Path,
+    judge_split: str | None = None,
 ) -> dict[str, object]:
+    if judge_split not in {None, *JUDGE_SPLITS}:
+        raise ValueError("judge_split must be judge_calibration or judge_validation")
+    selected_splits = (judge_split,) if judge_split is not None else JUDGE_SPLITS
     labels = {
         split: load_judge_calibration_cases(
             study_dir / f"{split}_human_ground_truth.jsonl"
         )
-        for split in JUDGE_SPLITS
+        for split in selected_splits
     }
     model_reports: dict[str, object] = {}
     for prediction_path in prediction_paths:
@@ -446,6 +450,7 @@ def evaluate_judge_study_models(
         "schema_version": 1,
         "evidence_scope": "human_calibrated_llm_judge_comparison",
         "human_labels_are_ground_truth": True,
+        "judge_split": judge_split or "all",
         "models": model_reports,
         "selection_rule": (
             "Select on judge_calibration only; report judge_validation after the "
