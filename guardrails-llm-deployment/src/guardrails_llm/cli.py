@@ -92,6 +92,7 @@ from .pipeline import build_assistant
 from .retrieval_benchmark import run_local_retrieval_benchmark
 from .vector import VectorIndexError, build_vector_index, default_index_path
 from .visualization import write_rag_visualization
+from .workshop3_demo import write_workshop3_demo
 
 
 def main() -> None:
@@ -800,12 +801,58 @@ def main() -> None:
     visualize_parser.add_argument("--question", required=True)
     visualize_parser.add_argument("--output", type=Path, required=True)
 
+    workshop3_demo_parser = subparsers.add_parser(
+        "workshop3-demo",
+        help="Write the Workshop 3 guardrail comparison demo",
+    )
+    workshop3_demo_parser.add_argument(
+        "--evidence",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "final_calibration_evidence.json",
+    )
+    workshop3_demo_parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "workshop3_guardrail_demo.html",
+    )
+    workshop3_demo_parser.add_argument("--live", action="store_true")
+    workshop3_demo_parser.add_argument("--allow-remote-models", action="store_true")
+    workshop3_demo_parser.add_argument("--env-file", type=Path)
+    workshop3_demo_parser.add_argument("--open", action="store_true")
+
     args = parser.parse_args()
     try:
         apply_model_profile(args)
     except (InHouseEndpointError, ValueError) as exc:
         parser.error(str(exc))
     corpus_path = getattr(args, "command_corpus", None) or args.corpus
+
+    if args.command == "workshop3-demo":
+        try:
+            result = write_workshop3_demo(
+                evidence_path=args.evidence,
+                output_path=args.output,
+                live=args.live,
+                allow_remote_models=args.allow_remote_models,
+                env_file=args.env_file,
+                open_browser=args.open,
+            )
+        except (
+            OSError,
+            ValueError,
+            VectorIndexError,
+            InHouseEndpointError,
+            RemoteModelsNotAllowedError,
+            MissingModelCredentialError,
+            RemoteModelCallError,
+        ) as exc:
+            parser.error(str(exc))
+        print(json.dumps(result, indent=2))
+        return
 
     if args.command == "validate-corpus":
         documents = validate_corpus(corpus_path)

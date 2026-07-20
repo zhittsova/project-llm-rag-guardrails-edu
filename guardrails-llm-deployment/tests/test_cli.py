@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -166,6 +168,74 @@ def test_review_judge_study_command_starts_selected_reviewer(
         "section_size": 8,
         "open_browser": True,
     }
+
+
+def test_workshop3_demo_command_passes_live_options(tmp_path: Path, monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_write_workshop3_demo(**kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        return {"output_path": str(kwargs["output_path"]), "mode": "live"}
+
+    monkeypatch.setattr(
+        "guardrails_llm.cli.write_workshop3_demo",
+        fake_write_workshop3_demo,
+    )
+    monkeypatch.setattr(sys, "argv", [
+        "guardrails-llm",
+        "workshop3-demo",
+        "--evidence",
+        str(tmp_path / "evidence.json"),
+        "--output",
+        str(tmp_path / "demo.html"),
+        "--live",
+        "--allow-remote-models",
+        "--env-file",
+        str(tmp_path / ".env"),
+    ])
+
+    main()
+
+    assert captured == {
+        "evidence_path": tmp_path / "evidence.json",
+        "output_path": tmp_path / "demo.html",
+        "live": True,
+        "allow_remote_models": True,
+        "env_file": tmp_path / ".env",
+        "open_browser": False,
+    }
+
+
+def test_workshop3_demo_entrypoints_exist_and_are_executable() -> None:
+    package_script = ROOT / "scripts" / "run_workshop3_demo.sh"
+    root_script = ROOT.parent / "scripts" / "run_workshop3_demo.sh"
+
+    assert package_script.exists()
+    assert root_script.exists()
+    assert package_script.stat().st_mode & 0o111
+    assert root_script.stat().st_mode & 0o111
+
+
+def test_workshop3_demo_script_runs_offline_without_open_flag(
+    tmp_path: Path,
+) -> None:
+    fake_uv = tmp_path / "uv"
+    fake_uv.write_text("#!/bin/sh\nprintf '%s\\n' \"$*\"\n", encoding="utf-8")
+    fake_uv.chmod(0o755)
+    environment = os.environ | {
+        "OPEN_BROWSER": "0",
+        "PATH": f"{tmp_path}:{os.environ['PATH']}",
+    }
+
+    result = subprocess.run(
+        [str(ROOT / "scripts" / "run_workshop3_demo.sh")],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+
+    assert result.stdout.strip() == "run guardrails-llm workshop3-demo"
 
 
 def test_comparison_scenarios_isolate_local_guardrail_techniques() -> None:

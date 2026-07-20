@@ -139,6 +139,33 @@ review rather than being silently reclassified as success.
 The holdout remains unopened until double human review and adjudication are
 complete. Generated labels are not treated as final human ground truth.
 
+## Workshop 3 Demo
+
+Run the complete offline demo from the repository root:
+
+```bash
+./scripts/run_workshop3_demo.sh
+```
+
+The command opens `reports/workshop3_guardrail_demo.html`. It uses the
+checked-in 400-case calibration evidence and makes no remote calls. The report
+shows the complete runtime cascade, the identical-split technique comparison,
+five baseline-versus-hybrid failure scenarios, and the nine remaining false
+abstentions. It labels the evidence as calibration-only and does not read the
+frozen holdout.
+
+After explicitly approving Fraunhofer model use, run the same five requests
+through BGE-M3 retrieval and the Qwen-backed baseline and complete hybrid:
+
+```bash
+./scripts/run_workshop3_demo.sh --live
+```
+
+Live mode first prepares or reuses the BGE-M3 cache and Chroma index. It then
+adds current baseline and hybrid dispositions, answers, triggers, and citations
+to the HTML. The script uses only the configured Fraunhofer endpoint; it cannot
+fall back to the official OpenAI Platform profile.
+
 ### Human-Calibrated LLM Judge
 
 Prepare two blinded, family-disjoint 200-output annotation sets from a common
