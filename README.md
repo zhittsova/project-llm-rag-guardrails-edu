@@ -94,6 +94,17 @@ uv run guardrails-llm validate-runtime-config
 retrieval depths, evidence, classifier, policy-context, and entailment
 thresholds, and runtime artifact paths. New captures include its SHA-256 hash.
 
+Run the local instructor policy manager:
+
+```bash
+uv --directory guardrails-llm-deployment run guardrails-llm manage-policy --open
+```
+
+It edits the TOML guardrail policy through validated drafts, local simulation,
+required direct/variant/benign coverage cases, atomic publish, and rollback
+snapshots. It binds to localhost, makes no remote calls, and shows BGE-M3
+runtime controls as read-only provenance.
+
 The package README contains the preparation, query, capture, and evaluation
 commands. The `.env` file and generated indexes/caches are local artifacts and
 must not be committed.

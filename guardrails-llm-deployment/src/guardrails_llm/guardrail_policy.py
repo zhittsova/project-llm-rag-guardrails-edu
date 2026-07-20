@@ -184,6 +184,17 @@ def load_guardrail_policy(
     similarity_embedder: TextEmbedder | None = None,
 ) -> GuardrailPolicy:
     data = tomllib.loads(path.read_text(encoding="utf-8"))
+    return guardrail_policy_from_mapping(
+        data,
+        similarity_embedder=similarity_embedder,
+    )
+
+
+def guardrail_policy_from_mapping(
+    data: dict[str, object],
+    *,
+    similarity_embedder: TextEmbedder | None = None,
+) -> GuardrailPolicy:
     extends_default = _as_bool(data.get("extends_default", True), "extends_default")
     base = GuardrailPolicy.default() if extends_default else GuardrailPolicy()
 

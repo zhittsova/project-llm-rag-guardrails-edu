@@ -123,6 +123,26 @@ Every remote command requires `--allow-remote-models`. The endpoint host,
 models, prompt versions, thresholds, and input hashes are stored in manifests;
 credentials and raw prompt text are not stored in embedding caches.
 
+## Instructor Policy Manager
+
+Start the local policy workflow from this directory:
+
+```bash
+uv run guardrails-llm manage-policy --open
+```
+
+The interface supports structured regex, fuzzy, and embedding-similarity rules;
+input blocking triggers; retrieval visibility; citation requirements; response
+messages; and coverage cases. Drafts persist in a local ignored SQLite file.
+Publishing requires a valid rule family with direct, variant, and benign
+near-miss coverage, writes the TOML atomically, preserves leading calibration
+comments, and creates a rollback snapshot.
+
+The simulator is intentionally offline. Regex and fuzzy checks are exact, while
+similarity is labelled as a local hashing preview. BGE-M3 calibration remains
+authoritative and is not replaced by the preview. The server accepts only
+localhost requests and does not expose credentials or call model APIs.
+
 Use `guardrails-llm --help` and the evaluation commands below for the complete
 capture sequence.
 

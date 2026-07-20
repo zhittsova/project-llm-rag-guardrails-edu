@@ -97,6 +97,8 @@ from .model_profiles import (
     model_profile_summary,
 )
 from .pipeline import build_assistant
+from .policy_manager import PolicyManager
+from .policy_server import serve_policy_ui
 from .retrieval_benchmark import run_local_retrieval_benchmark
 from .vector import VectorIndexError, build_vector_index, default_index_path
 from .visualization import write_rag_visualization
@@ -625,6 +627,27 @@ def main() -> None:
         choices=("reviewer_a", "reviewer_b"),
         required=True,
     )
+
+    policy_manager_parser = subparsers.add_parser(
+        "manage-policy",
+        help="Run the local instructor guardrail policy manager",
+    )
+    policy_manager_parser.add_argument(
+        "--policy",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "data"
+        / "guardrail_policy_bge_m3.toml",
+    )
+    policy_manager_parser.add_argument(
+        "--runtime-config",
+        type=Path,
+        default=default_inhouse_runtime_path(),
+    )
+    policy_manager_parser.add_argument("--state-dir", type=Path)
+    policy_manager_parser.add_argument("--host", default="127.0.0.1")
+    policy_manager_parser.add_argument("--port", type=int, default=8770)
+    policy_manager_parser.add_argument("--open", action="store_true")
     judge_review_parser.add_argument("--port", type=int, default=8765)
     judge_review_parser.add_argument("--section-size", type=int, default=10)
     judge_review_parser.add_argument("--open", action="store_true")
@@ -1249,6 +1272,23 @@ def main() -> None:
                 allow_reviewer_switch=args.allow_reviewer_switch,
             )
         except (OSError, ValueError) as exc:
+            parser.error(str(exc))
+        return
+
+    if args.command == "manage-policy":
+        try:
+            manager = PolicyManager(
+                args.policy,
+                args.runtime_config,
+                state_dir=args.state_dir,
+            )
+            serve_policy_ui(
+                manager,
+                host=args.host,
+                port=args.port,
+                open_browser=args.open,
+            )
+        except (OSError, TypeError, ValueError) as exc:
             parser.error(str(exc))
         return
 
