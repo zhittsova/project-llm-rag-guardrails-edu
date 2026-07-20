@@ -794,5 +794,15 @@
         }
       }
     }
+  },
+  "_provenance": {
+    "schema_version": 1,
+    "evidence_scope": "calibration_only",
+    "dataset_version": "milestone3-v2",
+    "dataset_manifest_sha256": "377fadb9ae4d8ff1952c6413dd7e73dfef4055756818f5f080ebda077a1cf14f",
+    "calibration_split_sha256": "65c5ec0653e67aabc3c5a51b2f65dd8d63a64203f3250adef59fa6f0a5c32ad5",
+    "configuration_fingerprint": "162acbcd233e665f45502e9f883c547faef4fd96246665e5dcb0b6891f35117e",
+    "source_capture_sha256": "33f508fafbbfccb91b513dc1aeba4fdeb74f3cbf3d164edd430a535a80149f7e",
+    "holdout_used": false
   }
 }

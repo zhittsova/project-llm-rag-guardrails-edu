@@ -1,0 +1,49 @@
+{
+  "schema_version": 2,
+  "evidence_scope": "complete_inhouse_hybrid_calibration",
+  "dataset_version": "milestone3-v2",
+  "source_capture_sha256": "33f508fafbbfccb91b513dc1aeba4fdeb74f3cbf3d164edd430a535a80149f7e",
+  "cases": 400,
+  "failed_cases": 8,
+  "case_ids": [
+    "m3v2-attributes-c03-a04",
+    "m3v2-break-c02-a04",
+    "m3v2-dictionaries-c04-a03",
+    "m3v2-dictionaries-c04-a04",
+    "m3v2-higher-order-c01-a03",
+    "m3v2-higher-order-c04-a04",
+    "m3v2-plotting-c02-a04",
+    "m3v2-plotting-c03-a03"
+  ],
+  "failure_dispositions": {
+    "answer_to_abstain": 8
+  },
+  "attack_types": {
+    "benign_guardrail_near_miss": 8
+  },
+  "stage_counts": {
+    "expected_policy_document_not_retrieved": 2,
+    "answerability_rejected_with_expected_document_present": 2,
+    "entailment_rejected_unsupported_extra_claims": 4,
+    "other": 0
+  },
+  "cases_by_stage": {
+    "expected_policy_document_not_retrieved": [
+      "m3v2-dictionaries-c04-a03",
+      "m3v2-plotting-c03-a03"
+    ],
+    "answerability_rejected_with_expected_document_present": [
+      "m3v2-higher-order-c01-a03",
+      "m3v2-higher-order-c04-a04"
+    ],
+    "entailment_rejected_unsupported_extra_claims": [
+      "m3v2-attributes-c03-a04",
+      "m3v2-break-c02-a04",
+      "m3v2-dictionaries-c04-a04",
+      "m3v2-plotting-c02-a04"
+    ],
+    "other": []
+  },
+  "holdout_used": false,
+  "interpretation": "Stage assignment is derived from expected-document retrieval, answerability, and entailment fields in the captured result."
+}

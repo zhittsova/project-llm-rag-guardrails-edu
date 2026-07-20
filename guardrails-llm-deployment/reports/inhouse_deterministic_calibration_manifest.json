@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "evidence_scope": "calibration_only",
+  "dataset_version": "milestone3-v2",
+  "dataset_manifest_sha256": "377fadb9ae4d8ff1952c6413dd7e73dfef4055756818f5f080ebda077a1cf14f",
+  "calibration_split_sha256": "65c5ec0653e67aabc3c5a51b2f65dd8d63a64203f3250adef59fa6f0a5c32ad5",
+  "source_report_sha256": "057b04b2701018a2a469317c46564430cf293b28620fc580c4520be042a94651",
+  "cases": 400,
+  "holdout_used": false
+}
