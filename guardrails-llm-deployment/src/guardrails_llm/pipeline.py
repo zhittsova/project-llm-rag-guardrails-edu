@@ -62,6 +62,7 @@ class LearningAssistant:
         answer_generator: AnswerGenerator | None = None,
         guard_classifier: GuardClassifier | None = None,
         classifier_strategy: str = "ambiguous",
+        classifier_min_confidence: float = 0.65,
         retrieval_top_k: int = 3,
         evidence_min_score: float | None = None,
         policy_context_min_score: float | None = None,
@@ -72,6 +73,8 @@ class LearningAssistant:
             raise ValueError("mode must be 'baseline' or 'guardrailed'")
         if classifier_strategy not in {"ambiguous", "always"}:
             raise ValueError("classifier_strategy must be 'ambiguous' or 'always'")
+        if not 0.0 <= classifier_min_confidence <= 1.0:
+            raise ValueError("classifier_min_confidence must be between zero and one")
         if retrieval_top_k <= 0:
             raise ValueError("retrieval_top_k must be greater than zero")
         self._retriever = retriever
@@ -82,6 +85,7 @@ class LearningAssistant:
         self._answer_generator = answer_generator
         self._guard_classifier = guard_classifier
         self._classifier_strategy = classifier_strategy
+        self._classifier_min_confidence = classifier_min_confidence
         self._retrieval_top_k = retrieval_top_k
         self._evidence_min_score = evidence_min_score
         self._policy_context_min_score = policy_context_min_score
@@ -133,7 +137,10 @@ class LearningAssistant:
                 classification = self._guard_classifier.classify(question)
                 if classification.explanation.startswith("model_classifier_error:"):
                     triggers.append(classification.explanation)
-                if classification.label != "safe" and classification.confidence >= 0.65:
+                if (
+                    classification.label != "safe"
+                    and classification.confidence >= self._classifier_min_confidence
+                ):
                     triggers.append(classification.label)
                     if classification.label == "unsupported":
                         triggers.append("ungrounded")
@@ -426,6 +433,7 @@ def build_assistant(
     guard_classifier: str = "none",
     classifier_model: str | None = None,
     classifier_strategy: str = "ambiguous",
+    classifier_min_confidence: float = 0.65,
     retrieval_top_k: int = 3,
     evidence_min_score: float | None = None,
     policy_context_top_k: int = 0,
@@ -517,6 +525,7 @@ def build_assistant(
         answer_generator=answer_generator,
         guard_classifier=classifier,
         classifier_strategy=classifier_strategy,
+        classifier_min_confidence=classifier_min_confidence,
         retrieval_top_k=retrieval_top_k,
         evidence_min_score=evidence_min_score,
         policy_context_min_score=policy_context_min_score,

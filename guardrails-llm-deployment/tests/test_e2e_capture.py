@@ -136,7 +136,8 @@ def test_calibration_capture_is_resumable_across_both_scenarios(
         "classifier": "guard-classifier-v3.4",
         "entailment": "answer-entailment-v1.4",
     }
-    assert first["schema_version"] == 2
+    assert first["schema_version"] == 3
+    assert len(first["runtime_config_sha256"]) == 64
     assert first["scenario_configuration"] == {
         "qwen_classifier_only": {
             "classifier_strategy": "always",
@@ -151,6 +152,11 @@ def test_calibration_capture_is_resumable_across_both_scenarios(
         "top_k": 8,
         "policy_context_top_k": 2,
         "policy_context_min_score": 0.51,
+    }
+    assert first["thresholds"] == {
+        "retrieval_evidence": 0.42,
+        "classifier_confidence": 0.65,
+        "entailment_confidence": 0.8,
     }
     assert first["dataset_version"] == "milestone3-v2"
     assert len(first["dataset_manifest_sha256"]) == 64
@@ -404,6 +410,7 @@ def test_build_assistants_propagates_remote_request_policy(
         index_dir=tmp_path / "index",
         cache_path=tmp_path / "cache.jsonl",
         evidence_min_score=0.42,
+        classifier_min_confidence=0.65,
         policy_context_top_k=2,
         policy_context_min_score=0.51,
         entailment_min_confidence=0.8,
@@ -413,6 +420,7 @@ def test_build_assistants_propagates_remote_request_policy(
     assert embedder_calls[0]["model_config"] is config
     assert len(assistant_calls) == 2
     assert all(call["model_config"] is config for call in assistant_calls)
+    assert all(call["classifier_min_confidence"] == 0.65 for call in assistant_calls)
     assert all(call["classifier_strategy"] == "always" for call in assistant_calls)
     assert all(call["policy_context_top_k"] == 2 for call in assistant_calls)
     assert all(call["policy_context_min_score"] == 0.51 for call in assistant_calls)

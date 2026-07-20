@@ -10,16 +10,19 @@ from .embeddings import create_embedder
 from .guardrail_policy import load_guardrail_policy
 from .model_config import OpenAIModelConfig
 from .model_profiles import (
+    INHOUSE_CLASSIFIER_MIN_CONFIDENCE,
+    INHOUSE_ENTAILMENT_MIN_CONFIDENCE,
     INHOUSE_CORPUS_PATH,
     INHOUSE_COURSE_ID,
     INHOUSE_EMBEDDING_CACHE,
     INHOUSE_EMBEDDING_MODEL,
     INHOUSE_EVIDENCE_MIN_SCORE,
     INHOUSE_INDEX_DIR,
-    INHOUSE_LLM_MODEL,
     INHOUSE_POLICY_CONTEXT_MIN_SCORE,
     INHOUSE_POLICY_CONTEXT_TOP_K,
+    INHOUSE_POLICY_PATH,
     INHOUSE_RETRIEVAL_TOP_K,
+    INHOUSE_RUNTIME_CONFIG,
     ensure_inhouse_endpoint,
 )
 from .pipeline import build_assistant
@@ -181,10 +184,10 @@ def _run_live_scenarios(
 ) -> list[dict[str, object]]:
     ensure_inhouse_endpoint(env_file)
     config = OpenAIModelConfig(
-        embedding_model=INHOUSE_EMBEDDING_MODEL,
-        answer_model=INHOUSE_LLM_MODEL,
-        classifier_model=INHOUSE_LLM_MODEL,
-        entailment_model=INHOUSE_LLM_MODEL,
+        embedding_model=INHOUSE_RUNTIME_CONFIG.models.embedding,
+        answer_model=INHOUSE_RUNTIME_CONFIG.models.answer,
+        classifier_model=INHOUSE_RUNTIME_CONFIG.models.classifier,
+        entailment_model=INHOUSE_RUNTIME_CONFIG.models.entailment,
         allow_remote_models=allow_remote_models,
         env_file=env_file,
     )
@@ -196,8 +199,7 @@ def _run_live_scenarios(
         env_file=env_file,
         cache_path=INHOUSE_EMBEDDING_CACHE,
     )
-    policy_path = INHOUSE_CORPUS_PATH.parent / "guardrail_policy_bge_m3.toml"
-    policy = load_guardrail_policy(policy_path, similarity_embedder=embedder)
+    policy = load_guardrail_policy(INHOUSE_POLICY_PATH, similarity_embedder=embedder)
     common = {
         "corpus_path": INHOUSE_CORPUS_PATH,
         "retriever_backend": "vector",
@@ -209,7 +211,7 @@ def _run_live_scenarios(
         "env_file": env_file,
         "embedding_cache_path": INHOUSE_EMBEDDING_CACHE,
         "generator": "openai",
-        "answer_model": INHOUSE_LLM_MODEL,
+        "answer_model": INHOUSE_RUNTIME_CONFIG.models.answer,
         "retrieval_top_k": INHOUSE_RETRIEVAL_TOP_K,
         "retrieval_embedder": embedder,
         "model_config": config,
@@ -219,14 +221,15 @@ def _run_live_scenarios(
         mode="guardrailed",
         guardrail_policy=policy,
         guard_classifier="openai",
-        classifier_model=INHOUSE_LLM_MODEL,
+        classifier_model=INHOUSE_RUNTIME_CONFIG.models.classifier,
         classifier_strategy="always",
+        classifier_min_confidence=INHOUSE_CLASSIFIER_MIN_CONFIDENCE,
         evidence_min_score=INHOUSE_EVIDENCE_MIN_SCORE,
         policy_context_top_k=INHOUSE_POLICY_CONTEXT_TOP_K,
         policy_context_min_score=INHOUSE_POLICY_CONTEXT_MIN_SCORE,
         entailment_verifier="openai",
-        entailment_model=INHOUSE_LLM_MODEL,
-        entailment_min_confidence=0.80,
+        entailment_model=INHOUSE_RUNTIME_CONFIG.models.entailment,
+        entailment_min_confidence=INHOUSE_ENTAILMENT_MIN_CONFIDENCE,
         **common,
     )
     results = []

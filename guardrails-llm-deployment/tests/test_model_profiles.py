@@ -32,8 +32,10 @@ def _runtime_args() -> Namespace:
         guard_classifier="none",
         classifier_model=None,
         classifier_strategy="ambiguous",
+        classifier_min_confidence=0.65,
         entailment_verifier="none",
         entailment_model=None,
+        entailment_min_confidence=0.80,
         retrieval_top_k=3,
         evidence_min_score=None,
         policy_context_top_k=0,
@@ -67,12 +69,14 @@ def test_inhouse_profile_selects_bge_and_qwen(monkeypatch) -> None:
     assert args.guard_classifier == "openai"
     assert args.classifier_model == INHOUSE_LLM_MODEL
     assert args.classifier_strategy == "always"
+    assert args.classifier_min_confidence == 0.65
     assert args.entailment_verifier == "openai"
     assert args.entailment_model == INHOUSE_LLM_MODEL
     assert args.retrieval_top_k == INHOUSE_RETRIEVAL_TOP_K
     assert args.evidence_min_score == INHOUSE_EVIDENCE_MIN_SCORE
     assert args.policy_context_top_k == profiles.INHOUSE_POLICY_CONTEXT_TOP_K
     assert args.policy_context_min_score == profiles.INHOUSE_POLICY_CONTEXT_MIN_SCORE
+    assert args.entailment_min_confidence == 0.80
     assert args.policy.name == "guardrail_policy_bge_m3.toml"
 
 
@@ -117,6 +121,10 @@ def test_profile_summary_never_contains_url_or_key(monkeypatch) -> None:
     assert summary["retrieval_top_k"] == INHOUSE_RETRIEVAL_TOP_K
     assert summary["policy_context_top_k"] == profiles.INHOUSE_POLICY_CONTEXT_TOP_K
     assert summary["policy_context_min_score"] == profiles.INHOUSE_POLICY_CONTEXT_MIN_SCORE
+    assert summary["classifier_min_confidence"] == 0.65
+    assert summary["entailment_min_confidence"] == 0.80
+    assert summary["runtime_config_schema_version"] == 1
+    assert len(summary["runtime_config_sha256"]) == 64
     serialized = str(summary)
     assert "not-for-output" not in serialized
     assert "https://" not in serialized

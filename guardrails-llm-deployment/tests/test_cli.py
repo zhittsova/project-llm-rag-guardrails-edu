@@ -792,6 +792,8 @@ def test_capture_inhouse_calibration_uses_frozen_threshold_by_default(
     assert config.classifier_model == "Qwen/Qwen3.6-35B-A3B"
     assert config.entailment_model == "Qwen/Qwen3.6-35B-A3B"
     assert captured_kwargs["evidence_min_score"] == 0.5203531980514526
+    assert captured_kwargs["classifier_min_confidence"] == 0.65
+    assert captured_kwargs["entailment_min_confidence"] == 0.80
     assert captured_kwargs["case_ids"] == [
         "m3v2-break-c03-a04",
         "m3v2-plotting-c03-a04",
@@ -838,6 +840,8 @@ def test_query_wires_grounded_evidence_options(monkeypatch, capsys) -> None:
             "Qwen/Qwen3.6-35B-A3B",
             "--entailment-min-confidence",
             "0.88",
+            "--classifier-min-confidence",
+            "0.77",
             "--allow-remote-models",
         ],
     )
@@ -850,7 +854,29 @@ def test_query_wires_grounded_evidence_options(monkeypatch, capsys) -> None:
     assert captured_kwargs["entailment_verifier"] == "openai"
     assert captured_kwargs["entailment_model"] == "Qwen/Qwen3.6-35B-A3B"
     assert captured_kwargs["entailment_min_confidence"] == 0.88
+    assert captured_kwargs["classifier_min_confidence"] == 0.77
     assert json.loads(capsys.readouterr().out)["answer"] == "Grounded answer."
+
+
+def test_validate_runtime_config_reports_safe_versioned_controls(
+    monkeypatch,
+    capsys,
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["guardrails-llm", "validate-runtime-config"],
+    )
+
+    main()
+
+    report = json.loads(capsys.readouterr().out)
+    assert report["schema_version"] == 1
+    assert report["profile"] == "inhouse"
+    assert report["models"]["embedding"] == "BAAI/bge-m3"
+    assert report["thresholds"]["classifier_min_confidence"] == 0.65
+    assert len(report["sha256"]) == 64
+    assert "api_key" not in json.dumps(report)
 
 
 def test_compare_guardrails_records_validation_split(tmp_path: Path, monkeypatch) -> None:
