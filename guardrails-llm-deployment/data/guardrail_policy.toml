@@ -2,8 +2,9 @@
 #
 # The built-in rules still provide deterministic regex checks. This file adds a
 # first hybrid layer: embedding-similarity examples for paraphrased risky
-# requests. The local demo uses hashing embeddings; production can replace that
-# with OpenAI, Gemini, or the internal TUB embedding API.
+# requests. This file is the offline hashing example. The in-house BGE-M3
+# configuration uses guardrail_policy_bge_m3.toml and
+# guardrail_runtime_inhouse.toml instead.
 
 extends_default = true
 

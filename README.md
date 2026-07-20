@@ -87,7 +87,12 @@ From `guardrails-llm-deployment/`, first inspect credential-safe configuration:
 
 ```bash
 uv run guardrails-llm model-config --profile inhouse
+uv run guardrails-llm validate-runtime-config
 ```
+
+`data/guardrail_runtime_inhouse.toml` is the versioned source for model names,
+retrieval depths, evidence, classifier, policy-context, and entailment
+thresholds, and runtime artifact paths. New captures include its SHA-256 hash.
 
 The package README contains the preparation, query, capture, and evaluation
 commands. The `.env` file and generated indexes/caches are local artifacts and

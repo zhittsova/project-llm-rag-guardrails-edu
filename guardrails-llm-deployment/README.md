@@ -27,6 +27,7 @@ src/guardrails_llm/
   baseline_pipeline.py     baseline RAG without guardrails
   vector.py                Chroma indexing and native-filtered retrieval
   guardrail_policy.py      TOML-backed rules and similarity policy
+  guardrail_runtime.py     strict versioned in-house runtime controls
   openai_models.py         gated OpenAI-compatible model adapters
   model_profiles.py        local and Fraunhofer in-house profiles
   evaluation.py            behavior and grounding metrics
@@ -85,6 +86,7 @@ Inspect configuration without making a model call:
 
 ```bash
 uv run guardrails-llm model-config --profile inhouse
+uv run guardrails-llm validate-runtime-config
 ```
 
 Prepare cached BGE-M3 vectors and the real-course index only after approving
@@ -110,6 +112,12 @@ The profile uses:
 - retrieval: top 8 course chunks plus up to 2 native-filtered policy chunks;
 - general evidence threshold: `0.5203531980514526`;
 - policy-context candidate threshold: `0.51`.
+
+These controls, classifier confidence `0.65`, entailment confidence `0.80`,
+model selections, and runtime paths come from
+`data/guardrail_runtime_inhouse.toml`. The loader rejects unknown keys,
+out-of-range values, and paths that escape the project root. New end-to-end
+captures include the runtime configuration SHA-256 in their manifest.
 
 Every remote command requires `--allow-remote-models`. The endpoint host,
 models, prompt versions, thresholds, and input hashes are stored in manifests;
