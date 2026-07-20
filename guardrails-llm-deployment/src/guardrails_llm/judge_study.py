@@ -145,6 +145,73 @@ def validate_annotation_file(
     }
 
 
+def judge_study_status(study_dir: Path) -> dict[str, object]:
+    summaries: dict[str, object] = {}
+    item_ids_by_split: dict[str, set[str]] = {}
+    annotations_by_role: dict[str, list[HumanJudgeAnnotation]] = {}
+    for split in JUDGE_SPLITS:
+        item_ids = {
+            str(payload["item_id"])
+            for payload in _load_jsonl(study_dir / f"{split}_items.jsonl")
+        }
+        item_ids_by_split[split] = item_ids
+        for reviewer in ("reviewer_a", "reviewer_b"):
+            annotations, summary = validate_annotation_file(
+                study_dir / f"{split}_{reviewer}.jsonl",
+                expected_item_ids=item_ids,
+                complete=False,
+            )
+            summaries[f"{split}:{reviewer}"] = summary
+            annotations_by_role[f"{split}:{reviewer}"] = annotations
+
+    reviewer_files_complete = all(
+        bool(summary["complete"])
+        for summary in summaries.values()
+    )
+    disagreements_path = study_dir / "judge_disagreements.jsonl"
+    disagreements = (
+        _load_jsonl(disagreements_path) if disagreements_path.exists() else []
+    )
+    if disagreements_path.exists() and reviewer_files_complete:
+        expected_disagreement_ids = _reviewer_disagreement_ids(annotations_by_role)
+        recorded_disagreement_ids = [
+            str(payload.get("item_id", "")) for payload in disagreements
+        ]
+        if (
+            len(recorded_disagreement_ids) != len(set(recorded_disagreement_ids))
+            or set(recorded_disagreement_ids) != expected_disagreement_ids
+        ):
+            raise ValueError(
+                "judge disagreement file is stale; run reconciliation again"
+            )
+    completed_adjudications = sum(
+        _adjudication_is_complete(payload) for payload in disagreements
+    )
+    remaining_adjudications = len(disagreements) - completed_adjudications
+    reconciliation_complete = (
+        reviewer_files_complete
+        and disagreements_path.exists()
+        and remaining_adjudications == 0
+    )
+    human_ground_truth_ready = _finalized_ground_truth_is_ready(
+        study_dir,
+        item_ids_by_split=item_ids_by_split,
+    )
+
+    return {
+        "study_dir": str(study_dir),
+        "reviewer_files_complete": reviewer_files_complete,
+        "reconciliation_complete": reconciliation_complete,
+        "adjudications": {
+            "total": len(disagreements),
+            "completed": completed_adjudications,
+            "remaining": remaining_adjudications,
+        },
+        "human_ground_truth_ready": human_ground_truth_ready,
+        "annotation_files": summaries,
+    }
+
+
 def reconcile_human_annotations(
     *,
     items_paths: list[Path],
@@ -448,6 +515,72 @@ def _load_adjudications(
             f"unknown={len(unknown)}"
         )
     return by_id
+
+
+def _adjudication_is_complete(payload: dict[str, object]) -> bool:
+    adjudicator_id = payload.get("adjudicator_id")
+    rationale = payload.get("rationale")
+    return (
+        isinstance(adjudicator_id, str)
+        and bool(adjudicator_id.strip())
+        and all(
+            isinstance(payload.get(dimension), bool)
+            for dimension in JUDGE_DIMENSIONS
+        )
+        and isinstance(rationale, str)
+        and bool(rationale.strip())
+    )
+
+
+def _reviewer_disagreement_ids(
+    annotations_by_role: dict[str, list[HumanJudgeAnnotation]],
+) -> set[str]:
+    disagreement_ids: set[str] = set()
+    for split in JUDGE_SPLITS:
+        reviewer_a = {
+            annotation.item_id: annotation
+            for annotation in annotations_by_role[f"{split}:reviewer_a"]
+        }
+        reviewer_b = {
+            annotation.item_id: annotation
+            for annotation in annotations_by_role[f"{split}:reviewer_b"]
+        }
+        for item_id in reviewer_a:
+            if any(
+                getattr(reviewer_a[item_id], dimension)
+                != getattr(reviewer_b[item_id], dimension)
+                for dimension in JUDGE_DIMENSIONS
+            ):
+                disagreement_ids.add(item_id)
+    return disagreement_ids
+
+
+def _finalized_ground_truth_is_ready(
+    study_dir: Path,
+    *,
+    item_ids_by_split: dict[str, set[str]],
+) -> bool:
+    manifest_path = study_dir / "judge_human_ground_truth_manifest.json"
+    if not manifest_path.exists():
+        return False
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict):
+        raise ValueError("judge human ground-truth manifest must be a JSON object")
+    if manifest.get("human_ground_truth_ready") is not True:
+        return False
+    expected_total = sum(len(item_ids) for item_ids in item_ids_by_split.values())
+    if manifest.get("items") != expected_total:
+        raise ValueError("judge human ground-truth manifest item count is stale")
+    for split, expected_ids in item_ids_by_split.items():
+        labels = load_judge_calibration_cases(
+            study_dir / f"{split}_human_ground_truth.jsonl"
+        )
+        actual_ids = {label.case_id for label in labels}
+        if actual_ids != expected_ids:
+            raise ValueError(
+                f"{split} human ground truth does not match current study items"
+            )
+    return True
 
 
 def _load_source_results(
