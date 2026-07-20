@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Iterable
 
 from .model_calibration import JUDGE_DIMENSIONS
+from .review_recommendations import RecommendationStore
 
 
 REVIEWERS = ("reviewer_a", "reviewer_b")
@@ -39,6 +40,7 @@ class ReviewStore:
         self.section_size = section_size
         self.database_path = self.study_dir / ".judge_review.sqlite3"
         self._items, self._sections, self._section_by_item = self._load_study()
+        self._recommendations = self._load_recommendations()
         self._initialize_database()
 
     def sections(self) -> list[dict[str, object]]:
@@ -102,7 +104,6 @@ class ReviewStore:
                 (*values, updated_at, self.reviewer, item_id),
             )
             connection.commit()
-
         section_id = self._section_by_item[item_id]
         section_flushed = False
         if self._section_ready(section_id):
@@ -135,6 +136,102 @@ class ReviewStore:
                 self.flush_section(section_id)
         return {"annotator_id": normalized, "progress": self.progress()}
 
+    def reveal_recommendation(self, item_id: str) -> dict[str, object]:
+        self._require_item(item_id)
+        if self._recommendations is None:
+            raise FileNotFoundError("judge recommendation files are not available")
+        self._record_assistance("recommendation_revealed", item_id=item_id)
+        return self._recommendations.get(item_id)
+
+    def apply_recommendation(self, item_id: str) -> dict[str, object]:
+        self._require_item(item_id)
+        if self._recommendations is None:
+            raise FileNotFoundError("judge recommendation files are not available")
+        recommendation = self._recommendations.get(item_id)
+        result = self.save_draft(
+            item_id,
+            {
+                dimension: recommendation[dimension]
+                for dimension in JUDGE_DIMENSIONS
+            },
+        )
+        self._record_assistance("recommendation_copied", item_id=item_id)
+        return result
+
+    def reveal_section_recommendations(
+        self,
+        section_id: str,
+    ) -> dict[str, dict[str, object]]:
+        section = next(
+            (item for item in self._sections if item["section_id"] == section_id),
+            None,
+        )
+        if section is None:
+            raise KeyError(f"unknown review section: {section_id}")
+        if self._recommendations is None:
+            raise FileNotFoundError("judge recommendation files are not available")
+        self._record_assistance(
+            "section_recommendations_revealed",
+            section_id=section_id,
+        )
+        return {
+            str(item_id): self._recommendations.get(str(item_id))
+            for item_id in section["item_ids"]
+        }
+
+    def reveal_all_recommendations(self) -> dict[str, dict[str, object]]:
+        if self._recommendations is None:
+            raise FileNotFoundError("judge recommendation files are not available")
+        self._record_assistance("all_recommendations_revealed")
+        return {
+            str(item["item_id"]): item
+            for item in self._recommendations.items()
+        }
+
+    def apply_section_recommendations(
+        self,
+        section_id: str,
+    ) -> dict[str, object]:
+        section = next(
+            (item for item in self._sections if item["section_id"] == section_id),
+            None,
+        )
+        if section is None:
+            raise KeyError(f"unknown review section: {section_id}")
+        if self._recommendations is None:
+            raise FileNotFoundError("judge recommendation files are not available")
+        for item_id in section["item_ids"]:
+            recommendation = self._recommendations.get(str(item_id))
+            self.save_draft(
+                str(item_id),
+                {
+                    dimension: recommendation[dimension]
+                    for dimension in JUDGE_DIMENSIONS
+                },
+            )
+        self._record_assistance(
+            "section_recommendations_copied",
+            section_id=section_id,
+        )
+        return {
+            "section_id": section_id,
+            "copied": len(section["item_ids"]),
+            "progress": self.progress(),
+        }
+
+    def assistance_events(self) -> list[dict[str, object]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT reviewer, action, item_id, section_id, created_at
+                FROM review_assistance_events
+                WHERE reviewer = ?
+                ORDER BY event_id
+                """,
+                (self.reviewer,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def progress(self) -> dict[str, int]:
         states = self._draft_states()
         complete = sum(_is_complete(state) for state in states.values())
@@ -145,6 +242,9 @@ class ReviewStore:
             "issues": issues,
             "remaining": len(states) - complete - issues,
         }
+
+    def recommendations_available(self) -> bool:
+        return self._recommendations is not None
 
     def flush_section(self, section_id: str) -> None:
         section = next(
@@ -251,6 +351,14 @@ class ReviewStore:
                     flushed_at TEXT NOT NULL,
                     PRIMARY KEY (reviewer, section_id)
                 );
+                CREATE TABLE IF NOT EXISTS review_assistance_events (
+                    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    reviewer TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    item_id TEXT,
+                    section_id TEXT,
+                    created_at TEXT NOT NULL
+                );
                 """
             )
             for split in ("judge_calibration", "judge_validation"):
@@ -294,6 +402,40 @@ class ReviewStore:
         connection.execute("PRAGMA journal_mode = WAL")
         connection.execute("PRAGMA busy_timeout = 5000")
         return connection
+
+    def _load_recommendations(self) -> RecommendationStore | None:
+        paths = [
+            self.study_dir / f"{split}_recommendation.jsonl"
+            for split in ("judge_calibration", "judge_validation")
+        ]
+        if not any(path.exists() for path in paths):
+            return None
+        if not all(path.exists() for path in paths):
+            raise ValueError("both recommendation split files are required")
+        return RecommendationStore(self.study_dir)
+
+    def _record_assistance(
+        self,
+        action: str,
+        *,
+        item_id: str | None = None,
+        section_id: str | None = None,
+    ) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO review_assistance_events(
+                    reviewer, action, item_id, section_id, created_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (self.reviewer, action, item_id, section_id, _now()),
+            )
+            connection.commit()
+        _atomic_write_jsonl(
+            self.study_dir
+            / f"judge_{self.reviewer}_recommendation_assistance.jsonl",
+            self.assistance_events(),
+        )
 
     def _draft_states(self) -> dict[str, dict[str, object]]:
         with self._connect() as connection:
@@ -406,7 +548,6 @@ def _annotation_payload(draft: dict[str, object]) -> dict[str, object]:
 def _is_complete(draft: dict[str, object]) -> bool:
     return (
         bool(str(draft.get("annotator_id", "")).strip())
-        and bool(str(draft.get("rationale", "")).strip())
         and all(isinstance(draft.get(dimension), bool) for dimension in JUDGE_DIMENSIONS)
         and not bool(draft.get("issue_flag"))
     )

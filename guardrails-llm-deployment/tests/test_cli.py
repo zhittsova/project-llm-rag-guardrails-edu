@@ -167,6 +167,70 @@ def test_review_judge_study_command_starts_selected_reviewer(
         "port": 8877,
         "section_size": 8,
         "open_browser": True,
+        "allow_reviewer_switch": False,
+    }
+
+
+def test_prepare_judge_recommendations_command(tmp_path: Path, monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_prepare(study_dir: Path) -> dict[str, object]:
+        captured["study_dir"] = study_dir
+        return {"items": 400}
+
+    monkeypatch.setattr(
+        "guardrails_llm.cli.prepare_review_recommendations",
+        fake_prepare,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "prepare-judge-recommendations",
+            "--study-dir",
+            str(tmp_path),
+        ],
+    )
+
+    main()
+
+    assert captured == {"study_dir": tmp_path}
+
+
+def test_review_judge_reconciliation_command(tmp_path: Path, monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_serve(**kwargs: object) -> None:
+        captured.update(kwargs)
+
+    monkeypatch.setattr(
+        "guardrails_llm.cli.serve_reconciliation_ui",
+        fake_serve,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "review-judge-reconciliation",
+            "--study-dir",
+            str(tmp_path),
+            "--port",
+            "8890",
+            "--section-size",
+            "12",
+            "--open",
+        ],
+    )
+
+    main()
+
+    assert captured == {
+        "study_dir": tmp_path,
+        "port": 8890,
+        "section_size": 12,
+        "open_browser": True,
     }
 
 

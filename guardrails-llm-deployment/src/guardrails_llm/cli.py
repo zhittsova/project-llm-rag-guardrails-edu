@@ -55,6 +55,8 @@ from .judge_study import (
 )
 from .judge_study_capture import run_judge_study_capture
 from .review_server import serve_review_ui
+from .reconciliation_server import serve_reconciliation_ui
+from .review_recommendations import prepare_review_recommendations
 from .model_calibration import (
     DEFAULT_CALIBRATION_SOURCE_CASES,
     DEFAULT_CALIBRATION_SOURCE_RESULTS,
@@ -615,6 +617,48 @@ def main() -> None:
     judge_review_parser.add_argument("--port", type=int, default=8765)
     judge_review_parser.add_argument("--section-size", type=int, default=10)
     judge_review_parser.add_argument("--open", action="store_true")
+    judge_review_parser.add_argument(
+        "--allow-reviewer-switch",
+        action="store_true",
+        help=(
+            "Expose both reviewer workspaces in one trusted local process; "
+            "do not use for independent blinded review"
+        ),
+    )
+
+    judge_recommendation_parser = subparsers.add_parser(
+        "prepare-judge-recommendations",
+        help="Create separate rubric recommendations for faster human review",
+    )
+    judge_recommendation_parser.add_argument(
+        "--study-dir",
+        type=Path,
+        required=True,
+    )
+
+    judge_reconciliation_ui_parser = subparsers.add_parser(
+        "review-judge-reconciliation",
+        help="Review three-way labels and adjudicate human disagreements",
+    )
+    judge_reconciliation_ui_parser.add_argument(
+        "--study-dir",
+        type=Path,
+        required=True,
+    )
+    judge_reconciliation_ui_parser.add_argument(
+        "--port",
+        type=int,
+        default=8770,
+    )
+    judge_reconciliation_ui_parser.add_argument(
+        "--section-size",
+        type=int,
+        default=10,
+    )
+    judge_reconciliation_ui_parser.add_argument(
+        "--open",
+        action="store_true",
+    )
 
     judge_reconcile_parser = subparsers.add_parser(
         "reconcile-judge-study",
@@ -1172,8 +1216,29 @@ def main() -> None:
                 port=args.port,
                 section_size=args.section_size,
                 open_browser=args.open,
+                allow_reviewer_switch=args.allow_reviewer_switch,
             )
         except (OSError, ValueError) as exc:
+            parser.error(str(exc))
+        return
+
+    if args.command == "prepare-judge-recommendations":
+        try:
+            report = prepare_review_recommendations(args.study_dir)
+        except (OSError, TypeError, ValueError) as exc:
+            parser.error(str(exc))
+        print(json.dumps(report, indent=2))
+        return
+
+    if args.command == "review-judge-reconciliation":
+        try:
+            serve_reconciliation_ui(
+                study_dir=args.study_dir,
+                port=args.port,
+                section_size=args.section_size,
+                open_browser=args.open,
+            )
+        except (OSError, TypeError, ValueError) as exc:
             parser.error(str(exc))
         return
 
