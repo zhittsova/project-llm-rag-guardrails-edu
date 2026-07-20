@@ -51,12 +51,11 @@ from .inhouse_experiment import (
 )
 from .judging import judge_results, judgments_to_json, summarize_judgments
 from .judge_study import (
-    JUDGE_SPLITS,
     evaluate_judge_study_models,
     finalize_human_ground_truth,
+    judge_study_status,
     prepare_judge_study,
     reconcile_human_annotations,
-    validate_annotation_file,
 )
 from .judge_study_capture import run_judge_study_capture
 from .review_server import serve_review_ui
@@ -1331,7 +1330,7 @@ def main() -> None:
 
     if args.command == "judge-study-status":
         try:
-            status = _judge_study_status(args.study_dir)
+            status = judge_study_status(args.study_dir)
         except (OSError, TypeError, ValueError) as exc:
             parser.error(str(exc))
         print(json.dumps(status, indent=2))
@@ -2214,32 +2213,6 @@ def _comparison_scenarios(args, policy):
             ]
         )
     return scenarios
-
-
-def _judge_study_status(study_dir: Path) -> dict[str, object]:
-    summaries: dict[str, object] = {}
-    for split in JUDGE_SPLITS:
-        items_path = study_dir / f"{split}_items.jsonl"
-        item_ids = {
-            str(json.loads(line)["item_id"])
-            for line in items_path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        }
-        for reviewer in ("reviewer_a", "reviewer_b"):
-            _annotations, summary = validate_annotation_file(
-                study_dir / f"{split}_{reviewer}.jsonl",
-                expected_item_ids=item_ids,
-                complete=False,
-            )
-            summaries[f"{split}:{reviewer}"] = summary
-    return {
-        "study_dir": str(study_dir),
-        "human_ground_truth_ready": all(
-            bool(summary["complete"])
-            for summary in summaries.values()
-        ),
-        "annotation_files": summaries,
-    }
 
 
 if __name__ == "__main__":

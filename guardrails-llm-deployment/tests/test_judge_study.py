@@ -3,11 +3,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from guardrails_llm.evaluation import load_eval_cases
 from guardrails_llm.judge_study import (
     JUDGE_SPLITS,
     finalize_human_ground_truth,
     evaluate_judge_study_models,
+    judge_study_status,
     prepare_judge_study,
     reconcile_human_annotations,
     validate_annotation_file,
@@ -150,6 +153,59 @@ def test_reconciliation_writes_only_human_disagreements(tmp_path: Path) -> None:
     assert disagreements[0]["grounded"] is None
 
 
+def test_status_keeps_ground_truth_pending_until_adjudication_is_finalized(
+    tmp_path: Path,
+) -> None:
+    for split in JUDGE_SPLITS:
+        item_id = f"{split}-item"
+        _write_jsonl(tmp_path / f"{split}_items.jsonl", [{"item_id": item_id}])
+        _write_jsonl(
+            tmp_path / f"{split}_reviewer_a.jsonl",
+            [_annotation(item_id, "reviewer-a")],
+        )
+        reviewer_b = _annotation(item_id, "reviewer-b")
+        if split == "judge_validation":
+            reviewer_b["grounded"] = False
+        _write_jsonl(tmp_path / f"{split}_reviewer_b.jsonl", [reviewer_b])
+
+    reconcile_human_annotations(
+        items_paths=[tmp_path / f"{split}_items.jsonl" for split in JUDGE_SPLITS],
+        reviewer_a_paths=[
+            tmp_path / f"{split}_reviewer_a.jsonl" for split in JUDGE_SPLITS
+        ],
+        reviewer_b_paths=[
+            tmp_path / f"{split}_reviewer_b.jsonl" for split in JUDGE_SPLITS
+        ],
+        disagreements_output=tmp_path / "judge_disagreements.jsonl",
+        report_output=tmp_path / "judge_human_agreement.json",
+    )
+
+    report = judge_study_status(tmp_path)
+
+    assert report["reviewer_files_complete"] is True
+    assert report["reconciliation_complete"] is False
+    assert report["adjudications"] == {"total": 1, "completed": 0, "remaining": 1}
+    assert report["human_ground_truth_ready"] is False
+
+
+def test_status_rejects_stale_disagreement_file(tmp_path: Path) -> None:
+    for split in JUDGE_SPLITS:
+        item_id = f"{split}-item"
+        _write_jsonl(tmp_path / f"{split}_items.jsonl", [{"item_id": item_id}])
+        _write_jsonl(
+            tmp_path / f"{split}_reviewer_a.jsonl",
+            [_annotation(item_id, "reviewer-a")],
+        )
+        reviewer_b = _annotation(item_id, "reviewer-b")
+        if split == "judge_validation":
+            reviewer_b["grounded"] = False
+        _write_jsonl(tmp_path / f"{split}_reviewer_b.jsonl", [reviewer_b])
+    _write_jsonl(tmp_path / "judge_disagreements.jsonl", [])
+
+    with pytest.raises(ValueError, match="disagreement file is stale"):
+        judge_study_status(tmp_path)
+
+
 def test_finalize_compiles_consensus_and_adjudicated_labels(tmp_path: Path) -> None:
     source_results = tmp_path / "source_results.json"
     source_results.write_text(json.dumps(_source_results()), encoding="utf-8")
@@ -208,6 +264,7 @@ def test_finalize_compiles_consensus_and_adjudicated_labels(tmp_path: Path) -> N
     assert report["items"] == 400
     assert report["adjudicated_items"] == 1
     assert len(calibration_labels) == len(validation_labels) == 200
+    assert judge_study_status(study_dir)["human_ground_truth_ready"] is True
 
     prediction_paths = []
     for model in ("qwen-test", "minimax-test"):

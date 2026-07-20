@@ -284,6 +284,11 @@ uv run guardrails-llm finalize-judge-study \
   --study-dir path/to/human_judge_study
 ```
 
+`judge-study-status` reports reviewer completion, adjudication progress, and
+finalized human-ground-truth readiness separately. Completed reviewer files do
+not make ground truth ready: every disagreement must be adjudicated and
+`finalize-judge-study` must validate and write the canonical label files.
+
 After both human reviews and the recommendation files are complete, inspect all
 three judgments side by side and adjudicate only Reviewer A versus Reviewer B
 disagreements:
