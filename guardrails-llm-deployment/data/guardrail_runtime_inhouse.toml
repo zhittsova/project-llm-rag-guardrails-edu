@@ -1,0 +1,31 @@
+# Versioned runtime controls for the Fraunhofer-backed guardrail pipeline.
+# Values are unchanged from the calibrated Milestone 3 implementation.
+
+schema_version = 1
+profile = "inhouse"
+endpoint_host = "learning-services4.fokus.fraunhofer.de"
+course_id = "python-intro"
+
+[models]
+embedding = "BAAI/bge-m3"
+answer = "Qwen/Qwen3.6-35B-A3B"
+classifier = "Qwen/Qwen3.6-35B-A3B"
+entailment = "Qwen/Qwen3.6-35B-A3B"
+judge = "Qwen/Qwen3.6-35B-A3B"
+
+[retrieval]
+top_k = 8
+evidence_min_score = 0.5203531980514526
+policy_context_top_k = 2
+policy_context_min_score = 0.51
+entailment_min_confidence = 0.80
+
+[classifier]
+strategy = "always"
+min_confidence = 0.65
+
+[paths]
+corpus = "data/python_course_docs.jsonl"
+policy = "data/guardrail_policy_bge_m3.toml"
+index = "indexes/python-course-bge-m3"
+embedding_cache = "indexes/cache/bge-m3.jsonl"
