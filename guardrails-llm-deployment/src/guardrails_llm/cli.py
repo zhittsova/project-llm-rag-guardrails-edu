@@ -32,6 +32,10 @@ from .final_evidence import (
     write_calibration_evidence,
 )
 from .guardrail_policy import GuardrailPolicy, default_policy_path, load_guardrail_policy
+from .guardrail_runtime import (
+    default_inhouse_runtime_path,
+    runtime_config_summary,
+)
 from .guard_text import normalize_guard_text
 from .holdout_review import (
     finalize_holdout_review,
@@ -82,6 +86,8 @@ from .model_config import (
     openai_config_summary,
 )
 from .model_profiles import (
+    INHOUSE_CLASSIFIER_MIN_CONFIDENCE,
+    INHOUSE_ENTAILMENT_MIN_CONFIDENCE,
     INHOUSE_EVIDENCE_MIN_SCORE,
     INHOUSE_POLICY_CONTEXT_MIN_SCORE,
     INHOUSE_POLICY_CONTEXT_TOP_K,
@@ -526,6 +532,11 @@ def main() -> None:
         default=INHOUSE_EVIDENCE_MIN_SCORE,
     )
     e2e_capture_parser.add_argument(
+        "--classifier-min-confidence",
+        type=_unit_float,
+        default=INHOUSE_CLASSIFIER_MIN_CONFIDENCE,
+    )
+    e2e_capture_parser.add_argument(
         "--policy-context-top-k",
         type=int,
         default=INHOUSE_POLICY_CONTEXT_TOP_K,
@@ -538,7 +549,7 @@ def main() -> None:
     e2e_capture_parser.add_argument(
         "--entailment-min-confidence",
         type=_unit_float,
-        default=0.80,
+        default=INHOUSE_ENTAILMENT_MIN_CONFIDENCE,
     )
     e2e_capture_parser.add_argument("--course-id", default="python-intro")
     e2e_capture_parser.add_argument("--limit-cases", type=int)
@@ -819,6 +830,16 @@ def main() -> None:
     policy_parser = subparsers.add_parser("validate-policy", help="Validate a guardrail policy TOML file")
     policy_parser.add_argument("--policy", type=Path, default=default_policy_path())
 
+    runtime_parser = subparsers.add_parser(
+        "validate-runtime-config",
+        help="Validate versioned in-house guardrail runtime controls",
+    )
+    runtime_parser.add_argument(
+        "--runtime-config",
+        type=Path,
+        default=default_inhouse_runtime_path(),
+    )
+
     model_config_parser = subparsers.add_parser("model-config", help="Show safe remote-model configuration")
     model_config_parser.add_argument("--provider", choices=["openai"], default="openai")
     _add_profile_arg(model_config_parser)
@@ -923,6 +944,14 @@ def main() -> None:
                 indent=2,
             )
         )
+        return
+
+    if args.command == "validate-runtime-config":
+        try:
+            report = runtime_config_summary(args.runtime_config)
+        except (OSError, ValueError) as exc:
+            parser.error(str(exc))
+        print(json.dumps(report, indent=2))
         return
 
     if args.command == "model-config":
@@ -1148,6 +1177,7 @@ def main() -> None:
                 output_path=args.output,
                 manifest_path=args.manifest,
                 evidence_min_score=args.evidence_min_score,
+                classifier_min_confidence=args.classifier_min_confidence,
                 policy_context_top_k=args.policy_context_top_k,
                 policy_context_min_score=args.policy_context_min_score,
                 entailment_min_confidence=args.entailment_min_confidence,
@@ -1592,6 +1622,11 @@ def main() -> None:
             guard_classifier=getattr(args, "guard_classifier", "none"),
             classifier_model=getattr(args, "classifier_model", None),
             classifier_strategy=getattr(args, "classifier_strategy", "ambiguous"),
+            classifier_min_confidence=getattr(
+                args,
+                "classifier_min_confidence",
+                0.65,
+            ),
             retrieval_top_k=getattr(args, "retrieval_top_k", 3),
             evidence_min_score=getattr(args, "evidence_min_score", None),
             policy_context_top_k=getattr(args, "policy_context_top_k", 0),
@@ -1690,6 +1725,11 @@ def _add_guard_classifier_args(parser: argparse.ArgumentParser) -> None:
         "--classifier-strategy",
         choices=["ambiguous", "always"],
         default="ambiguous",
+    )
+    parser.add_argument(
+        "--classifier-min-confidence",
+        type=_unit_float,
+        default=0.65,
     )
 
 

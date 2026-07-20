@@ -22,13 +22,18 @@ DATA = Path(__file__).resolve().parents[1] / "data" / "course_docs.jsonl"
 class CountingClassifier:
     model_name = "fake-classifier"
 
-    def __init__(self, label: str) -> None:
+    def __init__(self, label: str, confidence: float = 0.9) -> None:
         self.label = label
+        self.confidence = confidence
         self.calls = 0
 
     def classify(self, text: str) -> GuardClassification:
         self.calls += 1
-        return GuardClassification(label=self.label, confidence=0.9, explanation="fake")
+        return GuardClassification(
+            label=self.label,
+            confidence=self.confidence,
+            explanation="fake",
+        )
 
 
 class StaticRetriever:
@@ -267,6 +272,23 @@ def test_classifier_strategy_rejects_unknown_value() -> None:
             LexicalRetriever([]),
             classifier_strategy="sometimes",
         )
+
+
+def test_classifier_min_confidence_is_configurable() -> None:
+    classifier = CountingClassifier("unsafe_request", confidence=0.70)
+    assistant = LearningAssistant(
+        LexicalRetriever([]),
+        mode="guardrailed",
+        guard_classifier=classifier,
+        classifier_strategy="always",
+        classifier_min_confidence=0.75,
+    )
+
+    response = assistant.answer("What is a Python list?")
+
+    assert classifier.calls == 1
+    assert response.disposition is ResponseDisposition.ABSTAIN
+    assert "unsafe_request" not in response.guard_triggers
 
 
 def test_classifier_model_failure_is_visible_in_response() -> None:

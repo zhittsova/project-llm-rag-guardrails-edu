@@ -4,6 +4,8 @@
 # validated on the separate 400-case calibration split. The frozen holdout was
 # not used. They must not be reused for hashing or another embedding model.
 # Credential-safe evidence: reports/inhouse_bge_calibration_summary_v2.json
+# Runtime model, retrieval, and grounding controls are versioned separately in
+# guardrail_runtime_inhouse.toml.
 
 extends_default = true
 

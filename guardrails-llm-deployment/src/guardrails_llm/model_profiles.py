@@ -4,7 +4,12 @@ from argparse import Namespace
 from pathlib import Path
 from urllib.parse import urlparse
 
-from .guardrail_policy import default_policy_path
+from .guardrail_runtime import (
+    PROJECT_ROOT,
+    default_inhouse_runtime_path,
+    load_guardrail_runtime_config,
+    runtime_config_sha256,
+)
 from .model_config import (
     OpenAIModelConfig,
     load_local_env,
@@ -16,18 +21,31 @@ from .model_config import (
 LOCAL_PROFILE = "local"
 INHOUSE_PROFILE = "inhouse"
 MODEL_PROFILES = (LOCAL_PROFILE, INHOUSE_PROFILE)
-INHOUSE_ENDPOINT_HOST = "learning-services4.fokus.fraunhofer.de"
-INHOUSE_EMBEDDING_MODEL = "BAAI/bge-m3"
-INHOUSE_LLM_MODEL = "Qwen/Qwen3.6-35B-A3B"
-INHOUSE_EVIDENCE_MIN_SCORE = 0.5203531980514526
-INHOUSE_RETRIEVAL_TOP_K = 8
-INHOUSE_POLICY_CONTEXT_TOP_K = 2
-INHOUSE_POLICY_CONTEXT_MIN_SCORE = 0.51
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-INHOUSE_EMBEDDING_CACHE = PROJECT_ROOT / "indexes" / "cache" / "bge-m3.jsonl"
-INHOUSE_INDEX_DIR = PROJECT_ROOT / "indexes" / "python-course-bge-m3"
-INHOUSE_CORPUS_PATH = PROJECT_ROOT / "data" / "python_course_docs.jsonl"
-INHOUSE_COURSE_ID = "python-intro"
+INHOUSE_RUNTIME_CONFIG_PATH = default_inhouse_runtime_path()
+INHOUSE_RUNTIME_CONFIG = load_guardrail_runtime_config(
+    INHOUSE_RUNTIME_CONFIG_PATH
+)
+INHOUSE_ENDPOINT_HOST = INHOUSE_RUNTIME_CONFIG.endpoint_host
+INHOUSE_EMBEDDING_MODEL = INHOUSE_RUNTIME_CONFIG.models.embedding
+INHOUSE_LLM_MODEL = INHOUSE_RUNTIME_CONFIG.models.answer
+INHOUSE_EVIDENCE_MIN_SCORE = INHOUSE_RUNTIME_CONFIG.retrieval.evidence_min_score
+INHOUSE_RETRIEVAL_TOP_K = INHOUSE_RUNTIME_CONFIG.retrieval.top_k
+INHOUSE_POLICY_CONTEXT_TOP_K = INHOUSE_RUNTIME_CONFIG.retrieval.policy_context_top_k
+INHOUSE_POLICY_CONTEXT_MIN_SCORE = (
+    INHOUSE_RUNTIME_CONFIG.retrieval.policy_context_min_score
+)
+INHOUSE_CLASSIFIER_MIN_CONFIDENCE = (
+    INHOUSE_RUNTIME_CONFIG.classifier.min_confidence
+)
+INHOUSE_ENTAILMENT_MIN_CONFIDENCE = (
+    INHOUSE_RUNTIME_CONFIG.retrieval.entailment_min_confidence
+)
+INHOUSE_RESOLVED_PATHS = INHOUSE_RUNTIME_CONFIG.paths.resolve(PROJECT_ROOT)
+INHOUSE_EMBEDDING_CACHE = INHOUSE_RESOLVED_PATHS.embedding_cache
+INHOUSE_INDEX_DIR = INHOUSE_RESOLVED_PATHS.index
+INHOUSE_CORPUS_PATH = INHOUSE_RESOLVED_PATHS.corpus
+INHOUSE_POLICY_PATH = INHOUSE_RESOLVED_PATHS.policy
+INHOUSE_COURSE_ID = INHOUSE_RUNTIME_CONFIG.course_id
 
 
 class InHouseEndpointError(RuntimeError):
@@ -61,12 +79,34 @@ def apply_model_profile(args: Namespace) -> None:
     _set_if_present(args, "guard_embedding_provider", "openai")
     _set_if_present(args, "guard_embedding_model", INHOUSE_EMBEDDING_MODEL)
     _set_if_present(args, "generator", "openai")
-    _set_if_present(args, "answer_model", INHOUSE_LLM_MODEL)
+    _set_if_present(args, "answer_model", INHOUSE_RUNTIME_CONFIG.models.answer)
     _set_if_present(args, "guard_classifier", "openai")
-    _set_if_present(args, "classifier_model", INHOUSE_LLM_MODEL)
-    _set_if_present(args, "classifier_strategy", "always")
+    _set_if_present(
+        args,
+        "classifier_model",
+        INHOUSE_RUNTIME_CONFIG.models.classifier,
+    )
+    _set_if_present(
+        args,
+        "classifier_strategy",
+        INHOUSE_RUNTIME_CONFIG.classifier.strategy,
+    )
+    _set_if_present(
+        args,
+        "classifier_min_confidence",
+        INHOUSE_CLASSIFIER_MIN_CONFIDENCE,
+    )
     _set_if_present(args, "entailment_verifier", "openai")
-    _set_if_present(args, "entailment_model", INHOUSE_LLM_MODEL)
+    _set_if_present(
+        args,
+        "entailment_model",
+        INHOUSE_RUNTIME_CONFIG.models.entailment,
+    )
+    _set_if_present(
+        args,
+        "entailment_min_confidence",
+        INHOUSE_ENTAILMENT_MIN_CONFIDENCE,
+    )
     _set_if_present(args, "retrieval_top_k", INHOUSE_RETRIEVAL_TOP_K)
     _set_if_present(args, "policy_context_top_k", INHOUSE_POLICY_CONTEXT_TOP_K)
     _set_if_present(args, "policy_context_min_score", INHOUSE_POLICY_CONTEXT_MIN_SCORE)
@@ -75,9 +115,9 @@ def apply_model_profile(args: Namespace) -> None:
         and args.evidence_min_score is None
     ):
         args.evidence_min_score = INHOUSE_EVIDENCE_MIN_SCORE
-    _set_if_present(args, "judge_model", INHOUSE_LLM_MODEL)
+    _set_if_present(args, "judge_model", INHOUSE_RUNTIME_CONFIG.models.judge)
     if hasattr(args, "policy") and args.policy is None:
-        args.policy = default_policy_path().with_name("guardrail_policy_bge_m3.toml")
+        args.policy = INHOUSE_POLICY_PATH
 
 
 def model_profile_summary(
@@ -107,15 +147,22 @@ def model_profile_summary(
         "embedding_model": INHOUSE_EMBEDDING_MODEL,
         "course_id": INHOUSE_COURSE_ID,
         "index_directory": INHOUSE_INDEX_DIR.name,
-        "answer_model": INHOUSE_LLM_MODEL,
-        "classifier_model": INHOUSE_LLM_MODEL,
-        "entailment_model": INHOUSE_LLM_MODEL,
+        "answer_model": INHOUSE_RUNTIME_CONFIG.models.answer,
+        "classifier_model": INHOUSE_RUNTIME_CONFIG.models.classifier,
+        "entailment_model": INHOUSE_RUNTIME_CONFIG.models.entailment,
+        "judge_model": INHOUSE_RUNTIME_CONFIG.models.judge,
         "api_key_present": _api_key_present(config),
         "remote_calls_require_explicit_allowance": True,
         "retrieval_top_k": INHOUSE_RETRIEVAL_TOP_K,
         "retrieval_evidence_threshold": INHOUSE_EVIDENCE_MIN_SCORE,
         "policy_context_top_k": INHOUSE_POLICY_CONTEXT_TOP_K,
         "policy_context_min_score": INHOUSE_POLICY_CONTEXT_MIN_SCORE,
+        "classifier_min_confidence": INHOUSE_CLASSIFIER_MIN_CONFIDENCE,
+        "entailment_min_confidence": INHOUSE_ENTAILMENT_MIN_CONFIDENCE,
+        "runtime_config_schema_version": INHOUSE_RUNTIME_CONFIG.schema_version,
+        "runtime_config_sha256": runtime_config_sha256(
+            INHOUSE_RUNTIME_CONFIG_PATH
+        ),
     }
 
 

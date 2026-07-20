@@ -19,6 +19,7 @@ from .evaluation_dataset import (
 )
 from .dispositions import ResponseDisposition
 from .guardrail_policy import load_guardrail_policy
+from .guardrail_runtime import runtime_config_sha256
 from .model_config import (
     OpenAIModelConfig,
     ensure_openai_api_key,
@@ -26,6 +27,8 @@ from .model_config import (
     openai_request_policy,
 )
 from .model_profiles import (
+    INHOUSE_CLASSIFIER_MIN_CONFIDENCE,
+    INHOUSE_ENTAILMENT_MIN_CONFIDENCE,
     INHOUSE_POLICY_CONTEXT_MIN_SCORE,
     INHOUSE_POLICY_CONTEXT_TOP_K,
     INHOUSE_RETRIEVAL_TOP_K,
@@ -70,6 +73,9 @@ _CAPTURE_CONFIGURATION_KEYS_V1 = (
 _CAPTURE_CONFIGURATION_KEYS_V2 = _CAPTURE_CONFIGURATION_KEYS_V1 + (
     "scenario_configuration",
 )
+_CAPTURE_CONFIGURATION_KEYS_V3 = _CAPTURE_CONFIGURATION_KEYS_V2 + (
+    "runtime_config_sha256",
+)
 
 
 def run_calibration_e2e_capture(
@@ -83,9 +89,10 @@ def run_calibration_e2e_capture(
     output_path: Path,
     manifest_path: Path,
     evidence_min_score: float,
+    classifier_min_confidence: float = INHOUSE_CLASSIFIER_MIN_CONFIDENCE,
     policy_context_top_k: int = INHOUSE_POLICY_CONTEXT_TOP_K,
     policy_context_min_score: float = INHOUSE_POLICY_CONTEXT_MIN_SCORE,
-    entailment_min_confidence: float = 0.80,
+    entailment_min_confidence: float = INHOUSE_ENTAILMENT_MIN_CONFIDENCE,
     course_id: str = "python-intro",
     limit_cases: int | None = None,
     case_ids: list[str] | None = None,
@@ -100,6 +107,8 @@ def run_calibration_e2e_capture(
         raise ValueError("policy_context_top_k must be non-negative")
     if not math.isfinite(policy_context_min_score):
         raise ValueError("policy_context_min_score must be finite")
+    if not 0.0 <= classifier_min_confidence <= 1.0:
+        raise ValueError("classifier_min_confidence must be between zero and one")
     if not 0.0 <= entailment_min_confidence <= 1.0:
         raise ValueError("entailment_min_confidence must be between zero and one")
     if limit_cases is not None and limit_cases < 0:
@@ -127,7 +136,7 @@ def run_calibration_e2e_capture(
         cases = _select_stratified_cases(cases, limit_cases)
 
     configuration = {
-        "schema_version": 2,
+        "schema_version": 3,
         "experiment": "inhouse_calibration_end_to_end",
         "profile": "inhouse",
         "provider": "openai_compatible",
@@ -143,6 +152,7 @@ def run_calibration_e2e_capture(
                 "policy": "hybrid",
             },
         },
+        "runtime_config_sha256": runtime_config_sha256(),
         "models": {
             "embedding": config.embedding_model,
             "answer": config.answer_model,
@@ -165,6 +175,7 @@ def run_calibration_e2e_capture(
         },
         "thresholds": {
             "retrieval_evidence": evidence_min_score,
+            "classifier_confidence": classifier_min_confidence,
             "entailment_confidence": entailment_min_confidence,
         },
         "corpus_sha256": _file_sha256(corpus_path),
@@ -216,6 +227,7 @@ def run_calibration_e2e_capture(
                 index_dir=index_dir,
                 cache_path=cache_path,
                 evidence_min_score=evidence_min_score,
+                classifier_min_confidence=classifier_min_confidence,
                 policy_context_top_k=policy_context_top_k,
                 policy_context_min_score=policy_context_min_score,
                 entailment_min_confidence=entailment_min_confidence,
@@ -372,6 +384,7 @@ def _build_assistants(
     index_dir: Path,
     cache_path: Path,
     evidence_min_score: float,
+    classifier_min_confidence: float,
     policy_context_top_k: int,
     policy_context_min_score: float,
     entailment_min_confidence: float,
@@ -410,6 +423,7 @@ def _build_assistants(
         "answer_model": config.answer_model,
         "guard_classifier": "openai",
         "classifier_model": config.classifier_model,
+        "classifier_min_confidence": classifier_min_confidence,
         "retrieval_top_k": INHOUSE_RETRIEVAL_TOP_K,
         "evidence_min_score": evidence_min_score,
         "policy_context_top_k": policy_context_top_k,
@@ -524,6 +538,8 @@ def _validate_capture_manifest(
         configuration_keys = _CAPTURE_CONFIGURATION_KEYS_V1
     elif schema_version == 2:
         configuration_keys = _CAPTURE_CONFIGURATION_KEYS_V2
+    elif schema_version == 3:
+        configuration_keys = _CAPTURE_CONFIGURATION_KEYS_V3
     else:
         raise ValueError("capture manifest has an unsupported schema version")
     if any(key not in manifest for key in configuration_keys):

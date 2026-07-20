@@ -19,6 +19,7 @@ from .evaluation_dataset import (
 from .evaluation import EvalCase, load_eval_cases
 from .guard_text import normalize_guard_text
 from .guardrail_policy import load_guardrail_policy
+from .guardrail_runtime import runtime_config_sha256
 from .model_calibration import (
     CLASSIFIER_LABELS,
     ClassifierCalibrationCase,
@@ -31,7 +32,11 @@ from .model_config import (
     ensure_remote_models_allowed,
     openai_request_policy,
 )
-from .model_profiles import ensure_inhouse_endpoint
+from .model_profiles import (
+    INHOUSE_CLASSIFIER_MIN_CONFIDENCE,
+    INHOUSE_POLICY_PATH,
+    ensure_inhouse_endpoint,
+)
 from .openai_models import GUARD_CLASSIFIER_PROMPT_VERSION
 from .retrieval_routing import ACADEMIC_INTEGRITY_RETRIEVAL_QUERY
 from .vector import build_vector_index
@@ -44,8 +49,8 @@ CLASSIFIER_TRIGGER_LABELS = {
     "unsafe_request": "unsafe_request",
     "ungrounded": "unsupported",
 }
-DEFAULT_POLICY_PATH = Path(__file__).resolve().parents[2] / "data" / "guardrail_policy_bge_m3.toml"
-RUNTIME_CLASSIFIER_CONFIDENCE_THRESHOLD = 0.65
+DEFAULT_POLICY_PATH = INHOUSE_POLICY_PATH
+RUNTIME_CLASSIFIER_CONFIDENCE_THRESHOLD = INHOUSE_CLASSIFIER_MIN_CONFIDENCE
 
 
 def derive_classifier_label(case: EvalCase) -> str:
@@ -143,6 +148,7 @@ def run_v2_classifier_capture(
         "request_policy": openai_request_policy(config),
         "dataset_version": dataset_evidence["dataset_version"],
         "dataset_manifest_sha256": dataset_evidence["dataset_manifest_sha256"],
+        "runtime_config_sha256": runtime_config_sha256(),
         "prompt_versions": {"classifier": GUARD_CLASSIFIER_PROMPT_VERSION},
         "thresholds": {
             "guard_similarity": _policy_thresholds(policy_path),
@@ -276,6 +282,7 @@ def evaluate_v2_classifier_capture(
         "evidence_scope": "v2_balanced_classifier_component_benchmark",
         "dataset_version": dataset_evidence["dataset_version"],
         "dataset_manifest_sha256": dataset_evidence["dataset_manifest_sha256"],
+        "runtime_config_sha256": runtime_config_sha256(),
         "combined": raw_reports["combined"],
         "development": raw_reports["development"],
         "calibration": raw_reports["calibration"],
@@ -330,6 +337,7 @@ def prepare_inhouse_bge(
         "request_policy": openai_request_policy(config),
         "dataset_version": dataset_evidence["dataset_version"],
         "dataset_manifest_sha256": dataset_evidence["dataset_manifest_sha256"],
+        "runtime_config_sha256": runtime_config_sha256(),
         "corpus_sha256": _file_sha256(corpus_path),
         "split_sha256": {
             "development": _file_sha256(development_cases_path),

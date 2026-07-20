@@ -162,6 +162,7 @@ def test_v2_capture_resumes_and_writes_safe_manifest(tmp_path: Path, monkeypatch
     assert second["split_case_counts"] == {"development": 3}
     assert second["dataset_version"] == "milestone3-v2"
     assert len(second["dataset_manifest_sha256"]) == 64
+    assert len(second["runtime_config_sha256"]) == 64
     serialized = manifest.read_text(encoding="utf-8")
     assert "fixture-key" not in serialized
     assert "https://" not in serialized
@@ -445,6 +446,7 @@ def test_prepare_inhouse_bge_indexes_only_development_and_calibration(
     assert manifest["retrieval_routes"] == [ACADEMIC_INTEGRITY_RETRIEVAL_QUERY]
     assert manifest["dataset_version"] == "milestone3-v2"
     assert len(manifest["dataset_manifest_sha256"]) == 64
+    assert len(manifest["runtime_config_sha256"]) == 64
     assert manifest_path.exists()
     assert ACADEMIC_INTEGRITY_RETRIEVAL_QUERY in {
         text for batch in embedder.calls for text in batch
