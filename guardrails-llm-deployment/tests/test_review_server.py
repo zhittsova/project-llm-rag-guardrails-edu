@@ -16,7 +16,13 @@ def test_review_server_exposes_only_selected_reviewer_and_blinded_items(
     study_dir = _study_dir(tmp_path)
     store = ReviewStore(study_dir, "reviewer_a", section_size=1)
 
-    with _running_server(store) as base_url:
+    with _running_server(
+        store,
+        quality_report={
+            "quality_gates_passed": True,
+            "scenario_counts": {"secret-technique": 1},
+        },
+    ) as base_url:
         state = _json_request(f"{base_url}/api/state")
         section_id = state["sections"][0]["section_id"]
         section = _json_request(f"{base_url}/api/sections/{section_id}")
@@ -81,8 +87,16 @@ def test_review_server_rejects_unknown_item(tmp_path: Path) -> None:
 
 
 class _running_server:
-    def __init__(self, store: ReviewStore) -> None:
-        self.server = create_review_server(store, port=0)
+    def __init__(
+        self,
+        store: ReviewStore,
+        quality_report: dict[str, object] | None = None,
+    ) -> None:
+        self.server = create_review_server(
+            store,
+            port=0,
+            quality_report=quality_report,
+        )
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 
     def __enter__(self) -> str:

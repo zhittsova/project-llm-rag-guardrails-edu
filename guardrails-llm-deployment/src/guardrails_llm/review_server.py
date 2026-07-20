@@ -173,7 +173,10 @@ def _state_payload(server: ReviewHTTPServer) -> dict[str, object]:
         "annotator_id": annotator_id,
         "progress": server.store.progress(),
         "sections": server.store.sections(),
-        "study_quality": server.quality_report,
+        "study_quality_passed": bool(
+            server.quality_report
+            and server.quality_report.get("quality_gates_passed")
+        ),
     }
 
 
