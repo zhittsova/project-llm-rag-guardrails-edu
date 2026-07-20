@@ -68,6 +68,8 @@ normal test runs must not call a remote API.
   forcing a label. Repair and regenerate the study before final reconciliation.
 - Checked-in reports should be compact, credential-safe, versioned, and clear
   about whether they are development, calibration, or holdout evidence.
+- Keep large resumable prediction and per-case result captures local. Commit
+  their configuration manifests and compact derived reports instead.
 
 ## Documentation Gate for Every PR
 

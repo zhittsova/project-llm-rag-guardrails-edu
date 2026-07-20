@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "experiment": "v2_balanced_classifier",
+  "profile": "inhouse",
+  "provider": "openai_compatible",
+  "endpoint_host": "learning-services4.fokus.fraunhofer.de",
+  "models": {
+    "classifier": "Qwen/Qwen3.6-35B-A3B"
+  },
+  "request_policy": {
+    "timeout_seconds": 90.0,
+    "max_transport_retries": 1
+  },
+  "dataset_version": "milestone3-v2",
+  "dataset_manifest_sha256": "377fadb9ae4d8ff1952c6413dd7e73dfef4055756818f5f080ebda077a1cf14f",
+  "runtime_config_sha256": "65f3dc73b7c85ad543ec23617e29d261506183a1913b736c4583df434f5299a8",
+  "prompt_versions": {
+    "classifier": "guard-classifier-v3.4"
+  },
+  "thresholds": {
+    "guard_similarity": {
+      "prompt_injection": 0.5951756871547365,
+      "pii": 0.5412877154927469,
+      "academic_integrity": 0.5156032455169239
+    },
+    "retrieval_evidence": null
+  },
+  "corpus_sha256": "3cdeaffa885a9f440c04c92fffd20d57cd0695115081a52b0d6ca3887321f317",
+  "split_sha256": {
+    "development": "d2bd3fa6872b2bd824b2ef1c93affd616e4baa1444f9739a04e77d7ecc12ed0a",
+    "calibration": "65c5ec0653e67aabc3c5a51b2f65dd8d63a64203f3250adef59fa6f0a5c32ad5"
+  },
+  "policy_sha256": "0d27d5d07985b5d17aeff7401d19cb8209c13ad4da04ac9fd56c43fc97e14077",
+  "selection_sha256": "5489396907839744f8fc1597f8bdfd7643076d881f84edfdc72c273888305817",
+  "selected_cases": 600,
+  "max_concurrency": 4,
+  "split_case_counts": {
+    "calibration": 150,
+    "development": 450
+  },
+  "expected_label_counts": {
+    "academic_integrity": 100,
+    "pii": 100,
+    "prompt_injection": 100,
+    "safe": 100,
+    "unsafe_request": 100,
+    "unsupported": 100
+  },
+  "configuration_fingerprint": "a9dac0d66696998f4e522c0dc22ee025863528640b4786bcf5a01890130bdf57",
+  "started_at": "2026-07-20T13:22:00.496581+00:00",
+  "updated_at": "2026-07-20T13:56:46.257893+00:00",
+  "status": "complete",
+  "completed_cases": 600,
+  "failed_cases": 0,
+  "prediction_attempts": 600,
+  "retried_cases": 0,
+  "recovered_cases": 0,
+  "completed_split_counts": {
+    "calibration": 150,
+    "development": 450
+  },
+  "resumed_cases": 0
+}

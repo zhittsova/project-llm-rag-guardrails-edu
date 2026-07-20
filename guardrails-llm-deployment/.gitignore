@@ -32,3 +32,9 @@ dist/
 chroma/
 indexes/
 vector_store/
+
+# Large reproducible evaluation captures; commit summaries and manifests only
+reports/inhouse_bge_common_split_details.json
+reports/inhouse_calibration_e2e.jsonl
+reports/inhouse_classifier_v2_predictions.jsonl
+reports/inhouse_deterministic_calibration_results.json
