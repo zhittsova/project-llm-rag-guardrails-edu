@@ -142,8 +142,9 @@ def write_workshop3_demo(
         else []
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    rendered = _render_demo(evidence, live_results=live_results)
     output_path.write_text(
-        _render_demo(evidence, live_results=live_results),
+        "\n".join(line.rstrip() for line in rendered.splitlines()) + "\n",
         encoding="utf-8",
     )
     if open_browser:

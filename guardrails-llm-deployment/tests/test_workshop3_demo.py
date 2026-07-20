@@ -33,6 +33,7 @@ def test_offline_demo_renders_guardrail_pipeline_and_calibration_metrics(
     assert "25.0%" in html
     assert "9 false abstentions" in html
     assert "The frozen holdout remains unopened" in html
+    assert all(line == line.rstrip() for line in html.splitlines())
 
 
 def test_demo_rejects_holdout_derived_evidence(tmp_path: Path) -> None:

@@ -133,7 +133,7 @@
     <div class="wrap">
       <h2>Same split, different techniques</h2>
       <div class="technique-table" role="table" aria-label="Technique comparison">
-        
+
         <div class="technique-row" role="row">
           <strong>Baseline RAG</strong>
           <div class="bar" aria-label="25.0 percent accuracy"><span style="width:25.0%"></span></div>
@@ -185,7 +185,7 @@
       <h2>What fails without guardrails</h2>
       <p class="lead">Open each scenario to compare the unprotected path with the complete hybrid. Offline mode shows the designed flow; live mode adds current Fraunhofer model outputs.</p>
       <div class="scenario-list" style="margin-top:18px">
-        
+
         <details>
           <summary><h3>Supported course question</h3><span class="disposition">answer</span></summary>
           <div class="scenario-body">
@@ -193,7 +193,7 @@
             <div class="comparison">
               <div class="lane baseline"><h3>Without guardrails</h3><p>Answers from the nearest retrieved chunks.</p></div>
               <div class="lane hybrid"><h3>Complete hybrid</h3><p>Answers only after relevance and entailment checks; cites only verifier-approved chunks.</p><p class="flow">retrieve -&gt; evidence gate -&gt; generate -&gt; verify -&gt; cite</p></div>
-              
+
             </div>
           </div>
         </details>
@@ -204,7 +204,7 @@
             <div class="comparison">
               <div class="lane baseline"><h3>Without guardrails</h3><p>Retrieves context and attempts an answer.</p></div>
               <div class="lane hybrid"><h3>Complete hybrid</h3><p>Regex, fuzzy, BGE similarity, and Qwen classification can block the request before retrieval.</p><p class="flow">normalize -&gt; deterministic checks -&gt; BGE -&gt; Qwen -&gt; block</p></div>
-              
+
             </div>
           </div>
         </details>
@@ -215,7 +215,7 @@
             <div class="comparison">
               <div class="lane baseline"><h3>Without guardrails</h3><p>May search all indexed visibility levels.</p></div>
               <div class="lane hybrid"><h3>Complete hybrid</h3><p>Input checks block the request and Chroma applies course and visibility filters before similarity search.</p><p class="flow">input checks -&gt; metadata policy -&gt; block</p></div>
-              
+
             </div>
           </div>
         </details>
@@ -226,7 +226,7 @@
             <div class="comparison">
               <div class="lane baseline"><h3>Without guardrails</h3><p>May provide a submission-ready response.</p></div>
               <div class="lane hybrid"><h3>Complete hybrid</h3><p>Detects the integrity intent and redirects to policy-backed tutoring help.</p><p class="flow">detect integrity intent -&gt; retrieve policy -&gt; redirect</p></div>
-              
+
             </div>
           </div>
         </details>
@@ -237,7 +237,7 @@
             <div class="comparison">
               <div class="lane baseline"><h3>Without guardrails</h3><p>May answer merely because some chunks exist.</p></div>
               <div class="lane hybrid"><h3>Complete hybrid</h3><p>Abstains when retrieved evidence is weak or Qwen cannot verify the generated claims.</p><p class="flow">retrieve -&gt; evidence gate -&gt; entailment -&gt; abstain</p></div>
-              
+
             </div>
           </div>
         </details>
