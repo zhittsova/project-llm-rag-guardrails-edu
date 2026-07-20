@@ -51,7 +51,7 @@ TOPICS = (
     ("knowledge", "declarative and imperative knowledge", "deklaratives und imperatives Wissen", "lec01", "declarative knowledge is statements of fact"),
     ("strings", "string indexing and immutability", "String-Indizierung und Unveränderlichkeit", "lec02", "strings are immutable meaning they cannot be modified"),
     ("loops", "while and for loops", "while- und for-Schleifen", "lec03", "while loops can repeat code inside indefinitely"),
-    ("break", "the break statement in loops", "die break-Anweisung in Schleifen", "lec04", "immediately exits whatever loop it is in"),
+    ("break", "the break statement in loops", "Break-Anweisung in Schleifen", "lec04", "immediately exits whatever loop it is in"),
     ("floats", "floating-point approximation", "Gleitkomma-Approximation", "lec05", "approximate the potentially infinite binary sequence"),
     ("bisection", "bisection search", "Bisektionssuche", "lec06", "cuts set of things to check in half"),
     ("functions", "functions and abstraction", "Funktionen und Abstraktion", "lec07", "coder achieves abstraction with a function or procedure"),

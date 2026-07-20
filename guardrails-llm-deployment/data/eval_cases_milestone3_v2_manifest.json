@@ -39,7 +39,7 @@
     },
     "calibration": {
       "path": "eval_cases_milestone3_v2_calibration.jsonl",
-      "sha256": "79b65572ca79d52035711fd11821a686248638d45b0eff7bb6d8b875e5712497"
+      "sha256": "65c5ec0653e67aabc3c5a51b2f65dd8d63a64203f3250adef59fa6f0a5c32ad5"
     },
     "holdout": {
       "path": "eval_cases_milestone3_v2_holdout.jsonl",
