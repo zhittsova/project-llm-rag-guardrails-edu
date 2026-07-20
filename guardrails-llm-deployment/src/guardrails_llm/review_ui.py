@@ -50,12 +50,13 @@ REVIEW_UI_HTML = r"""<!doctype html>
     .progress { display: grid; grid-template-columns: auto 150px; gap: 10px; align-items: center; }
     .progress-label { white-space: nowrap; font-variant-numeric: tabular-nums; }
     progress { width: 150px; height: 8px; accent-color: var(--accent); }
-    .annotator { display: flex; align-items: center; gap: 8px; }
+    .annotator { display: grid; grid-template-columns: auto auto; align-items: center; gap: 2px 8px; }
     .annotator label { color: var(--muted); font-size: .86rem; }
     .annotator input {
       width: 160px; height: 36px; border: 1px solid var(--border);
       border-radius: var(--radius); padding: 0 10px; background: var(--surface);
     }
+    .identity-warning { grid-column: 1 / -1; color: var(--issue); font-size: .74rem; }
     .workspace { display: grid; grid-template-columns: 290px minmax(0, 1fr); min-height: 0; }
     .sidebar {
       position: sticky; top: 64px; height: calc(100vh - 64px); overflow: auto;
@@ -204,7 +205,7 @@ REVIEW_UI_HTML = r"""<!doctype html>
       <div class="brand"><h1>Human Judge Review</h1><label class="reviewer" for="reviewer-select">Reviewer</label><select id="reviewer-select"></select></div>
       <div class="save-state" id="save-state" role="status">Loading...</div>
       <div class="progress"><span class="progress-label" id="progress-label"></span><progress id="progress" max="1" value="0"></progress></div>
-      <div class="annotator"><label for="annotator-id">Annotator ID</label><input id="annotator-id" autocomplete="off" placeholder="reviewer-kate"></div>
+      <div class="annotator"><label for="annotator-id">Annotator ID</label><input id="annotator-id" autocomplete="off" placeholder="reviewer-kate"><span class="identity-warning" id="identity-warning"></span></div>
     </header>
     <div class="workspace">
       <aside class="sidebar">
@@ -271,6 +272,15 @@ REVIEW_UI_HTML = r"""<!doctype html>
       const bar = document.getElementById("progress");
       bar.max = progress.total || 1;
       bar.value = resolved;
+      document.getElementById("identity-warning").textContent = progress.identity_missing
+        ? `${progress.identity_missing} reviewed; add an Annotator ID to export`
+        : "";
+    }
+
+    async function refreshState() {
+      state = await request("/api/state");
+      updateProgress(state.progress);
+      renderSidebar();
     }
 
     function renderSidebar() {
@@ -413,7 +423,7 @@ REVIEW_UI_HTML = r"""<!doctype html>
               const item = group.items.find((candidate) => candidate.item_id === itemId);
               if (item) item.draft = result.draft;
             });
-            updateProgress(result.progress);
+            await refreshState();
             renderQuestions();
             setSaveState("Recommendation copied");
           } catch (error) { showError(error); }
@@ -429,9 +439,7 @@ REVIEW_UI_HTML = r"""<!doctype html>
           const item = group.items.find((candidate) => candidate.item_id === itemId);
           if (item) item.draft = result.draft;
         });
-        updateProgress(result.progress);
-        state = await request("/api/state");
-        renderSidebar();
+        await refreshState();
         document.getElementById("error").innerHTML = "";
         setSaveState(result.section_flushed ? "Section exported" : "Autosaved");
       } catch (error) { showError(error); }
@@ -493,7 +501,7 @@ REVIEW_UI_HTML = r"""<!doctype html>
       setSaveState("Saving...", "saving");
       try {
         const result = await request("/api/annotator", {method: "PATCH", body: JSON.stringify({annotator_id: event.target.value})});
-        updateProgress(result.progress);
+        await refreshState();
         setSaveState("Annotator saved");
       } catch (error) { showError(error); }
     });
@@ -509,8 +517,7 @@ REVIEW_UI_HTML = r"""<!doctype html>
       if (!state.recommendations_available) return;
       try {
         const result = await request(`/api/sections/${encodeURIComponent(currentSectionId)}/apply-recommendations`, {method: "POST", body: "{}"});
-        updateProgress(result.progress);
-        state = await request("/api/state");
+        await refreshState();
         await loadSection(currentSectionId);
         setSaveState(`${result.copied} recommendations copied`);
       } catch (error) { showError(error); }

@@ -48,16 +48,22 @@ class ReviewStore:
         result = []
         for section in self._sections:
             item_ids = section["item_ids"]
-            complete = sum(_is_complete(states[item_id]) for item_id in item_ids)
-            issues = sum(_is_issue(states[item_id]) for item_id in item_ids)
+            complete = sum(_is_reviewed(states[item_id]) for item_id in item_ids)
+            issues = sum(_is_reviewed_issue(states[item_id]) for item_id in item_ids)
             resolved = complete + issues
+            export_ready = sum(
+                _is_complete(states[item_id]) or _is_issue(states[item_id])
+                for item_id in item_ids
+            )
             result.append(
                 {
                     **section,
                     "completed": complete,
                     "issues": issues,
                     "remaining": len(item_ids) - resolved,
-                    "ready": resolved == len(item_ids),
+                    "ready": export_ready == len(item_ids),
+                    "export_ready": export_ready,
+                    "identity_missing": resolved - export_ready,
                     "flushed": self._section_flushed(str(section["section_id"])),
                 }
             )
@@ -234,13 +240,20 @@ class ReviewStore:
 
     def progress(self) -> dict[str, int]:
         states = self._draft_states()
-        complete = sum(_is_complete(state) for state in states.values())
-        issues = sum(_is_issue(state) for state in states.values())
+        complete = sum(_is_reviewed(state) for state in states.values())
+        issues = sum(_is_reviewed_issue(state) for state in states.values())
+        export_ready = sum(
+            _is_complete(state) or _is_issue(state)
+            for state in states.values()
+        )
+        resolved = complete + issues
         return {
             "total": len(states),
             "completed": complete,
             "issues": issues,
-            "remaining": len(states) - complete - issues,
+            "remaining": len(states) - resolved,
+            "export_ready": export_ready,
+            "identity_missing": resolved - export_ready,
         }
 
     def recommendations_available(self) -> bool:
@@ -548,15 +561,27 @@ def _annotation_payload(draft: dict[str, object]) -> dict[str, object]:
 def _is_complete(draft: dict[str, object]) -> bool:
     return (
         bool(str(draft.get("annotator_id", "")).strip())
-        and all(isinstance(draft.get(dimension), bool) for dimension in JUDGE_DIMENSIONS)
-        and not bool(draft.get("issue_flag"))
+        and _is_reviewed(draft)
     )
 
 
 def _is_issue(draft: dict[str, object]) -> bool:
     return (
+        bool(str(draft.get("annotator_id", "")).strip())
+        and _is_reviewed_issue(draft)
+    )
+
+
+def _is_reviewed(draft: dict[str, object]) -> bool:
+    return (
+        all(isinstance(draft.get(dimension), bool) for dimension in JUDGE_DIMENSIONS)
+        and not bool(draft.get("issue_flag"))
+    )
+
+
+def _is_reviewed_issue(draft: dict[str, object]) -> bool:
+    return (
         bool(draft.get("issue_flag"))
-        and bool(str(draft.get("annotator_id", "")).strip())
         and bool(str(draft.get("issue_note", "")).strip())
     )
 
