@@ -61,6 +61,20 @@ def build_calibration_evidence(
     dataset_version = deterministic.get("dataset_version")
     if not dataset_version or dataset_version != model.get("dataset_version"):
         raise FinalEvidenceError("calibration inputs use different dataset versions")
+    for provenance_key in (
+        "dataset_manifest_sha256",
+        "calibration_split_sha256",
+    ):
+        deterministic_hash = deterministic.get(provenance_key)
+        model_hash = model.get(provenance_key)
+        if (
+            not _is_sha256(deterministic_hash)
+            or not _is_sha256(model_hash)
+            or deterministic_hash != model_hash
+        ):
+            raise FinalEvidenceError(
+                "calibration inputs use different calibration provenance"
+            )
     if deterministic.get("cases") != 400 or model.get("cases_per_scenario") != 400:
         raise FinalEvidenceError("final calibration comparison requires 400 cases per technique")
     if deterministic.get("cases_per_disposition") != 100 or model.get(
@@ -188,14 +202,19 @@ def render_calibration_report(report: dict[str, object]) -> str:
             f"{_format_metric(hybrid['redirect_recall'])}.",
             "- Supported-answer precision: "
             f"{_format_metric(hybrid['supported_answer_precision'])}.",
-            "- Citation-entailment precision: "
-            f"{_format_metric(hybrid['citation_entailment_precision'])}.",
+            "- Citation-entailment precision "
+            f"({_format_scope(hybrid.get('citation_entailment_scope'))}): "
+            f"{_format_metric(hybrid['citation_entailment_precision'])} "
+            f"across {hybrid.get('citation_entailment_total', 'n/a')} citations.",
             f"- Expected-document citation precision: "
             f"{_format_metric(hybrid['expected_document_citation_precision'])}.",
             "",
             "The expected-document citation diagnostic remains failed and visible. Generated "
             "expected-document labels require independent human review before this metric can be "
             "treated as authoritative.",
+            "",
+            "The citation-entailment figure is runtime verifier consistency, not an independent "
+            "human entailment judgment.",
             "",
             "## Evidence Boundary",
             "",
@@ -208,21 +227,63 @@ def render_calibration_report(report: dict[str, object]) -> str:
     failures = report.get("failure_analysis")
     if isinstance(failures, dict):
         stage_counts = _require_mapping(failures, "stage_counts")
+        failed_cases = int(failures["failed_cases"])
+        transition_payload = failures.get("failure_dispositions")
+        if isinstance(transition_payload, dict):
+            transitions = transition_payload
+        elif failures.get("failure_disposition") in {
+            "false_abstention",
+            "answer_to_abstain",
+        }:
+            transitions = {"answer_to_abstain": failed_cases}
+        else:
+            transitions = {"unclassified": failed_cases}
+        only_false_abstentions = transitions == {"answer_to_abstain": failed_cases}
         lines.extend(
             [
                 "## Remaining Complete-Hybrid Failures",
                 "",
-                f"All {failures['failed_cases']} behavior errors are false abstentions:",
-                "",
-                f"- {stage_counts['expected_policy_document_not_retrieved']} retrieval misses.",
-                f"- {stage_counts['answerability_rejected_with_expected_document_present']} "
-                "evidence-gate rejects with the expected document present.",
-                f"- {stage_counts['entailment_rejected_unsupported_extra_claims']} entailment "
-                "rejects caused by unsupported extra claims.",
+                (
+                    f"All {failed_cases} behavior errors are false abstentions:"
+                    if only_false_abstentions
+                    else f"The {failed_cases} behavior errors include these transitions:"
+                ),
                 "",
             ]
         )
+        if not only_false_abstentions:
+            for transition, count in sorted(transitions.items()):
+                expected, separator, actual = transition.partition("_to_")
+                label = f"{expected} -> {actual}" if separator else transition
+                lines.append(f"- {label}: {count}.")
+            lines.append("")
+        stage_lines = (
+            (
+                "expected_policy_document_not_retrieved",
+                "retrieval misses",
+            ),
+            (
+                "answerability_rejected_with_expected_document_present",
+                "answerability abstentions with the expected document present",
+            ),
+            (
+                "entailment_rejected_unsupported_extra_claims",
+                "entailment rejects caused by unsupported extra claims",
+            ),
+            ("other", "unclassified stage failures"),
+        )
+        for stage, label in stage_lines:
+            count = int(stage_counts.get(stage, 0))
+            if count:
+                lines.append(f"- {count} {label}.")
+        lines.append("")
     return "\n".join(lines)
+
+
+def _format_scope(value: object) -> str:
+    if not isinstance(value, str) or not value:
+        return "scope unspecified"
+    return value.replace("_", "-")
 
 
 def write_calibration_evidence(

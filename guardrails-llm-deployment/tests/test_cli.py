@@ -932,6 +932,54 @@ def test_validate_runtime_config_reports_safe_versioned_controls(
     assert "api_key" not in json.dumps(report)
 
 
+def test_refresh_calibration_evidence_forwards_all_artifact_paths(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    captured = {}
+
+    def fake_refresh(**kwargs):
+        captured.update(kwargs)
+        return {"cases": 400}
+
+    monkeypatch.setattr(
+        "guardrails_llm.cli.refresh_calibration_evidence", fake_refresh
+    )
+    paths = {
+        "--deterministic-capture": tmp_path / "deterministic.json",
+        "--deterministic-manifest": tmp_path / "deterministic-manifest.json",
+        "--model-evaluation": tmp_path / "model-evaluation.json",
+        "--model-manifest": tmp_path / "manifest.json",
+        "--model-capture": tmp_path / "capture.jsonl",
+        "--deterministic-output": tmp_path / "deterministic-output.json",
+        "--model-output": tmp_path / "model-output.json",
+        "--failure-output": tmp_path / "failures.json",
+        "--output-json": tmp_path / "final.json",
+        "--output-markdown": tmp_path / "final.md",
+    }
+    argv = ["guardrails-llm", "refresh-calibration-evidence"]
+    for option, path in paths.items():
+        argv.extend([option, str(path)])
+    monkeypatch.setattr(sys, "argv", argv)
+
+    main()
+
+    assert captured == {
+        "deterministic_path": paths["--deterministic-capture"],
+        "deterministic_manifest_path": paths["--deterministic-manifest"],
+        "model_evaluation_path": paths["--model-evaluation"],
+        "model_manifest_path": paths["--model-manifest"],
+        "model_capture_path": paths["--model-capture"],
+        "deterministic_output": paths["--deterministic-output"],
+        "model_output": paths["--model-output"],
+        "failure_output": paths["--failure-output"],
+        "final_json_output": paths["--output-json"],
+        "final_markdown_output": paths["--output-markdown"],
+    }
+    assert json.loads(capsys.readouterr().out) == {"cases": 400}
+
+
 def test_compare_guardrails_records_validation_split(tmp_path: Path, monkeypatch) -> None:
     output = tmp_path / "comparison.json"
     monkeypatch.setattr(

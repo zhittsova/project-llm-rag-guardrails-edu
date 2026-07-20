@@ -16,6 +16,7 @@ from .e2e_capture import (
     run_calibration_e2e_capture,
 )
 from .embeddings import CachedEmbedder, create_embedder
+from .evidence_refresh import refresh_calibration_evidence
 from .evaluation import (
     EvalCase,
     results_to_json,
@@ -784,21 +785,21 @@ def main() -> None:
         type=Path,
         default=Path(__file__).resolve().parents[2]
         / "reports"
-        / "inhouse_common_split_calibration_v3.json",
+        / "inhouse_common_split_calibration_v4.json",
     )
     final_evidence_parser.add_argument(
         "--model-report",
         type=Path,
         default=Path(__file__).resolve().parents[2]
         / "reports"
-        / "inhouse_retrieval_recovery_calibration_v4.json",
+        / "inhouse_model_calibration_v5.json",
     )
     final_evidence_parser.add_argument(
         "--failure-report",
         type=Path,
         default=Path(__file__).resolve().parents[2]
         / "reports"
-        / "inhouse_calibration_failure_analysis_v4.json",
+        / "inhouse_calibration_failure_analysis_v5.json",
     )
     final_evidence_parser.add_argument(
         "--output-json",
@@ -808,6 +809,81 @@ def main() -> None:
         / "final_calibration_evidence.json",
     )
     final_evidence_parser.add_argument(
+        "--output-markdown",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "final_calibration_evidence.md",
+    )
+
+    refresh_evidence_parser = subparsers.add_parser(
+        "refresh-calibration-evidence",
+        help="Rebuild calibration summaries from repaired capture artifacts",
+    )
+    refresh_evidence_parser.add_argument(
+        "--deterministic-capture",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_deterministic_calibration_raw.json",
+    )
+    refresh_evidence_parser.add_argument(
+        "--deterministic-manifest",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_deterministic_calibration_manifest.json",
+    )
+    refresh_evidence_parser.add_argument(
+        "--model-evaluation",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_calibration_e2e_evaluation.json",
+    )
+    refresh_evidence_parser.add_argument(
+        "--model-manifest",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_calibration_e2e_manifest.json",
+    )
+    refresh_evidence_parser.add_argument(
+        "--model-capture",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_calibration_e2e.jsonl",
+    )
+    refresh_evidence_parser.add_argument(
+        "--deterministic-output",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_common_split_calibration_v4.json",
+    )
+    refresh_evidence_parser.add_argument(
+        "--model-output",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_model_calibration_v5.json",
+    )
+    refresh_evidence_parser.add_argument(
+        "--failure-output",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "inhouse_calibration_failure_analysis_v5.json",
+    )
+    refresh_evidence_parser.add_argument(
+        "--output-json",
+        type=Path,
+        default=Path(__file__).resolve().parents[2]
+        / "reports"
+        / "final_calibration_evidence.json",
+    )
+    refresh_evidence_parser.add_argument(
         "--output-markdown",
         type=Path,
         default=Path(__file__).resolve().parents[2]
@@ -1417,6 +1493,25 @@ def main() -> None:
                 replace=args.replace,
             )
         except (OSError, TypeError, ValueError) as exc:
+            parser.error(str(exc))
+        print(json.dumps(report, indent=2))
+        return
+
+    if args.command == "refresh-calibration-evidence":
+        try:
+            report = refresh_calibration_evidence(
+                deterministic_path=args.deterministic_capture,
+                deterministic_manifest_path=args.deterministic_manifest,
+                model_evaluation_path=args.model_evaluation,
+                model_manifest_path=args.model_manifest,
+                model_capture_path=args.model_capture,
+                deterministic_output=args.deterministic_output,
+                model_output=args.model_output,
+                failure_output=args.failure_output,
+                final_json_output=args.output_json,
+                final_markdown_output=args.output_markdown,
+            )
+        except FinalEvidenceError as exc:
             parser.error(str(exc))
         print(json.dumps(report, indent=2))
         return
