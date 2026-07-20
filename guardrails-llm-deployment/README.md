@@ -299,27 +299,39 @@ uv run guardrails-llm review-judge-reconciliation \
   --open
 ```
 
-Judge predictions are captured without reading human labels. Repeat the command
-with `Qwen/Qwen3.6-35B-A3B` and `MiniMaxAI/MiniMax-M2.5`, using separate output
-and manifest paths:
+Judge predictions are captured without reading human labels. Scope calibration
+and validation into separate files so the rubric can be selected on calibration
+without exposing validation results. `--limit-cases` supports a bounded smoke
+test with a separate output and manifest:
 
 ```bash
 uv run guardrails-llm capture-judge-study \
   --study-dir path/to/human_judge_study \
   --source-results path/to/common_split_results.json \
-  --judge-model Qwen/Qwen3.6-35B-A3B \
-  --output path/to/judge_qwen_predictions.jsonl \
-  --manifest path/to/judge_qwen_manifest.json \
+  --judge-model MiniMaxAI/MiniMax-M2.5 \
+  --judge-split judge_calibration \
+  --output path/to/judge_calibration_predictions.jsonl \
+  --manifest path/to/judge_calibration_manifest.json \
   --max-concurrency 4 \
   --allow-remote-models
 ```
 
-After adjudication, compare both prediction files with `evaluate-judge-study`.
-The report keeps judge calibration and judge validation separate and applies
-the structured-validity, per-dimension, exact-match, and groundedness gates.
+Evaluate calibration with `--judge-split judge_calibration`. After selecting a
+model and locking the rubric, capture `judge_validation` to a second file.
+Passing both prediction paths to `evaluate-judge-study` produces one report
+with the two splits kept separate. The report applies the structured-validity,
+per-dimension, exact-match, and groundedness gates.
 Predictions captured for an older study selection are not reusable after study
 items are regenerated; recapture both judge candidates against the final item
 IDs before calculating agreement.
+
+The selected in-house judge is MiniMax `MiniMaxAI/MiniMax-M2.5` with rubric
+`guardrail-judge-v2.3`. It passed all gates on both 200-item splits: exact
+five-dimension agreement was `0.790` on calibration and `0.795` on validation;
+groundedness agreement was `0.920` and `0.915`. See
+[`reports/inhouse_judge_validation_v23.md`](reports/inhouse_judge_validation_v23.md).
+The human review was recommendation-assisted, so the report does not describe
+it as fully independent double annotation.
 
 ### Independent Frozen-Holdout Review
 

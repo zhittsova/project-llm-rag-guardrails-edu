@@ -232,7 +232,7 @@ def test_judge_capture_reconstructs_source_case_and_result(
     assert source_case.case_id == "normal-003"
     assert source_result.case_id == "normal-003"
     assert source_result.actual_behavior.value == "answer"
-    assert manifest["prompt_versions"]["judge"] == "guardrail-judge-v2.2"
+    assert manifest["prompt_versions"]["judge"] == "guardrail-judge-v2.3"
 
 
 def test_both_capture_validates_all_inputs_before_model_calls(

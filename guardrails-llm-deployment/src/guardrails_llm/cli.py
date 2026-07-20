@@ -724,6 +724,11 @@ def main() -> None:
     judge_capture_parser.add_argument("--manifest", type=Path, required=True)
     judge_capture_parser.add_argument("--max-concurrency", type=int, default=1)
     judge_capture_parser.add_argument("--retry-failures", action="store_true")
+    judge_capture_parser.add_argument(
+        "--judge-split",
+        choices=["judge_calibration", "judge_validation"],
+    )
+    judge_capture_parser.add_argument("--limit-cases", type=int)
     judge_capture_parser.add_argument("--allow-remote-models", action="store_true")
     judge_capture_parser.add_argument("--env-file", type=Path)
 
@@ -737,6 +742,10 @@ def main() -> None:
         type=Path,
         action="append",
         required=True,
+    )
+    judge_evaluate_parser.add_argument(
+        "--judge-split",
+        choices=["judge_calibration", "judge_validation"],
     )
     judge_evaluate_parser.add_argument("--output-json", type=Path, required=True)
 
@@ -1433,6 +1442,8 @@ def main() -> None:
                 manifest_path=args.manifest,
                 max_concurrency=args.max_concurrency,
                 retry_failures=args.retry_failures,
+                judge_split=args.judge_split,
+                limit_cases=args.limit_cases,
             )
         except (
             OSError,
@@ -1451,6 +1462,7 @@ def main() -> None:
                 study_dir=args.study_dir,
                 prediction_paths=args.predictions,
                 output_path=args.output_json,
+                judge_split=args.judge_split,
             )
         except (OSError, TypeError, ValueError) as exc:
             parser.error(str(exc))

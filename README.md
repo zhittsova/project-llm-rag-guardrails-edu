@@ -142,11 +142,18 @@ approved runtime configuration, and check final-run readiness. Separate
 holdout reviewer files and explicit reconciliation preserve independent human
 labeling before canonical annotations are written.
 
-The LLM-judge study uses two blinded, family-disjoint 200-output sets. Qwen and
-MiniMax captures have completed all 400 items each with 100% structured-response
-validity and no failed predictions. Agreement metrics remain unavailable until
-two human reviews and disagreement adjudication are complete. The package
-includes a reviewer-isolated local UI with SQLite autosave,
+The LLM-judge study uses two blinded, family-disjoint 200-output sets. Both
+human reviews and all three disagreement adjudications are complete. MiniMax
+`MiniMaxAI/MiniMax-M2.5` with the locked `guardrail-judge-v2.3` rubric passed
+all judge-validation gates: 100% structured validity, `0.795` exact
+five-dimension agreement, `0.915` groundedness agreement, and at least `0.900`
+agreement on every dimension. The human review was recommendation-assisted
+(67 Reviewer A and 40 Reviewer B assistance events), so it is not presented as
+fully independent double annotation. Adjudicated human labels remain ground
+truth and the LLM judge remains secondary. See the compact
+[`judge validation report`](guardrails-llm-deployment/reports/inhouse_judge_validation_v23.md).
+
+The package includes a reviewer-isolated local UI with SQLite autosave,
 question-grouped sections, dataset-issue flags, and atomic JSONL export. Start
 one process per reviewer so neither reviewer can see the other's labels:
 
