@@ -460,6 +460,7 @@ def build_assistant(
             embedding_cache_path=embedding_cache_path,
             answer_generator=answer_generator,
             retrieval_embedder=retrieval_embedder,
+            retrieval_top_k=retrieval_top_k,
         )
 
     # Build the guardrailed assistant here. The baseline implementation lives

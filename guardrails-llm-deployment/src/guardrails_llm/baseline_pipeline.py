@@ -54,11 +54,15 @@ class BaselineRagAssistant:
         course_id: str = "guardrails-101",
         retriever_backend: str = "lexical",
         answer_generator: AnswerGenerator | None = None,
+        retrieval_top_k: int = 3,
     ) -> None:
+        if retrieval_top_k <= 0:
+            raise ValueError("retrieval_top_k must be greater than zero")
         self._retriever = retriever
         self._course_id = course_id
         self._retriever_backend = retriever_backend
         self._answer_generator = answer_generator
+        self._retrieval_top_k = retrieval_top_k
 
     def answer(self, question: str) -> BaselineRagResponse:
         started_at = perf_counter()
@@ -66,7 +70,7 @@ class BaselineRagAssistant:
         # Baseline retrieval intentionally has no course_id/public filters.
         # This is useful for failure analysis: it can retrieve private chunks
         # or injected content, showing why guardrails are needed.
-        retrieved = self._retriever.search(question)
+        retrieved = self._retriever.search(question, top_k=self._retrieval_top_k)
 
         retrieved_chunks = [chunk for chunk, _score in retrieved]
         if self._answer_generator:
@@ -121,6 +125,7 @@ def build_baseline_assistant(
     embedding_cache_path: Path | None = None,
     answer_generator: AnswerGenerator | None = None,
     retrieval_embedder: TextEmbedder | None = None,
+    retrieval_top_k: int = 3,
 ) -> BaselineRagAssistant:
     if retriever_backend == "lexical":
         documents = load_documents(corpus_path)
@@ -150,6 +155,7 @@ def build_baseline_assistant(
         course_id=course_id,
         retriever_backend=retriever_backend,
         answer_generator=answer_generator,
+        retrieval_top_k=retrieval_top_k,
     )
 
 

@@ -392,6 +392,15 @@ def test_baseline_pipeline_abstains_when_retrieval_is_empty() -> None:
     assert response.disposition is ResponseDisposition.ABSTAIN
 
 
+def test_baseline_pipeline_uses_configured_retrieval_budget() -> None:
+    retriever = StaticRetriever([])
+    assistant = BaselineRagAssistant(retriever, retrieval_top_k=8)
+
+    assistant.answer("What is RAG?")
+
+    assert retriever.search_kwargs[0]["top_k"] == 8
+
+
 def test_guardrailed_assistant_respects_course_id(tmp_path: Path) -> None:
     corpus = tmp_path / "courses.jsonl"
     corpus.write_text(
