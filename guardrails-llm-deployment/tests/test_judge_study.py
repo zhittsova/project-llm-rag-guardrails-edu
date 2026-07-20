@@ -97,6 +97,23 @@ def test_annotation_validation_reports_incomplete_templates(tmp_path: Path) -> N
     assert summary["complete"] is False
 
 
+def test_complete_human_annotation_allows_empty_optional_rationale(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "annotations.jsonl"
+    payload = _annotation("judge_calibration-item", "reviewer-a")
+    payload["rationale"] = ""
+    _write_jsonl(path, [payload])
+
+    _annotations, summary = validate_annotation_file(
+        path,
+        expected_item_ids={"judge_calibration-item"},
+        complete=True,
+    )
+
+    assert summary["complete"] is True
+
+
 def test_reconciliation_writes_only_human_disagreements(tmp_path: Path) -> None:
     item_paths = []
     reviewer_a_paths = []

@@ -141,6 +141,21 @@ REVIEW_UI_HTML = r"""<!doctype html>
     }
     .issue-control { display: flex; gap: 8px; align-items: center; min-height: 28px; }
     .issue-note { margin-top: 7px; }
+    .recommendation-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .recommendation-actions button {
+      min-height: 34px; border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 0 10px; background: var(--surface); color: var(--text);
+    }
+    .recommendation-actions button.primary { border-color: #afd6da; background: var(--accent-soft); color: #075e67; }
+    .recommendation {
+      margin-top: 10px; padding: 12px; border: 1px solid #afd6da;
+      border-radius: var(--radius); background: #f0f8f8;
+    }
+    .recommendation strong { display: block; margin-bottom: 7px; }
+    .recommendation-labels { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+    .recommendation-labels span { padding: 3px 6px; border-radius: 3px; background: var(--surface); border: 1px solid var(--border); font-size: .76rem; }
+    .recommendation pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; color: #405159; }
+    .assistance-warning { color: var(--issue); font-size: .78rem; margin-top: 7px; }
     .hidden { display: none !important; }
     .empty { padding: 60px 20px; text-align: center; color: var(--muted); }
     .error-banner { margin-bottom: 14px; padding: 10px 12px; border: 1px solid #df9a95; border-radius: var(--radius); background: var(--no-soft); color: var(--no); }
@@ -186,7 +201,7 @@ REVIEW_UI_HTML = r"""<!doctype html>
 <body>
   <div class="app">
     <header class="topbar">
-      <div class="brand"><h1>Human Judge Review</h1><span class="reviewer" id="reviewer"></span></div>
+      <div class="brand"><h1>Human Judge Review</h1><label class="reviewer" for="reviewer-select">Reviewer</label><select id="reviewer-select"></select></div>
       <div class="save-state" id="save-state" role="status">Loading...</div>
       <div class="progress"><span class="progress-label" id="progress-label"></span><progress id="progress" max="1" value="0"></progress></div>
       <div class="annotator"><label for="annotator-id">Annotator ID</label><input id="annotator-id" autocomplete="off" placeholder="reviewer-kate"></div>
@@ -200,7 +215,7 @@ REVIEW_UI_HTML = r"""<!doctype html>
         <div id="error"></div>
         <div class="content-toolbar">
           <h2 id="section-title">Review section</h2>
-          <div class="nav-buttons"><button id="previous" type="button">&larr; Previous</button><button id="next" type="button">Next &rarr;</button></div>
+          <div class="nav-buttons"><button id="show-section" type="button">Show section hints</button><button id="show-all" type="button">Show all hints</button><button id="copy-section" type="button">Copy section recommendations</button><button id="previous" type="button">&larr; Previous</button><button id="next" type="button">Next &rarr;</button></div>
         </div>
         <div id="questions"><div class="empty">Loading review items...</div></div>
       </main>
@@ -217,14 +232,20 @@ REVIEW_UI_HTML = r"""<!doctype html>
     let state = null;
     let sectionData = null;
     let currentSectionId = null;
+    let activeReviewer = null;
     const saveTimers = new Map();
+    const revealedRecommendations = new Map();
 
     const escapeHtml = (value) => String(value ?? "")
       .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 
     async function request(path, options = {}) {
-      const response = await fetch(path, {
+      const url = new URL(path, window.location.origin);
+      if (activeReviewer && url.pathname.startsWith("/api/")) {
+        url.searchParams.set("reviewer", activeReviewer);
+      }
+      const response = await fetch(url.pathname + url.search, {
         ...options,
         headers: {"Content-Type": "application/json", ...(options.headers || {})}
       });
@@ -274,7 +295,7 @@ REVIEW_UI_HTML = r"""<!doctype html>
 
     function itemResolved(draft) {
       const labelled = dimensions.every(([key]) => typeof draft[key] === "boolean");
-      const complete = labelled && draft.rationale.trim() && !draft.issue_flag;
+      const complete = labelled && !draft.issue_flag;
       const issue = draft.issue_flag && draft.issue_note.trim();
       return Boolean(complete || issue);
     }
@@ -311,8 +332,16 @@ REVIEW_UI_HTML = r"""<!doctype html>
         </div>
         <div class="judgment">
           <div class="dimensions">${renderDimensions(item)}</div>
+          ${state.recommendations_available ? `<div class="recommendation-actions">
+            <button type="button" data-action="show-recommendation">Show recommendation</button>
+            <button type="button" class="primary" data-action="copy-recommendation">Copy recommendation</button>
+          </div>
+          <div class="recommendation${revealedRecommendations.has(item.item_id) ? "" : " hidden"}" data-recommendation>
+            ${renderRecommendation(revealedRecommendations.get(item.item_id))}
+          </div>
+          <div class="assistance-warning">Revealing or copying is recorded as assisted review and is not independent human labeling.</div>` : ""}
           <div class="annotation-row">
-            <label><span class="field-label">Rationale (required)</span><textarea data-field="rationale" placeholder="Briefly explain the judgment.">${escapeHtml(item.draft.rationale)}</textarea></label>
+            <label><span class="field-label">Rationale (optional)</span><textarea data-field="rationale" placeholder="Add a note when it helps explain the judgment.">${escapeHtml(item.draft.rationale)}</textarea></label>
             <div>
               <label class="issue-control"><input type="checkbox" data-field="issue_flag"${item.draft.issue_flag ? " checked" : ""}> Flag dataset issue</label>
               <label class="issue-note${issueHidden}"><span class="field-label">Issue note (required when flagged)</span><textarea data-field="issue_note" placeholder="Explain why this item cannot be judged reliably.">${escapeHtml(item.draft.issue_note)}</textarea></label>
@@ -320,6 +349,14 @@ REVIEW_UI_HTML = r"""<!doctype html>
           </div>
         </div>
       </article>`;
+    }
+
+    function renderRecommendation(recommendation) {
+      if (!recommendation) return "";
+      const labels = dimensions.map(([key, label]) =>
+        `<span>${escapeHtml(label)}: ${recommendation[key] ? "Yes" : "No"}</span>`
+      ).join("");
+      return `<strong>Rubric recommendation</strong><div class="recommendation-labels">${labels}</div><pre>${escapeHtml(recommendation.rationale)}</pre>`;
     }
 
     function renderQuestions() {
@@ -355,6 +392,31 @@ REVIEW_UI_HTML = r"""<!doctype html>
             clearTimeout(saveTimers.get(timerKey));
             saveTimers.set(timerKey, setTimeout(() => saveItem(itemId, {[textarea.dataset.field]: textarea.value}), 500));
           });
+        });
+        const showButton = article.querySelector('[data-action="show-recommendation"]');
+        if (showButton) showButton.addEventListener("click", async () => {
+          try {
+            const recommendation = await request(`/api/recommendations/${encodeURIComponent(itemId)}`);
+            revealedRecommendations.set(itemId, recommendation);
+            const panel = article.querySelector("[data-recommendation]");
+            panel.innerHTML = renderRecommendation(recommendation);
+            panel.classList.remove("hidden");
+            showButton.textContent = "Recommendation shown";
+            showButton.disabled = true;
+          } catch (error) { showError(error); }
+        });
+        const copyButton = article.querySelector('[data-action="copy-recommendation"]');
+        if (copyButton) copyButton.addEventListener("click", async () => {
+          try {
+            const result = await request(`/api/items/${encodeURIComponent(itemId)}/apply-recommendation`, {method: "POST", body: "{}"});
+            sectionData.question_groups.forEach((group) => {
+              const item = group.items.find((candidate) => candidate.item_id === itemId);
+              if (item) item.draft = result.draft;
+            });
+            updateProgress(result.progress);
+            renderQuestions();
+            setSaveState("Recommendation copied");
+          } catch (error) { showError(error); }
         });
       });
     }
@@ -396,7 +458,14 @@ REVIEW_UI_HTML = r"""<!doctype html>
     async function initialize() {
       try {
         state = await request("/api/state");
-        document.getElementById("reviewer").textContent = state.reviewer.replace("_", " ");
+        activeReviewer = state.reviewer;
+        const reviewerSelect = document.getElementById("reviewer-select");
+        reviewerSelect.innerHTML = state.available_reviewers.map((reviewer) =>
+          `<option value="${escapeHtml(reviewer)}">${escapeHtml(reviewer.replace("_", " "))}</option>`
+        ).join("");
+        reviewerSelect.value = activeReviewer;
+        reviewerSelect.closest(".brand").querySelector("label").classList.toggle("hidden", state.available_reviewers.length === 1);
+        reviewerSelect.classList.toggle("hidden", state.available_reviewers.length === 1);
         document.getElementById("annotator-id").value = state.annotator_id;
         updateProgress(state.progress);
         const firstOpen = state.sections.find((section) => section.remaining > 0) || state.sections[0];
@@ -408,6 +477,18 @@ REVIEW_UI_HTML = r"""<!doctype html>
     }
 
     document.getElementById("incomplete-only").addEventListener("change", () => renderQuestions());
+    document.getElementById("reviewer-select").addEventListener("change", async (event) => {
+      activeReviewer = event.target.value;
+      revealedRecommendations.clear();
+      state = await request("/api/state");
+      document.getElementById("annotator-id").value = state.annotator_id;
+      updateProgress(state.progress);
+      const firstOpen = state.sections.find((section) => section.remaining > 0) || state.sections[0];
+      currentSectionId = firstOpen.section_id;
+      renderSidebar();
+      await loadSection(currentSectionId);
+      setSaveState("Reviewer switched");
+    });
     document.getElementById("annotator-id").addEventListener("change", async (event) => {
       setSaveState("Saving...", "saving");
       try {
@@ -423,6 +504,34 @@ REVIEW_UI_HTML = r"""<!doctype html>
     document.getElementById("next").addEventListener("click", () => {
       const index = state.sections.findIndex((section) => section.section_id === currentSectionId);
       if (index < state.sections.length - 1) loadSection(state.sections[index + 1].section_id);
+    });
+    document.getElementById("copy-section").addEventListener("click", async () => {
+      if (!state.recommendations_available) return;
+      try {
+        const result = await request(`/api/sections/${encodeURIComponent(currentSectionId)}/apply-recommendations`, {method: "POST", body: "{}"});
+        updateProgress(result.progress);
+        state = await request("/api/state");
+        await loadSection(currentSectionId);
+        setSaveState(`${result.copied} recommendations copied`);
+      } catch (error) { showError(error); }
+    });
+    document.getElementById("show-section").addEventListener("click", async () => {
+      if (!state.recommendations_available) return;
+      try {
+        const result = await request(`/api/sections/${encodeURIComponent(currentSectionId)}/recommendations`);
+        Object.entries(result.recommendations).forEach(([itemId, recommendation]) => revealedRecommendations.set(itemId, recommendation));
+        renderQuestions();
+        setSaveState("Section hints shown");
+      } catch (error) { showError(error); }
+    });
+    document.getElementById("show-all").addEventListener("click", async () => {
+      if (!state.recommendations_available) return;
+      try {
+        const result = await request("/api/recommendations");
+        Object.entries(result.recommendations).forEach(([itemId, recommendation]) => revealedRecommendations.set(itemId, recommendation));
+        renderQuestions();
+        setSaveState("All hints available");
+      } catch (error) { showError(error); }
     });
     initialize();
   </script>

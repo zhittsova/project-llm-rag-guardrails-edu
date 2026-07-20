@@ -118,6 +118,31 @@ def test_incomplete_section_is_not_flushed(tmp_path: Path) -> None:
     assert saved["grounded"] is None
 
 
+def test_complete_human_labels_do_not_require_rationale(tmp_path: Path) -> None:
+    study_dir = _study_dir(tmp_path)
+    store = ReviewStore(study_dir, "reviewer_a", section_size=1)
+    item_id = store.sections()[0]["item_ids"][0]
+
+    result = store.save_draft(
+        item_id,
+        {
+            "annotator_id": "alice",
+            **{dimension: True for dimension in DIMENSIONS},
+            "rationale": "",
+        },
+    )
+
+    assert result["section_flushed"] is True
+    saved = next(
+        row
+        for row in _read_jsonl(
+            study_dir / "judge_calibration_reviewer_a.jsonl"
+        )
+        if row["item_id"] == item_id
+    )
+    assert saved["rationale"] == ""
+
+
 def test_flagged_issue_is_exported_without_forcing_labels(tmp_path: Path) -> None:
     study_dir = _study_dir(tmp_path)
     store = ReviewStore(study_dir, "reviewer_a", section_size=1)

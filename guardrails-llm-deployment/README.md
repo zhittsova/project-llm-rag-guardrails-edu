@@ -35,6 +35,8 @@ src/guardrails_llm/
   holdout_review.py        blinded double review and adjudication workflow
   review_store.py          SQLite drafts and atomic reviewer-file export
   review_server.py         reviewer-isolated local annotation interface
+  review_recommendations.py separate, rationalized review hints
+  review_reconciliation.py three-way comparison and adjudication storage
 data/                      corpus, policy, and versioned evaluation files
 reports/                   compact calibration evidence
 tests/                     deterministic tests with fake model clients
@@ -124,12 +126,15 @@ The versioned v2 dataset has 2,000 generated cases:
 - 400 calibration;
 - 400 frozen holdout.
 
-The latest identical-split calibration evidence is in
+The historical identical-split calibration evidence is in
 [`reports/inhouse_retrieval_recovery_calibration_v4.json`](reports/inhouse_retrieval_recovery_calibration_v4.json).
-The model-backed hybrid reached `391/400`, `0.978` behavior accuracy and
+Before the evaluation-language repair, the model-backed hybrid reached
+`391/400`, `0.978` behavior accuracy and
 macro-F1, `0.91` answer recall, and `0.045` false-refusal rate. It produced no
 unsafe answers, and verifier-conditioned citation-entailment precision was
-`1.0`.
+`1.0`. The repair changed 100 calibration prompts and 300 development
+prompts, so this is a historical diagnostic. The model-backed development and
+calibration sequence must be rerun before publishing current figures.
 
 The additional expected-document citation diagnostic remains below its gate at
 `0.752`. Generated expected-document labels can omit other valid supporting
@@ -214,6 +219,22 @@ Do not share `judge_study_mapping.jsonl`, prediction files, the SQLite store,
 or one reviewer's JSONL files with the other reviewer. Only the two blinded
 item files and the reviewer's assigned UI process are needed.
 
+Human rationales are optional; all five boolean dimensions remain required.
+To create separate deterministic rubric recommendations without changing
+either human file:
+
+```bash
+uv run guardrails-llm prepare-judge-recommendations \
+  --study-dir path/to/human_judge_study
+```
+
+The UI hides recommendations by default and can reveal or copy one item, one
+section, or the complete study. Every reveal and copy is written to the local
+SQLite assistance log. Any affected item is an assisted review and must not be
+reported as independently labeled. A trusted single operator may enable the
+reviewer picker with `--allow-reviewer-switch`; do not use that flag when two
+people are performing blinded independent review.
+
 Check reviewer progress and reconcile two completed reviews locally:
 
 ```bash
@@ -223,6 +244,16 @@ uv run guardrails-llm reconcile-judge-study \
   --study-dir path/to/human_judge_study
 uv run guardrails-llm finalize-judge-study \
   --study-dir path/to/human_judge_study
+```
+
+After both human reviews and the recommendation files are complete, inspect all
+three judgments side by side and adjudicate only Reviewer A versus Reviewer B
+disagreements:
+
+```bash
+uv run guardrails-llm review-judge-reconciliation \
+  --study-dir path/to/human_judge_study \
+  --open
 ```
 
 Judge predictions are captured without reading human labels. Repeat the command
@@ -297,7 +328,9 @@ uv run guardrails-llm build-final-evidence
 ```
 
 This writes `reports/final_calibration_evidence.json` and
-`reports/final_calibration_evidence.md`. It rejects holdout-derived or
+`reports/final_calibration_evidence.md`. Existing checked-in output reflects
+the historical pre-repair capture and must be rebuilt after the repaired-source
+model runs. The command rejects holdout-derived or
 incomplete inputs and keeps failed diagnostics visible.
 
 Only after holdout annotations are independently reviewed, adjudicated, and

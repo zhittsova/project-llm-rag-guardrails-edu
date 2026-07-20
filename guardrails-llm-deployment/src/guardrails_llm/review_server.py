@@ -7,7 +7,7 @@ from collections import OrderedDict
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from .judge_study_audit import audit_judge_study
 from .review_store import ReviewStore
@@ -22,10 +22,22 @@ class ReviewHTTPServer(ThreadingHTTPServer):
         server_address: tuple[str, int],
         store: ReviewStore,
         quality_report: dict[str, object] | None = None,
+        stores: dict[str, ReviewStore] | None = None,
     ) -> None:
         self.store = store
+        self.stores = stores or {store.reviewer: store}
         self.quality_report = quality_report
         super().__init__(server_address, ReviewRequestHandler)
+
+    def store_for(self, request_path: str) -> ReviewStore:
+        reviewer = parse_qs(urlparse(request_path).query).get(
+            "reviewer",
+            [self.store.reviewer],
+        )[0]
+        try:
+            return self.stores[reviewer]
+        except KeyError as exc:
+            raise KeyError(f"unknown reviewer: {reviewer}") from exc
 
 
 class ReviewRequestHandler(BaseHTTPRequestHandler):
@@ -33,34 +45,120 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlparse(self.path).path
+        try:
+            store = self.server.store_for(self.path)
+        except KeyError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+            return
         if path == "/":
             self._send_html(REVIEW_UI_HTML)
             return
         if path == "/api/state":
-            self._send_json(_state_payload(self.server))
+            self._send_json(_state_payload(self.server, store))
+            return
+        if path == "/api/recommendations":
+            try:
+                self._send_json(
+                    {"recommendations": store.reveal_all_recommendations()}
+                )
+            except FileNotFoundError as exc:
+                self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        if (
+            path.startswith("/api/sections/")
+            and path.endswith("/recommendations")
+        ):
+            section_id = unquote(
+                path.removeprefix("/api/sections/").removesuffix(
+                    "/recommendations"
+                )
+            )
+            try:
+                self._send_json(
+                    {
+                        "recommendations": (
+                            store.reveal_section_recommendations(section_id)
+                        )
+                    }
+                )
+            except KeyError as exc:
+                self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+            except FileNotFoundError as exc:
+                self._send_error(HTTPStatus.CONFLICT, str(exc))
+            return
+        if path.startswith("/api/recommendations/"):
+            item_id = unquote(path.removeprefix("/api/recommendations/"))
+            try:
+                self._send_json(
+                    store.reveal_recommendation(item_id)
+                )
+            except KeyError as exc:
+                self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+            except FileNotFoundError as exc:
+                self._send_error(HTTPStatus.CONFLICT, str(exc))
             return
         if path.startswith("/api/sections/"):
             section_id = unquote(path.removeprefix("/api/sections/"))
             try:
-                self._send_json(_section_payload(self.server.store, section_id))
+                self._send_json(_section_payload(store, section_id))
             except KeyError as exc:
                 self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+            return
+        self._send_error(HTTPStatus.NOT_FOUND, "not found")
+
+    def do_POST(self) -> None:
+        path = urlparse(self.path).path
+        try:
+            store = self.server.store_for(self.path)
+            self._read_json()
+            if (
+                path.startswith("/api/items/")
+                and path.endswith("/apply-recommendation")
+            ):
+                item_id = unquote(
+                    path.removeprefix("/api/items/").removesuffix(
+                        "/apply-recommendation"
+                    )
+                )
+                self._send_json(
+                    store.apply_recommendation(item_id)
+                )
+                return
+            if (
+                path.startswith("/api/sections/")
+                and path.endswith("/apply-recommendations")
+            ):
+                section_id = unquote(
+                    path.removeprefix("/api/sections/").removesuffix(
+                        "/apply-recommendations"
+                    )
+                )
+                self._send_json(
+                    store.apply_section_recommendations(section_id)
+                )
+                return
+        except KeyError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+            return
+        except (FileNotFoundError, ValueError) as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
             return
         self._send_error(HTTPStatus.NOT_FOUND, "not found")
 
     def do_PATCH(self) -> None:
         path = urlparse(self.path).path
         try:
+            store = self.server.store_for(self.path)
             payload = self._read_json()
             if path == "/api/annotator":
                 annotator_id = payload.get("annotator_id")
                 if not isinstance(annotator_id, str):
                     raise ValueError("annotator_id must be a string")
-                self._send_json(self.server.store.set_annotator_id(annotator_id))
+                self._send_json(store.set_annotator_id(annotator_id))
                 return
             if path.startswith("/api/items/"):
                 item_id = unquote(path.removeprefix("/api/items/"))
-                self._send_json(self.server.store.save_draft(item_id, payload))
+                self._send_json(store.save_draft(item_id, payload))
                 return
         except KeyError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
@@ -125,8 +223,14 @@ def create_review_server(
     *,
     port: int = 8765,
     quality_report: dict[str, object] | None = None,
+    stores: dict[str, ReviewStore] | None = None,
 ) -> ReviewHTTPServer:
-    return ReviewHTTPServer(("127.0.0.1", port), store, quality_report)
+    return ReviewHTTPServer(
+        ("127.0.0.1", port),
+        store,
+        quality_report,
+        stores,
+    )
 
 
 def serve_review_ui(
@@ -136,6 +240,7 @@ def serve_review_ui(
     port: int = 8765,
     section_size: int = 10,
     open_browser: bool = False,
+    allow_reviewer_switch: bool = False,
 ) -> None:
     quality_report = audit_judge_study(study_dir)
     if not quality_report["quality_gates_passed"]:
@@ -147,8 +252,26 @@ def serve_review_ui(
         raise ValueError(
             "judge study failed quality gates: " + ", ".join(failed)
         )
-    store = ReviewStore(study_dir, reviewer, section_size=section_size)
-    server = create_review_server(store, port=port, quality_report=quality_report)
+    reviewer_names = (
+        ("reviewer_a", "reviewer_b")
+        if allow_reviewer_switch
+        else (reviewer,)
+    )
+    stores = {
+        reviewer_name: ReviewStore(
+            study_dir,
+            reviewer_name,
+            section_size=section_size,
+        )
+        for reviewer_name in reviewer_names
+    }
+    store = stores[reviewer]
+    server = create_review_server(
+        store,
+        port=port,
+        quality_report=quality_report,
+        stores=stores,
+    )
     host, bound_port = server.server_address
     url = f"http://{host}:{bound_port}"
     print(f"Human judge review UI: {url}")
@@ -164,19 +287,24 @@ def serve_review_ui(
         server.server_close()
 
 
-def _state_payload(server: ReviewHTTPServer) -> dict[str, object]:
-    items = server.store.items()
-    annotator_id = server.store.draft(str(items[0]["item_id"]))["annotator_id"]
+def _state_payload(
+    server: ReviewHTTPServer,
+    store: ReviewStore,
+) -> dict[str, object]:
+    items = store.items()
+    annotator_id = store.draft(str(items[0]["item_id"]))["annotator_id"]
     return {
         "schema_version": 1,
-        "reviewer": server.store.reviewer,
+        "reviewer": store.reviewer,
+        "available_reviewers": sorted(server.stores),
         "annotator_id": annotator_id,
-        "progress": server.store.progress(),
-        "sections": server.store.sections(),
+        "progress": store.progress(),
+        "sections": store.sections(),
         "study_quality_passed": bool(
             server.quality_report
             and server.quality_report.get("quality_gates_passed")
         ),
+        "recommendations_available": store.recommendations_available(),
     }
 
 

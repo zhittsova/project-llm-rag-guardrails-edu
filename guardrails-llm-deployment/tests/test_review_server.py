@@ -7,6 +7,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from guardrails_llm.review_server import create_review_server
+from guardrails_llm.review_recommendations import prepare_review_recommendations
 from guardrails_llm.review_store import ReviewStore
 
 
@@ -35,6 +36,31 @@ def test_review_server_exposes_only_selected_reviewer_and_blinded_items(
     assert section["question_groups"][0]["items"][0]["draft"]["grounded"] is None
 
 
+def test_review_server_can_switch_reviewers_without_mixing_drafts(
+    tmp_path: Path,
+) -> None:
+    study_dir = _study_dir(tmp_path)
+    reviewer_a = ReviewStore(study_dir, "reviewer_a", section_size=1)
+    reviewer_b = ReviewStore(study_dir, "reviewer_b", section_size=1)
+    item_id = reviewer_a.sections()[0]["item_ids"][0]
+
+    with _running_server(
+        reviewer_a,
+        stores={"reviewer_a": reviewer_a, "reviewer_b": reviewer_b},
+    ) as base_url:
+        state = _json_request(f"{base_url}/api/state?reviewer=reviewer_b")
+        _json_request(
+            f"{base_url}/api/items/{item_id}?reviewer=reviewer_b",
+            method="PATCH",
+            payload={"annotator_id": "bob", "grounded": False},
+        )
+
+    assert state["reviewer"] == "reviewer_b"
+    assert state["available_reviewers"] == ["reviewer_a", "reviewer_b"]
+    assert reviewer_b.draft(item_id)["grounded"] is False
+    assert reviewer_a.draft(item_id)["grounded"] is None
+
+
 def test_review_server_saves_draft_and_global_annotator(tmp_path: Path) -> None:
     study_dir = _study_dir(tmp_path)
     store = ReviewStore(study_dir, "reviewer_a", section_size=1)
@@ -57,6 +83,31 @@ def test_review_server_saves_draft_and_global_annotator(tmp_path: Path) -> None:
     assert store.draft(item_id)["rationale"] == "Supported by chunk one."
 
 
+def test_review_server_reveals_and_copies_recommendation_on_request(
+    tmp_path: Path,
+) -> None:
+    study_dir = _study_dir(tmp_path)
+    prepare_review_recommendations(study_dir)
+    store = ReviewStore(study_dir, "reviewer_a", section_size=1)
+    item_id = store.sections()[0]["item_ids"][0]
+
+    with _running_server(store) as base_url:
+        state = _json_request(f"{base_url}/api/state")
+        recommendation = _json_request(
+            f"{base_url}/api/recommendations/{item_id}"
+        )
+        copied = _json_request(
+            f"{base_url}/api/items/{item_id}/apply-recommendation",
+            method="POST",
+            payload={},
+        )
+
+    assert state["recommendations_available"] is True
+    assert recommendation["rationale"]
+    assert copied["draft"]["grounded"] is True
+    assert copied["draft"]["rationale"] == ""
+
+
 def test_review_server_renders_complete_local_ui(tmp_path: Path) -> None:
     store = ReviewStore(_study_dir(tmp_path), "reviewer_a", section_size=1)
 
@@ -67,6 +118,9 @@ def test_review_server_renders_complete_local_ui(tmp_path: Path) -> None:
     assert "Grounded" in html
     assert "Flag dataset issue" in html
     assert "Retrieved evidence" in html
+    assert "Show recommendation" in html
+    assert "Copy recommendation" in html
+    assert "Rationale (optional)" in html
     assert "model-prediction" not in html
 
 
@@ -91,11 +145,13 @@ class _running_server:
         self,
         store: ReviewStore,
         quality_report: dict[str, object] | None = None,
+        stores: dict[str, ReviewStore] | None = None,
     ) -> None:
         self.server = create_review_server(
             store,
             port=0,
             quality_report=quality_report,
+            stores=stores,
         )
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 

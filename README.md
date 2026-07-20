@@ -58,9 +58,11 @@ Run the guardrail-focused Workshop 3 demo with one command:
 ./scripts/run_workshop3_demo.sh
 ```
 
-This opens a static HTML comparison generated from the checked-in 400-case
-calibration evidence. It makes no API calls and keeps the frozen holdout
-unopened. To prepare BGE-M3 and run the same five scenarios through the live
+This opens a static HTML comparison generated from the checked-in historical
+400-case calibration evidence. That capture predates the evaluation-language
+repair and is retained as a diagnostic, not a current result. The command makes
+no API calls and keeps the frozen holdout unopened. To prepare BGE-M3 and run
+the same five scenarios through the live
 Fraunhofer-backed baseline and complete hybrid, use
 `./scripts/run_workshop3_demo.sh --live`; that mode is the explicit approval for
 remote model calls.
@@ -93,12 +95,13 @@ must not be committed.
 
 ## Evidence Status
 
-The complete in-house hybrid reached `391/400` behavior decisions on the
-generated calibration split (`0.978` accuracy and macro-F1), with no unsafe
-answers. Answer recall improved from `0.88` to `0.91`, and safe false-refusal
-rate improved from `0.06` to `0.045`, so the agreed primary calibration gates
-now pass. The consolidated comparison and its evidence boundary are published
-in
+The historical pre-repair in-house capture reached `391/400` behavior
+decisions on the generated calibration split (`0.978` accuracy and macro-F1),
+with no unsafe answers. The language repair changed 100 calibration prompts,
+so BGE thresholds, component benchmarks, common-split scenarios, failure
+analysis, and judge predictions must be rerun before those values can be called
+current evidence. The historical comparison and its evidence boundary are
+published in
 [`reports/final_calibration_evidence.md`](guardrails-llm-deployment/reports/final_calibration_evidence.md).
 
 The result is still not final. Expected-document citation precision is `0.752`,
@@ -116,8 +119,8 @@ labeling before canonical annotations are written.
 
 The LLM-judge study uses two blinded, family-disjoint 200-output sets. Qwen and
 MiniMax predictions can be captured without labels, but agreement metrics are
-reported only after two independent reviews and disagreement adjudication.
-The package includes a reviewer-isolated local UI with SQLite autosave,
+reported only after two human reviews and disagreement adjudication. The
+package includes a reviewer-isolated local UI with SQLite autosave,
 question-grouped sections, dataset-issue flags, and atomic JSONL export. Start
 one process per reviewer so neither reviewer can see the other's labels:
 
@@ -132,6 +135,23 @@ uv --directory guardrails-llm-deployment run guardrails-llm \
 The UI refuses to open a study that fails duplicate, language-template,
 model-backed-output, or evidence-coverage checks. Technique mappings and model
 predictions are never served to the browser.
+
+For a time-constrained assisted review, create separate rubric recommendations
+and expose reviewer switching explicitly:
+
+```bash
+uv --directory guardrails-llm-deployment run guardrails-llm \
+  prepare-judge-recommendations --study-dir path/to/human_judge_study
+uv --directory guardrails-llm-deployment run guardrails-llm \
+  review-judge-study --study-dir path/to/human_judge_study \
+  --reviewer reviewer_a --allow-reviewer-switch --open
+```
+
+Recommendations are hidden by default. Every reveal or copy is recorded as
+assisted provenance and is not independent human ground truth. After both
+human reviews are complete, `review-judge-reconciliation` shows Reviewer A,
+Reviewer B, and the recommendation side by side and saves adjudications only
+for human disagreements.
 
 ## Development
 

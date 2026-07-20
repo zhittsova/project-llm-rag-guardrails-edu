@@ -57,6 +57,8 @@ normal test runs must not call a remote API.
 - Human labels remain ground truth for judge calibration.
 - Keep reviewer drafts isolated. A reviewer UI must not expose technique
   mappings, model predictions, hidden labels, or another reviewer's data.
+- Treat recommendation-assisted labels as assisted review, not independent
+  human annotation. Preserve reveal and copy provenance.
 - Keep demos fail-closed: offline mode must not contact a provider, and live
   mode must retain an explicit remote-model gate and evidence-scope labels.
 - Treat malformed or ambiguous study items as dataset issues instead of

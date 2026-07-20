@@ -49,11 +49,8 @@ class HumanJudgeAnnotation:
                 raise ValueError(f"{self.item_id}: {dimension} must be true or false")
             if value is not None and not isinstance(value, bool):
                 raise ValueError(f"{self.item_id}: {dimension} must be true, false, or null")
-        if not isinstance(self.rationale, str) or (
-            complete and not self.rationale.strip()
-        ):
-            requirement = "a non-empty string" if complete else "a string"
-            raise ValueError(f"{self.item_id}: rationale must be {requirement}")
+        if not isinstance(self.rationale, str):
+            raise ValueError(f"{self.item_id}: rationale must be a string")
 
 
 def prepare_judge_study(
