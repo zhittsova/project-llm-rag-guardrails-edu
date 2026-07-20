@@ -121,6 +121,8 @@ def test_review_server_renders_complete_local_ui(tmp_path: Path) -> None:
     assert "Show recommendation" in html
     assert "Copy recommendation" in html
     assert "Rationale (optional)" in html
+    assert "reviewed; add an Annotator ID to export" in html
+    assert "async function refreshState()" in html
     assert "model-prediction" not in html
 
 

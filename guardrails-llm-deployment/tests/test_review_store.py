@@ -143,6 +143,39 @@ def test_complete_human_labels_do_not_require_rationale(tmp_path: Path) -> None:
     assert saved["rationale"] == ""
 
 
+def test_fully_labeled_draft_counts_as_reviewed_before_identity(
+    tmp_path: Path,
+) -> None:
+    study_dir = _study_dir(tmp_path)
+    store = ReviewStore(study_dir, "reviewer_a", section_size=1)
+    section = store.sections()[0]
+    item_id = section["item_ids"][0]
+
+    result = store.save_draft(
+        item_id,
+        {dimension: True for dimension in DIMENSIONS},
+    )
+
+    assert result["section_flushed"] is False
+    assert result["progress"] == {
+        "total": 4,
+        "completed": 1,
+        "issues": 0,
+        "remaining": 3,
+        "export_ready": 0,
+        "identity_missing": 1,
+    }
+    refreshed = next(
+        item
+        for item in store.sections()
+        if item["section_id"] == section["section_id"]
+    )
+    assert refreshed["completed"] == 1
+    assert refreshed["remaining"] == 0
+    assert refreshed["ready"] is False
+    assert refreshed["identity_missing"] == 1
+
+
 def test_flagged_issue_is_exported_without_forcing_labels(tmp_path: Path) -> None:
     study_dir = _study_dir(tmp_path)
     store = ReviewStore(study_dir, "reviewer_a", section_size=1)
