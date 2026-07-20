@@ -1,0 +1,798 @@
+{
+  "qwen_classifier_only": {
+    "expected_cases": 400,
+    "successful_cases": 400,
+    "capture_failures": 0,
+    "missing_cases": 0,
+    "metrics_on_successful_cases": {
+      "total": 400,
+      "passed": 389,
+      "pass_rate": 0.973,
+      "false_positive_refusals": 11,
+      "false_negative_answers": 0,
+      "by_category": {
+        "normal_course": {
+          "total": 100,
+          "passed": 89,
+          "false_positive_refusals": 11,
+          "false_negative_answers": 0
+        },
+        "privacy_pii": {
+          "total": 50,
+          "passed": 50,
+          "false_positive_refusals": 0,
+          "false_negative_answers": 0
+        },
+        "prompt_injection_paraphrase": {
+          "total": 26,
+          "passed": 26,
+          "false_positive_refusals": 0,
+          "false_negative_answers": 0
+        },
+        "unsupported_abstention": {
+          "total": 100,
+          "passed": 100,
+          "false_positive_refusals": 0,
+          "false_negative_answers": 0
+        },
+        "academic_integrity": {
+          "total": 100,
+          "passed": 100,
+          "false_positive_refusals": 0,
+          "false_negative_answers": 0
+        },
+        "unsafe_harm": {
+          "total": 24,
+          "passed": 24,
+          "false_positive_refusals": 0,
+          "false_negative_answers": 0
+        }
+      },
+      "avg_latency_ms": 23417.48,
+      "behavior_accuracy": 0.973,
+      "behavior_confusion_matrix": {
+        "answer": {
+          "answer": 89,
+          "block": 0,
+          "abstain": 11,
+          "redirect": 0
+        },
+        "block": {
+          "answer": 0,
+          "block": 100,
+          "abstain": 0,
+          "redirect": 0
+        },
+        "abstain": {
+          "answer": 0,
+          "block": 0,
+          "abstain": 100,
+          "redirect": 0
+        },
+        "redirect": {
+          "answer": 0,
+          "block": 0,
+          "abstain": 0,
+          "redirect": 100
+        }
+      },
+      "behavior_metrics": {
+        "answer": {
+          "support": 100,
+          "predicted": 89,
+          "true_positives": 89,
+          "precision": 1.0,
+          "recall": 0.89,
+          "f1": 0.942
+        },
+        "block": {
+          "support": 100,
+          "predicted": 100,
+          "true_positives": 100,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "abstain": {
+          "support": 100,
+          "predicted": 111,
+          "true_positives": 100,
+          "precision": 0.901,
+          "recall": 1.0,
+          "f1": 0.948
+        },
+        "redirect": {
+          "support": 100,
+          "predicted": 100,
+          "true_positives": 100,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        }
+      },
+      "macro_behavior_f1": 0.972,
+      "retrieval_evaluable_total": 200,
+      "retrieval_recall_at_3": 0.925,
+      "retrieval_hit_rate_at_3": 0.925,
+      "evidence_sufficiency_total": 102,
+      "evidence_sufficiency_accuracy": 0.892,
+      "supported_answer_total": 89,
+      "supported_answer_precision": 1.0,
+      "expected_document_citation_total": 282,
+      "expected_document_citation_precision": 0.784,
+      "citation_entailment_total": 282,
+      "citation_entailment_precision": 1.0,
+      "citation_entailment_scope": "model_verifier_conditioned",
+      "claim_support_total": 89,
+      "claim_support_rate": 1.0,
+      "claim_support_scope": "model_verifier_conditioned",
+      "safe_request_total": 200,
+      "safe_false_refusal_rate": 0.055,
+      "unsafe_request_total": 200,
+      "false_unsafe_answer_rate": 0.0,
+      "by_attack_type": {
+        "normal_course_positive_direct": {
+          "total": 25,
+          "passed": 24,
+          "behavior_correct": 24,
+          "behavior_accuracy": 0.96
+        },
+        "normal_course_positive_variant": {
+          "total": 25,
+          "passed": 24,
+          "behavior_correct": 24,
+          "behavior_accuracy": 0.96
+        },
+        "benign_guardrail_near_miss": {
+          "total": 50,
+          "passed": 41,
+          "behavior_correct": 41,
+          "behavior_accuracy": 0.82
+        },
+        "positive_direct_metadata_access": {
+          "total": 13,
+          "passed": 13,
+          "behavior_correct": 13,
+          "behavior_accuracy": 1.0
+        },
+        "positive_variant_metadata_access": {
+          "total": 13,
+          "passed": 13,
+          "behavior_correct": 13,
+          "behavior_accuracy": 1.0
+        },
+        "positive_direct_prompt_injection": {
+          "total": 13,
+          "passed": 13,
+          "behavior_correct": 13,
+          "behavior_accuracy": 1.0
+        },
+        "positive_variant_prompt_injection": {
+          "total": 13,
+          "passed": 13,
+          "behavior_correct": 13,
+          "behavior_accuracy": 1.0
+        },
+        "positive_direct_unsupported": {
+          "total": 25,
+          "passed": 25,
+          "behavior_correct": 25,
+          "behavior_accuracy": 1.0
+        },
+        "positive_variant_unsupported": {
+          "total": 25,
+          "passed": 25,
+          "behavior_correct": 25,
+          "behavior_accuracy": 1.0
+        },
+        "positive_direct_groundedness": {
+          "total": 25,
+          "passed": 25,
+          "behavior_correct": 25,
+          "behavior_accuracy": 1.0
+        },
+        "positive_variant_groundedness": {
+          "total": 25,
+          "passed": 25,
+          "behavior_correct": 25,
+          "behavior_accuracy": 1.0
+        },
+        "positive_direct_academic_integrity": {
+          "total": 25,
+          "passed": 25,
+          "behavior_correct": 25,
+          "behavior_accuracy": 1.0
+        },
+        "positive_variant_academic_integrity": {
+          "total": 75,
+          "passed": 75,
+          "behavior_correct": 75,
+          "behavior_accuracy": 1.0
+        },
+        "positive_direct_pii": {
+          "total": 12,
+          "passed": 12,
+          "behavior_correct": 12,
+          "behavior_accuracy": 1.0
+        },
+        "positive_variant_pii": {
+          "total": 12,
+          "passed": 12,
+          "behavior_correct": 12,
+          "behavior_accuracy": 1.0
+        },
+        "positive_direct_unsafe_request": {
+          "total": 12,
+          "passed": 12,
+          "behavior_correct": 12,
+          "behavior_accuracy": 1.0
+        },
+        "positive_variant_unsafe_request": {
+          "total": 12,
+          "passed": 12,
+          "behavior_correct": 12,
+          "behavior_accuracy": 1.0
+        }
+      },
+      "by_difficulty": {
+        "easy": {
+          "total": 50,
+          "passed": 46,
+          "behavior_correct": 46,
+          "behavior_accuracy": 0.92
+        },
+        "medium": {
+          "total": 275,
+          "passed": 268,
+          "behavior_correct": 268,
+          "behavior_accuracy": 0.975
+        },
+        "hard": {
+          "total": 75,
+          "passed": 75,
+          "behavior_correct": 75,
+          "behavior_accuracy": 1.0
+        }
+      }
+    },
+    "quality_gates": {
+      "complete_capture": true,
+      "behavior_accuracy": 0.973,
+      "behavior_accuracy_passed": true,
+      "macro_f1": 0.972,
+      "macro_f1_passed": true,
+      "answer_recall_passed": false,
+      "block_recall_passed": true,
+      "abstain_recall_passed": true,
+      "redirect_recall_passed": true,
+      "safe_false_refusal_rate": 0.055,
+      "safe_false_refusal_passed": false,
+      "supported_answer_precision_passed": true,
+      "expected_document_citation_precision_passed": false,
+      "citation_entailment_precision_passed": true,
+      "all_passed": false
+    },
+    "confidence_intervals": {
+      "method": "percentile_bootstrap",
+      "confidence_level": 0.95,
+      "samples_requested": 1000,
+      "seed": 0,
+      "row": {
+        "sampling_units": 400,
+        "metrics": {
+          "behavior_accuracy": {
+            "point": 0.9725,
+            "lower": 0.955,
+            "upper": 0.9875,
+            "samples_used": 1000
+          },
+          "macro_behavior_f1": {
+            "point": 0.9724,
+            "lower": 0.9558,
+            "upper": 0.9877,
+            "samples_used": 1000
+          },
+          "safe_false_refusal_rate": {
+            "point": 0.055,
+            "lower": 0.0253,
+            "upper": 0.0882,
+            "samples_used": 1000
+          },
+          "false_unsafe_answer_rate": {
+            "point": 0.0,
+            "lower": 0.0,
+            "upper": 0.0,
+            "samples_used": 1000
+          },
+          "retrieval_recall_at_3": {
+            "point": 0.925,
+            "lower": 0.8857,
+            "upper": 0.9594,
+            "samples_used": 1000
+          },
+          "supported_answer_precision": {
+            "point": 1.0,
+            "lower": 1.0,
+            "upper": 1.0,
+            "samples_used": 1000
+          },
+          "citation_entailment_precision": {
+            "point": 1.0,
+            "lower": 1.0,
+            "upper": 1.0,
+            "samples_used": 1000
+          },
+          "claim_support_rate": {
+            "point": 1.0,
+            "lower": 1.0,
+            "upper": 1.0,
+            "samples_used": 1000
+          },
+          "abstain_recall": {
+            "point": 1.0,
+            "lower": 1.0,
+            "upper": 1.0,
+            "samples_used": 1000
+          }
+        }
+      },
+      "family": {
+        "sampling_units": 8,
+        "metrics": {
+          "behavior_accuracy": {
+            "point": 0.9725,
+            "lower": 0.9614,
+            "upper": 0.99,
+            "samples_used": 1000
+          },
+          "macro_behavior_f1": {
+            "point": 0.9724,
+            "lower": 0.7135,
+            "upper": 0.979,
+            "samples_used": 1000
+          },
+          "safe_false_refusal_rate": {
+            "point": 0.055,
+            "lower": 0.0357,
+            "upper": 0.1186,
+            "samples_used": 1000
+          },
+          "false_unsafe_answer_rate": {
+            "point": 0.0,
+            "lower": 0.0,
+            "upper": 0.0,
+            "samples_used": 1000
+          },
+          "retrieval_recall_at_3": {
+            "point": 0.925,
+            "lower": 0.8596,
+            "upper": 0.9535,
+            "samples_used": 1000
+          },
+          "supported_answer_precision": {
+            "point": 1.0,
+            "lower": 1.0,
+            "upper": 1.0,
+            "samples_used": 1000
+          },
+          "citation_entailment_precision": {
+            "point": 1.0,
+            "lower": 1.0,
+            "upper": 1.0,
+            "samples_used": 1000
+          },
+          "claim_support_rate": {
+            "point": 1.0,
+            "lower": 1.0,
+            "upper": 1.0,
+            "samples_used": 1000
+          },
+          "abstain_recall": {
+            "point": 1.0,
+            "lower": 1.0,
+            "upper": 1.0,
+            "samples_used": 908
+          }
+        }
+      }
+    }
+  },
+  "complete_inhouse_hybrid": {
+    "expected_cases": 400,
+    "successful_cases": 400,
+    "capture_failures": 0,
+    "missing_cases": 0,
+    "metrics_on_successful_cases": {
+      "total": 400,
+      "passed": 392,
+      "pass_rate": 0.98,
+      "false_positive_refusals": 8,
+      "false_negative_answers": 0,
+      "by_category": {
+        "normal_course": {
+          "total": 100,
+          "passed": 92,
+          "false_positive_refusals": 8,
+          "false_negative_answers": 0
+        },
+        "privacy_pii": {
+          "total": 50,
+          "passed": 50,
+          "false_positive_refusals": 0,
+          "false_negative_answers": 0
+        },
+        "prompt_injection_paraphrase": {
+          "total": 26,
+          "passed": 26,
+          "false_positive_refusals": 0,
+          "false_negative_answers": 0
+        },
+        "unsupported_abstention": {
+          "total": 100,
+          "passed": 100,
+          "false_positive_refusals": 0,
+          "false_negative_answers": 0
+        },
+        "academic_integrity": {
+          "total": 100,
+          "passed": 100,
+          "false_positive_refusals": 0,
+          "false_negative_answers": 0
+        },
+        "unsafe_harm": {
+          "total": 24,
+          "passed": 24,
+          "false_positive_refusals": 0,
+          "false_negative_answers": 0
+        }
+      },
+      "avg_latency_ms": 22502.85,
+      "behavior_accuracy": 0.98,
+      "behavior_confusion_matrix": {
+        "answer": {
+          "answer": 92,
+          "block": 0,
+          "abstain": 8,
+          "redirect": 0
+        },
+        "block": {
+          "answer": 0,
+          "block": 100,
+          "abstain": 0,
+          "redirect": 0
+        },
+        "abstain": {
+          "answer": 0,
+          "block": 0,
+          "abstain": 100,
+          "redirect": 0
+        },
+        "redirect": {
+          "answer": 0,
+          "block": 0,
+          "abstain": 0,
+          "redirect": 100
+        }
+      },
+      "behavior_metrics": {
+        "answer": {
+          "support": 100,
+          "predicted": 92,
+          "true_positives": 92,
+          "precision": 1.0,
+          "recall": 0.92,
+          "f1": 0.958
+        },
+        "block": {
+          "support": 100,
+          "predicted": 100,
+          "true_positives": 100,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "abstain": {
+          "support": 100,
+          "predicted": 108,
+          "true_positives": 100,
+          "precision": 0.926,
+          "recall": 1.0,
+          "f1": 0.962
+        },
+        "redirect": {
+          "support": 100,
+          "predicted": 100,
+          "true_positives": 100,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        }
+      },
+      "macro_behavior_f1": 0.98,
+      "retrieval_evaluable_total": 200,
+      "retrieval_recall_at_3": 0.925,
+      "retrieval_hit_rate_at_3": 0.925,
+      "evidence_sufficiency_total": 103,
+      "evidence_sufficiency_accuracy": 0.922,
+      "supported_answer_total": 92,
+      "supported_answer_precision": 1.0,
+      "expected_document_citation_total": 303,
+      "expected_document_citation_precision": 0.766,
+      "citation_entailment_total": 303,
+      "citation_entailment_precision": 1.0,
+      "citation_entailment_scope": "model_verifier_conditioned",
+      "claim_support_total": 92,
+      "claim_support_rate": 1.0,
+      "claim_support_scope": "model_verifier_conditioned",
+      "safe_request_total": 200,
+      "safe_false_refusal_rate": 0.04,
+      "unsafe_request_total": 200,
+      "false_unsafe_answer_rate": 0.0,
+      "by_attack_type": {
+        "normal_course_positive_direct": {
+          "total": 25,
+          "passed": 25,
+          "behavior_correct": 25,
+          "behavior_accuracy": 1.0
+        },
+        "normal_course_positive_variant": {
+          "total": 25,
+          "passed": 25,
+          "behavior_correct": 25,
+          "behavior_accuracy": 1.0
+        },
+        "benign_guardrail_near_miss": {
+          "total": 50,
+          "passed": 42,
+          "behavior_correct": 42,
+          "behavior_accuracy": 0.84
+        },
+        "positive_direct_metadata_access": {
+          "total": 13,
+          "passed": 13,
+          "behavior_correct": 13,
+          "behavior_accuracy": 1.0
+        },
+        "positive_variant_metadata_access": {
+          "total": 13,
+          "passed": 13,
+          "behavior_correct": 13,
+          "behavior_accuracy": 1.0
+        },
+        "positive_direct_prompt_injection": {
+          "total": 13,
+          "passed": 13,
+          "behavior_correct": 13,
+          "behavior_accuracy": 1.0
+        },
+        "positive_variant_prompt_injection": {
+          "total": 13,
+          "passed": 13,
+          "behavior_correct": 13,
+          "behavior_accuracy": 1.0
+        },
+        "positive_direct_unsupported": {
+          "total": 25,
+          "passed": 25,
+          "behavior_correct": 25,
+          "behavior_accuracy": 1.0
+        },
+        "positive_variant_unsupported": {
+          "total": 25,
+          "passed": 25,
+          "behavior_correct": 25,
+          "behavior_accuracy": 1.0
+        },
+        "positive_direct_groundedness": {
+          "total": 25,
+          "passed": 25,
+          "behavior_correct": 25,
+          "behavior_accuracy": 1.0
+        },
+        "positive_variant_groundedness": {
+          "total": 25,
+          "passed": 25,
+          "behavior_correct": 25,
+          "behavior_accuracy": 1.0
+        },
+        "positive_direct_academic_integrity": {
+          "total": 25,
+          "passed": 25,
+          "behavior_correct": 25,
+          "behavior_accuracy": 1.0
+        },
+        "positive_variant_academic_integrity": {
+          "total": 75,
+          "passed": 75,
+          "behavior_correct": 75,
+          "behavior_accuracy": 1.0
+        },
+        "positive_direct_pii": {
+          "total": 12,
+          "passed": 12,
+          "behavior_correct": 12,
+          "behavior_accuracy": 1.0
+        },
+        "positive_variant_pii": {
+          "total": 12,
+          "passed": 12,
+          "behavior_correct": 12,
+          "behavior_accuracy": 1.0
+        },
+        "positive_direct_unsafe_request": {
+          "total": 12,
+          "passed": 12,
+          "behavior_correct": 12,
+          "behavior_accuracy": 1.0
+        },
+        "positive_variant_unsafe_request": {
+          "total": 12,
+          "passed": 12,
+          "behavior_correct": 12,
+          "behavior_accuracy": 1.0
+        }
+      },
+      "by_difficulty": {
+        "easy": {
+          "total": 50,
+          "passed": 47,
+          "behavior_correct": 47,
+          "behavior_accuracy": 0.94
+        },
+        "medium": {
+          "total": 275,
+          "passed": 270,
+          "behavior_correct": 270,
+          "behavior_accuracy": 0.982
+        },
+        "hard": {
+          "total": 75,
+          "passed": 75,
+          "behavior_correct": 75,
+          "behavior_accuracy": 1.0
+        }
+      }
+    },
+    "quality_gates": {
+      "complete_capture": true,
+      "behavior_accuracy": 0.98,
+      "behavior_accuracy_passed": true,
+      "macro_f1": 0.98,
+      "macro_f1_passed": true,
+      "answer_recall_passed": true,
+      "block_recall_passed": true,
+      "abstain_recall_passed": true,
+      "redirect_recall_passed": true,
+      "safe_false_refusal_rate": 0.04,
+      "safe_false_refusal_passed": true,
+      "supported_answer_precision_passed": true,
+      "expected_document_citation_precision_passed": false,
+      "citation_entailment_precision_passed": true,
+      "all_passed": false
+    },
+    "confidence_intervals": {
+      "method": "percentile_bootstrap",
+      "confidence_level": 0.95,
+      "samples_requested": 1000,
+      "seed": 0,
+      "row": {
+        "sampling_units": 400,
+        "metrics": {
+          "behavior_accuracy": {
+            "point": 0.98,
+            "lower": 0.965,
+            "upper": 0.9925,
+            "samples_used": 1000
+          },
+          "macro_behavior_f1": {
+            "point": 0.98,
+            "lower": 0.9647,
+            "upper": 0.9924,
+            "samples_used": 1000
+          },
+          "safe_false_refusal_rate": {
+            "point": 0.04,
+            "lower": 0.015,
+            "upper": 0.0693,
+            "samples_used": 1000
+          },
+          "false_unsafe_answer_rate": {
+            "point": 0.0,
+            "lower": 0.0,
+            "upper": 0.0,
+            "samples_used": 1000
+          },
+          "retrieval_recall_at_3": {
+            "point": 0.925,
+            "lower": 0.8857,
+            "upper": 0.9594,
+            "samples_used": 1000
+          },
+          "supported_answer_precision": {
+            "point": 1.0,
+            "lower": 1.0,
+            "upper": 1.0,
+            "samples_used": 1000
+          },
+          "citation_entailment_precision": {
+            "point": 1.0,
+            "lower": 1.0,
+            "upper": 1.0,
+            "samples_used": 1000
+          },
+          "claim_support_rate": {
+            "point": 1.0,
+            "lower": 1.0,
+            "upper": 1.0,
+            "samples_used": 1000
+          },
+          "abstain_recall": {
+            "point": 1.0,
+            "lower": 1.0,
+            "upper": 1.0,
+            "samples_used": 1000
+          }
+        }
+      },
+      "family": {
+        "sampling_units": 8,
+        "metrics": {
+          "behavior_accuracy": {
+            "point": 0.98,
+            "lower": 0.9667,
+            "upper": 0.9964,
+            "samples_used": 1000
+          },
+          "macro_behavior_f1": {
+            "point": 0.98,
+            "lower": 0.7176,
+            "upper": 0.9852,
+            "samples_used": 1000
+          },
+          "safe_false_refusal_rate": {
+            "point": 0.04,
+            "lower": 0.0101,
+            "upper": 0.0847,
+            "samples_used": 1000
+          },
+          "false_unsafe_answer_rate": {
+            "point": 0.0,
+            "lower": 0.0,
+            "upper": 0.0,
+            "samples_used": 1000
+          },
+          "retrieval_recall_at_3": {
+            "point": 0.925,
+            "lower": 0.8596,
+            "upper": 0.9535,
+            "samples_used": 1000
+          },
+          "supported_answer_precision": {
+            "point": 1.0,
+            "lower": 1.0,
+            "upper": 1.0,
+            "samples_used": 1000
+          },
+          "citation_entailment_precision": {
+            "point": 1.0,
+            "lower": 1.0,
+            "upper": 1.0,
+            "samples_used": 1000
+          },
+          "claim_support_rate": {
+            "point": 1.0,
+            "lower": 1.0,
+            "upper": 1.0,
+            "samples_used": 1000
+          },
+          "abstain_recall": {
+            "point": 1.0,
+            "lower": 1.0,
+            "upper": 1.0,
+            "samples_used": 908
+          }
+        }
+      }
+    }
+  }
+}
