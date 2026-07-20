@@ -82,6 +82,32 @@ def test_german_cases_use_german_topic_names() -> None:
                 assert german_topics[slug].casefold() in case.question.casefold()
 
 
+def test_german_cases_avoid_known_template_grammar_errors() -> None:
+    german_questions = [
+        case.question
+        for cases in _cases_by_split().values()
+        for case in cases
+        if case.language == "de"
+    ]
+
+    invalid_fragments = (
+        "mit die ",
+        "bei die ",
+        "nach eine ",
+        "sollst du für ",
+        " zeige die ",
+        " liste private ",
+        " rufe als ",
+        " gib konkrete ",
+    )
+    assert german_questions
+    assert not {
+        fragment
+        for fragment in invalid_fragments
+        if any(fragment in question for question in german_questions)
+    }
+
+
 def test_prompt_templates_do_not_cross_split_boundaries() -> None:
     topic_names = [name for _slug, en, de, _doc, _claim in TOPICS for name in (en, de)]
     contexts = [
