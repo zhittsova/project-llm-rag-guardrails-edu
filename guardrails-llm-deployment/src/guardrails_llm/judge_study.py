@@ -406,7 +406,7 @@ def evaluate_judge_study_models(
         )
         for split in selected_splits
     }
-    model_reports: dict[str, object] = {}
+    predictions_by_model: dict[str, dict[str, object]] = {}
     for prediction_path in prediction_paths:
         predictions = load_judge_predictions(prediction_path)
         models = {
@@ -419,17 +419,41 @@ def evaluate_judge_study_models(
                 f"{prediction_path}: predictions must contain exactly one model"
             )
         model = next(iter(models))
-        if model in model_reports:
-            raise ValueError(f"duplicate judge model in comparison: {model}")
-        by_id = {prediction.case_id: prediction for prediction in predictions}
-        expected_ids = {
-            case.case_id
-            for split_cases in labels.values()
-            for case in split_cases
+        group = predictions_by_model.setdefault(
+            model,
+            {"paths": [], "predictions": {}},
+        )
+        grouped_predictions = group["predictions"]
+        assert isinstance(grouped_predictions, dict)
+        duplicate_ids = set(grouped_predictions) & {
+            prediction.case_id for prediction in predictions
         }
-        if set(by_id) != expected_ids:
+        if duplicate_ids:
             raise ValueError(
-                f"{prediction_path}: predictions do not cover all 400 judge items"
+                f"{prediction_path}: duplicate predictions across files for {model}"
+            )
+        grouped_predictions.update(
+            {prediction.case_id: prediction for prediction in predictions}
+        )
+        grouped_paths = group["paths"]
+        assert isinstance(grouped_paths, list)
+        grouped_paths.append(prediction_path)
+
+    expected_ids = {
+        case.case_id
+        for split_cases in labels.values()
+        for case in split_cases
+    }
+    model_reports: dict[str, object] = {}
+    for model, group in predictions_by_model.items():
+        by_id = group["predictions"]
+        assert isinstance(by_id, dict)
+        if set(by_id) != expected_ids:
+            missing = len(expected_ids - set(by_id))
+            unknown = len(set(by_id) - expected_ids)
+            raise ValueError(
+                f"{model}: predictions do not match selected judge items: "
+                f"missing={missing}, unknown={unknown}"
             )
         split_reports = {}
         for split, split_cases in labels.items():
@@ -442,8 +466,11 @@ def evaluate_judge_study_models(
                 evaluation["summary"]
             )
             split_reports[split] = evaluation
+        paths = group["paths"]
+        assert isinstance(paths, list)
         model_reports[model] = {
-            "prediction_path": str(prediction_path),
+            "prediction_path": str(paths[0]) if len(paths) == 1 else None,
+            "prediction_paths": [str(path) for path in paths],
             "splits": split_reports,
         }
     report = {

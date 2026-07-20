@@ -317,6 +317,23 @@ def test_finalize_compiles_consensus_and_adjudicated_labels(tmp_path: Path) -> N
         "judge_calibration"
     }
 
+    validation_predictions = [
+        payload
+        for payload in _read_jsonl(prediction_paths[0])
+        if str(payload["case_id"]).startswith("judge_validation-")
+    ]
+    validation_path = study_dir / "qwen-validation-only.jsonl"
+    _write_jsonl(validation_path, validation_predictions)
+    combined_comparison = evaluate_judge_study_models(
+        study_dir=study_dir,
+        prediction_paths=[calibration_path, validation_path],
+        output_path=study_dir / "combined-comparison.json",
+    )
+
+    assert set(combined_comparison["models"]["qwen-test"]["splits"]) == set(
+        JUDGE_SPLITS
+    )
+
 
 def _source_results() -> dict[str, list[dict[str, object]]]:
     cases = load_eval_cases(CALIBRATION_CASES)
