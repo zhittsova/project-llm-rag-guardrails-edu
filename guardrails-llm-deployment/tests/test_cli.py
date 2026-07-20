@@ -171,6 +171,59 @@ def test_review_judge_study_command_starts_selected_reviewer(
     }
 
 
+def test_manage_policy_command_starts_local_instructor_ui(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    policy_path = tmp_path / "policy.toml"
+    runtime_path = tmp_path / "runtime.toml"
+    policy_path.write_text("extends_default = true\n", encoding="utf-8")
+    runtime_path.write_text("schema_version = 1\n", encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    class FakeManager:
+        def __init__(self, policy, runtime_config, *, state_dir=None):
+            captured.update(
+                policy=policy,
+                runtime_config=runtime_config,
+                state_dir=state_dir,
+            )
+
+    def fake_serve_policy_ui(manager, **kwargs: object) -> None:
+        captured["manager"] = manager
+        captured.update(kwargs)
+
+    monkeypatch.setattr("guardrails_llm.cli.PolicyManager", FakeManager)
+    monkeypatch.setattr("guardrails_llm.cli.serve_policy_ui", fake_serve_policy_ui)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "manage-policy",
+            "--policy",
+            str(policy_path),
+            "--runtime-config",
+            str(runtime_path),
+            "--state-dir",
+            str(tmp_path / "state"),
+            "--port",
+            "8870",
+            "--open",
+        ],
+    )
+
+    main()
+
+    assert isinstance(captured["manager"], FakeManager)
+    assert captured["policy"] == policy_path
+    assert captured["runtime_config"] == runtime_path
+    assert captured["state_dir"] == tmp_path / "state"
+    assert captured["host"] == "127.0.0.1"
+    assert captured["port"] == 8870
+    assert captured["open_browser"] is True
+
+
 def test_prepare_judge_recommendations_command(tmp_path: Path, monkeypatch) -> None:
     captured: dict[str, object] = {}
 
