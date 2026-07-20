@@ -358,19 +358,35 @@ and updates the dataset manifest before evaluation is permitted.
 
 ### Final Evidence and Holdout Release Gate
 
-Build the consolidated seven-technique calibration report from the checked-in
-400-case common-split evidence:
+After a repaired model capture, rebuild the model evaluation, deterministic
+summary, model-backed summary, failure analysis, and consolidated
+seven-technique report in one offline command. Pass the local raw capture
+explicitly because large per-case JSONL captures are intentionally ignored:
+
+```bash
+uv run guardrails-llm refresh-calibration-evidence \
+  --model-capture /path/to/inhouse_calibration_e2e.jsonl
+```
+
+The command verifies all 800 scenario runs against the selected calibration
+case IDs, binds the deterministic capture to its versioned manifest, rebuilds
+model metrics directly from the raw rows, and publishes outputs only after all
+release checks pass. It then applies the same checks as the standalone
+consolidation command:
 
 ```bash
 uv run guardrails-llm build-final-evidence
 ```
 
 This writes `reports/final_calibration_evidence.json` and
-`reports/final_calibration_evidence.md`. Existing checked-in consolidated
-output still reflects the historical pre-repair capture and will be rebuilt by
-the automated evidence-refresh workstream from the repaired captures. The
-command rejects holdout-derived or incomplete inputs and keeps failed
-diagnostics visible.
+`reports/final_calibration_evidence.md`. The checked-in report now reflects the
+repaired 400-case calibration capture. Both commands reject holdout-derived or
+incomplete inputs and keep failed diagnostics visible.
+
+A clean checkout can inspect and rebuild the final report from the compact
+versioned summaries with `build-final-evidence`, but it cannot reproduce the
+ignored remote-model capture itself. That requires the original JSONL capture
+or a separately approved remote recapture.
 
 Only after holdout annotations are independently reviewed, adjudicated, and
 sealed, freeze the exact artifacts selected during calibration:
