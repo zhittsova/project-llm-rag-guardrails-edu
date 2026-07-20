@@ -154,20 +154,25 @@ The versioned v2 dataset has 2,000 generated cases:
 - 400 calibration;
 - 400 frozen holdout.
 
-The historical identical-split calibration evidence is in
-[`reports/inhouse_retrieval_recovery_calibration_v4.json`](reports/inhouse_retrieval_recovery_calibration_v4.json).
-Before the evaluation-language repair, the model-backed hybrid reached
-`391/400`, `0.978` behavior accuracy and
-macro-F1, `0.91` answer recall, and `0.045` false-refusal rate. It produced no
-unsafe answers, and verifier-conditioned citation-entailment precision was
-`1.0`. The repair changed 100 calibration prompts and 300 development
-prompts, so this is a historical diagnostic. The model-backed development and
-calibration sequence must be rerun before publishing current figures.
+The repaired-source model-backed capture completed all `800/800` scenario runs
+without provider or parsing failures. On the common 400-case calibration split,
+the complete in-house hybrid reached `392/400`, `0.980` behavior accuracy and
+macro-F1, `0.92` answer recall, and a `0.04` safe false-refusal rate. It
+produced no unsafe answers; supported-answer precision and verifier-conditioned
+citation-entailment precision were both `1.0`.
+
+The balanced 600-case Qwen classifier benchmark reached `597/600` overall and
+`148/150` on its calibration subset. Calibration macro-F1 was `0.987`, all
+structured responses were valid, per-label recall passed, and the classifier
+promotion gates passed. The repaired BGE-M3 comparison measured `0.925`
+expected-document recall within the top three chunks on 200 evidence-bearing
+calibration cases, compared with `0.690` for hashing embeddings.
 
 The additional expected-document citation diagnostic remains below its gate at
-`0.752`. Generated expected-document labels can omit other valid supporting
+`0.766`. Generated expected-document labels can omit other valid supporting
 documents, so this failure remains visible and requires independent human
-review rather than being silently reclassified as success.
+review rather than being silently reclassified as success. These are
+calibration results; the frozen holdout remains unopened.
 
 The holdout remains unopened until double human review and adjudication are
 complete. Generated labels are not treated as final human ground truth.
@@ -361,10 +366,11 @@ uv run guardrails-llm build-final-evidence
 ```
 
 This writes `reports/final_calibration_evidence.json` and
-`reports/final_calibration_evidence.md`. Existing checked-in output reflects
-the historical pre-repair capture and must be rebuilt after the repaired-source
-model runs. The command rejects holdout-derived or
-incomplete inputs and keeps failed diagnostics visible.
+`reports/final_calibration_evidence.md`. Existing checked-in consolidated
+output still reflects the historical pre-repair capture and will be rebuilt by
+the automated evidence-refresh workstream from the repaired captures. The
+command rejects holdout-derived or incomplete inputs and keeps failed
+diagnostics visible.
 
 Only after holdout annotations are independently reviewed, adjudicated, and
 sealed, freeze the exact artifacts selected during calibration:

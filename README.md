@@ -111,20 +111,27 @@ must not be committed.
 
 ## Evidence Status
 
-The historical pre-repair in-house capture reached `391/400` behavior
-decisions on the generated calibration split (`0.978` accuracy and macro-F1),
-with no unsafe answers. The language repair changed 100 calibration prompts,
-so BGE thresholds, component benchmarks, common-split scenarios, failure
-analysis, and judge predictions must be rerun before those values can be called
-current evidence. The historical comparison and its evidence boundary are
-published in
-[`reports/final_calibration_evidence.md`](guardrails-llm-deployment/reports/final_calibration_evidence.md).
+The repaired-source in-house calibration capture completed all `800/800`
+Qwen-only and complete-hybrid runs without provider or parsing failures. On the
+same 400 calibration cases, the complete hybrid reached `392/400` correct
+behaviors (`0.980` accuracy and macro-F1), `0.92` answer recall, `0.04` safe
+false-refusal rate, and no unsafe answers. Supported-answer precision and
+verifier-conditioned citation-entailment precision were both `1.0`.
 
-The result is still not final. Expected-document citation precision is `0.752`,
-below its additional `0.95` diagnostic gate, although verifier-conditioned
-citation-entailment precision is `1.0`. The generated expected-document labels
-need independent human review before that difference can be interpreted as a
-runtime citation defect.
+The balanced classifier component benchmark also completed all 600 cases. It
+reached `597/600` overall and `148/150` on calibration, with calibration
+macro-F1 `0.987`, 100% structured-response validity, and every classifier
+promotion gate passed. BGE-M3 retrieval reached `0.925` expected-document
+recall within the top three chunks on the 200 evidence-bearing calibration
+cases, compared with `0.690` for local hashing embeddings.
+
+The result is still calibration evidence, not a final generalization claim.
+Expected-document citation precision is `0.766`, below its additional `0.95`
+diagnostic gate, although verifier-conditioned citation-entailment precision is
+`1.0`. Generated expected-document labels can omit other valid evidence and
+therefore require independent human review before this difference is treated
+as a runtime citation defect. The consolidated final report will be refreshed
+from these versioned captures in the next workstream.
 
 The frozen 400-case holdout has not been run. It requires two independent human
 reviews, adjudication, judge validation, and configuration freeze first. The
@@ -134,9 +141,10 @@ holdout reviewer files and explicit reconciliation preserve independent human
 labeling before canonical annotations are written.
 
 The LLM-judge study uses two blinded, family-disjoint 200-output sets. Qwen and
-MiniMax predictions can be captured without labels, but agreement metrics are
-reported only after two human reviews and disagreement adjudication. The
-package includes a reviewer-isolated local UI with SQLite autosave,
+MiniMax captures have completed all 400 items each with 100% structured-response
+validity and no failed predictions. Agreement metrics remain unavailable until
+two human reviews and disagreement adjudication are complete. The package
+includes a reviewer-isolated local UI with SQLite autosave,
 question-grouped sections, dataset-issue flags, and atomic JSONL export. Start
 one process per reviewer so neither reviewer can see the other's labels:
 
