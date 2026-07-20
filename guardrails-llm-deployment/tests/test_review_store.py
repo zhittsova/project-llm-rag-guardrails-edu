@@ -52,6 +52,38 @@ def test_store_keeps_reviewer_drafts_isolated(tmp_path: Path) -> None:
     assert reviewer_b.draft(item_id)["annotator_id"] == ""
 
 
+def test_store_sets_reviewer_annotator_id_for_every_draft(tmp_path: Path) -> None:
+    study_dir = _study_dir(tmp_path)
+    reviewer_a = ReviewStore(study_dir, "reviewer_a", section_size=1)
+    reviewer_b = ReviewStore(study_dir, "reviewer_b", section_size=1)
+
+    reviewer_a.set_annotator_id("reviewer-kate")
+
+    assert {
+        reviewer_a.draft(item["item_id"])["annotator_id"]
+        for item in reviewer_a.items()
+    } == {"reviewer-kate"}
+    assert {
+        reviewer_b.draft(item["item_id"])["annotator_id"]
+        for item in reviewer_b.items()
+    } == {""}
+
+
+def test_issue_flag_can_be_saved_before_note_is_written(tmp_path: Path) -> None:
+    study_dir = _study_dir(tmp_path)
+    store = ReviewStore(study_dir, "reviewer_a", section_size=1)
+    item_id = store.sections()[0]["item_ids"][0]
+
+    result = store.save_draft(
+        item_id,
+        {"annotator_id": "alice", "issue_flag": True},
+    )
+
+    assert result["section_flushed"] is False
+    assert result["draft"]["issue_flag"] is True
+    assert result["draft"]["issue_note"] == ""
+
+
 def test_complete_section_flushes_annotations_atomically(tmp_path: Path) -> None:
     study_dir = _study_dir(tmp_path)
     store = ReviewStore(study_dir, "reviewer_a", section_size=1)

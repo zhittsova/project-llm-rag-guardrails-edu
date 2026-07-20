@@ -115,6 +115,26 @@ class ReviewStore:
             "progress": self.progress(),
         }
 
+    def set_annotator_id(self, annotator_id: str) -> dict[str, object]:
+        if not isinstance(annotator_id, str) or not annotator_id.strip():
+            raise ValueError("annotator_id must be a non-empty string")
+        normalized = annotator_id.strip()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE review_drafts
+                SET annotator_id = ?, updated_at = ?
+                WHERE reviewer = ?
+                """,
+                (normalized, _now(), self.reviewer),
+            )
+            connection.commit()
+        for section in self._sections:
+            section_id = str(section["section_id"])
+            if self._section_ready(section_id):
+                self.flush_section(section_id)
+        return {"annotator_id": normalized, "progress": self.progress()}
+
     def progress(self) -> dict[str, int]:
         states = self._draft_states()
         complete = sum(_is_complete(state) for state in states.values())
@@ -359,10 +379,6 @@ def _validate_changes(changes: dict[str, object]) -> dict[str, object]:
             raise ValueError(f"{field} must be a string")
     if "issue_flag" in normalized and not isinstance(normalized["issue_flag"], bool):
         raise ValueError("issue_flag must be true or false")
-    if normalized.get("issue_flag") is True and not str(
-        normalized.get("issue_note", "")
-    ).strip():
-        raise ValueError("issue_note is required when issue_flag is true")
     return normalized
 
 

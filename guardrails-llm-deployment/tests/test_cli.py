@@ -129,6 +129,45 @@ def test_compare_guardrails_writes_json_artifact(tmp_path: Path, monkeypatch) ->
         assert "embedding_preload" not in data[label]
 
 
+def test_review_judge_study_command_starts_selected_reviewer(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_serve_review_ui(**kwargs: object) -> None:
+        captured.update(kwargs)
+
+    monkeypatch.setattr("guardrails_llm.cli.serve_review_ui", fake_serve_review_ui)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "review-judge-study",
+            "--study-dir",
+            str(tmp_path),
+            "--reviewer",
+            "reviewer_b",
+            "--port",
+            "8877",
+            "--section-size",
+            "8",
+            "--open",
+        ],
+    )
+
+    main()
+
+    assert captured == {
+        "study_dir": tmp_path,
+        "reviewer": "reviewer_b",
+        "port": 8877,
+        "section_size": 8,
+        "open_browser": True,
+    }
+
+
 def test_comparison_scenarios_isolate_local_guardrail_techniques() -> None:
     policy = load_guardrail_policy(
         ROOT / "data" / "guardrail_policy.toml",
