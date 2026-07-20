@@ -52,6 +52,19 @@ uv --directory guardrails-llm-deployment run pytest
 ./scripts/run_workshop2_demo.sh
 ```
 
+Run the guardrail-focused Workshop 3 demo with one command:
+
+```bash
+./scripts/run_workshop3_demo.sh
+```
+
+This opens a static HTML comparison generated from the checked-in 400-case
+calibration evidence. It makes no API calls and keeps the frozen holdout
+unopened. To prepare BGE-M3 and run the same five scenarios through the live
+Fraunhofer-backed baseline and complete hybrid, use
+`./scripts/run_workshop3_demo.sh --live`; that mode is the explicit approval for
+remote model calls.
+
 Ask an offline guardrailed question:
 
 ```bash
