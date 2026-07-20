@@ -215,6 +215,11 @@ written to `judge_reviewer_a_issues.jsonl` or
 `judge_reviewer_b_issues.jsonl`; they do not force reviewers to invent labels
 for an unjudgeable item.
 
+The sidebar counts fully labelled items as reviewed immediately. Until an
+annotator ID is entered, the UI shows those items as awaiting identity and does
+not export their section. Saving the ID refreshes all section counters and
+exports any section that is otherwise complete.
+
 Do not share `judge_study_mapping.jsonl`, prediction files, the SQLite store,
 or one reviewer's JSONL files with the other reviewer. Only the two blinded
 item files and the reviewer's assigned UI process are needed.

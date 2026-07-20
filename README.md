@@ -132,6 +132,9 @@ uv --directory guardrails-llm-deployment run guardrails-llm \
   --open
 ```
 
+Sidebar counters track fully labelled items immediately. An annotator ID is
+still required before a completed section is exported to the reviewer JSONL.
+
 The UI refuses to open a study that fails duplicate, language-template,
 model-backed-output, or evidence-coverage checks. Technique mappings and model
 predictions are never served to the browser.
