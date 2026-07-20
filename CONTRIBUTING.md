@@ -61,6 +61,9 @@ normal test runs must not call a remote API.
   human annotation. Preserve reveal and copy provenance.
 - Keep demos fail-closed: offline mode must not contact a provider, and live
   mode must retain an explicit remote-model gate and evidence-scope labels.
+- Keep write-capable local administration tools bound to localhost, reject
+  non-local browser origins, validate drafts before publish, write atomically,
+  and retain rollback snapshots.
 - Treat malformed or ambiguous study items as dataset issues instead of
   forcing a label. Repair and regenerate the study before final reconciliation.
 - Checked-in reports should be compact, credential-safe, versioned, and clear
