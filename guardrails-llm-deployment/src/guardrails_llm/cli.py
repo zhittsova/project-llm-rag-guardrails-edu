@@ -54,6 +54,7 @@ from .judge_study import (
     validate_annotation_file,
 )
 from .judge_study_capture import run_judge_study_capture
+from .review_server import serve_review_ui
 from .model_calibration import (
     DEFAULT_CALIBRATION_SOURCE_CASES,
     DEFAULT_CALIBRATION_SOURCE_RESULTS,
@@ -600,6 +601,20 @@ def main() -> None:
     )
     judge_status_parser.add_argument("--study-dir", type=Path, required=True)
 
+    judge_review_parser = subparsers.add_parser(
+        "review-judge-study",
+        help="Run the local blinded human judge review interface",
+    )
+    judge_review_parser.add_argument("--study-dir", type=Path, required=True)
+    judge_review_parser.add_argument(
+        "--reviewer",
+        choices=("reviewer_a", "reviewer_b"),
+        required=True,
+    )
+    judge_review_parser.add_argument("--port", type=int, default=8765)
+    judge_review_parser.add_argument("--section-size", type=int, default=10)
+    judge_review_parser.add_argument("--open", action="store_true")
+
     judge_reconcile_parser = subparsers.add_parser(
         "reconcile-judge-study",
         help="Measure reviewer agreement and prepare adjudication items",
@@ -1100,6 +1115,19 @@ def main() -> None:
         except (OSError, TypeError, ValueError) as exc:
             parser.error(str(exc))
         print(json.dumps(status, indent=2))
+        return
+
+    if args.command == "review-judge-study":
+        try:
+            serve_review_ui(
+                study_dir=args.study_dir,
+                reviewer=args.reviewer,
+                port=args.port,
+                section_size=args.section_size,
+                open_browser=args.open,
+            )
+        except (OSError, ValueError) as exc:
+            parser.error(str(exc))
         return
 
     if args.command == "reconcile-judge-study":

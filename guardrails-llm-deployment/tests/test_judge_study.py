@@ -61,6 +61,23 @@ def test_prepare_judge_study_builds_balanced_family_disjoint_sets(
         assert "scenario" not in items[0]
         assert template[0]["grounded"] is None
         assert template[0]["annotator_id"] == ""
+        visible_payloads = [
+            json.dumps(
+                {key: value for key, value in item.items() if key != "item_id"},
+                sort_keys=True,
+            )
+            for item in items
+        ]
+        assert len(visible_payloads) == len(set(visible_payloads))
+
+    calibration_items = _read_jsonl(
+        tmp_path / "study" / "judge_calibration_items.jsonl"
+    )
+    validation_items = _read_jsonl(
+        tmp_path / "study" / "judge_validation_items.jsonl"
+    )
+    assert len({item["question"] for item in calibration_items}) == 160
+    assert len({item["question"] for item in validation_items}) == 200
 
 
 def test_annotation_validation_reports_incomplete_templates(tmp_path: Path) -> None:

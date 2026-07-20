@@ -55,6 +55,10 @@ normal test runs must not call a remote API.
 - Report per-class failures and failed gates; do not hide them behind an
   aggregate score.
 - Human labels remain ground truth for judge calibration.
+- Keep reviewer drafts isolated. A reviewer UI must not expose technique
+  mappings, model predictions, hidden labels, or another reviewer's data.
+- Treat malformed or ambiguous study items as dataset issues instead of
+  forcing a label. Repair and regenerate the study before final reconciliation.
 - Checked-in reports should be compact, credential-safe, versioned, and clear
   about whether they are development, calibration, or holdout evidence.
 

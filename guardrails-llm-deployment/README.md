@@ -33,6 +33,8 @@ src/guardrails_llm/
   e2e_capture.py           resumable common-split model experiments
   final_evidence.py        calibration packaging and final-run release gates
   holdout_review.py        blinded double review and adjudication workflow
+  review_store.py          SQLite drafts and atomic reviewer-file export
+  review_server.py         reviewer-isolated local annotation interface
 data/                      corpus, policy, and versioned evaluation files
 reports/                   compact calibration evidence
 tests/                     deterministic tests with fake model clients
@@ -148,6 +150,43 @@ uv run guardrails-llm prepare-judge-study \
   --output-dir path/to/human_judge_study
 ```
 
+Preparation now prioritizes unique source requests before selecting a second
+distinct system output for the same request. Exact duplicate review tasks are
+excluded. The study-quality audit also checks German template errors, unique
+question coverage, inclusion of complete in-house hybrid outputs, and usable
+supporting evidence.
+
+Run a separate local UI process for each reviewer. Use different ports when
+both processes run on the same machine:
+
+```bash
+uv run guardrails-llm review-judge-study \
+  --study-dir path/to/human_judge_study \
+  --reviewer reviewer_a \
+  --port 8765 \
+  --open
+
+uv run guardrails-llm review-judge-study \
+  --study-dir path/to/human_judge_study \
+  --reviewer reviewer_b \
+  --port 8766 \
+  --open
+```
+
+Each process binds only to `127.0.0.1` and exposes only the selected reviewer's
+drafts. Field changes are transactionally autosaved in
+`.judge_review.sqlite3`. Questions are grouped into collapsible sections, and
+distinct anonymous system outputs remain separate judgments. When every item
+in a section is either fully labeled or flagged as a dataset issue, the section
+is atomically exported to the existing reviewer JSONL file. Dataset issues are
+written to `judge_reviewer_a_issues.jsonl` or
+`judge_reviewer_b_issues.jsonl`; they do not force reviewers to invent labels
+for an unjudgeable item.
+
+Do not share `judge_study_mapping.jsonl`, prediction files, the SQLite store,
+or one reviewer's JSONL files with the other reviewer. Only the two blinded
+item files and the reviewer's assigned UI process are needed.
+
 Check reviewer progress and reconcile two completed reviews locally:
 
 ```bash
@@ -177,6 +216,9 @@ uv run guardrails-llm capture-judge-study \
 After adjudication, compare both prediction files with `evaluate-judge-study`.
 The report keeps judge calibration and judge validation separate and applies
 the structured-validity, per-dimension, exact-match, and groundedness gates.
+Predictions captured for an older study selection are not reusable after study
+items are regenerated; recapture both judge candidates against the final item
+IDs before calculating agreement.
 
 ### Independent Frozen-Holdout Review
 

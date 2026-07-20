@@ -565,20 +565,61 @@ def _select_diverse(
         group.sort(key=lambda item: str(item["source_case_id"]))
     ordered_keys = sorted(groups, key=lambda key: (key[0], key[1]))
     selected: list[dict[str, object]] = []
-    index = 0
-    while len(selected) < count and ordered_keys:
-        key = ordered_keys[index % len(ordered_keys)]
-        group = groups[key]
-        if group:
-            selected.append(group.pop(0))
-        if not group:
-            ordered_keys.remove(key)
-            index = 0
-        else:
-            index += 1
+    selected_sources: set[str] = set()
+    selected_signatures: set[str] = set()
+    for require_new_source in (True, False):
+        while len(selected) < count:
+            made_progress = False
+            for key in ordered_keys:
+                group = groups[key]
+                candidate_index = next(
+                    (
+                        position
+                        for position, candidate in enumerate(group)
+                        if (
+                            not require_new_source
+                            or str(candidate["source_case_id"]) not in selected_sources
+                        )
+                        and _judge_task_signature(candidate) not in selected_signatures
+                    ),
+                    None,
+                )
+                if candidate_index is None:
+                    continue
+                candidate = group.pop(candidate_index)
+                selected.append(candidate)
+                selected_sources.add(str(candidate["source_case_id"]))
+                selected_signatures.add(_judge_task_signature(candidate))
+                made_progress = True
+                if len(selected) == count:
+                    break
+            if not made_progress:
+                break
     if len(selected) != count:
         raise ValueError(f"only {len(selected)} candidates available for a quota of {count}")
     return selected
+
+
+def _judge_task_signature(candidate: dict[str, object]) -> str:
+    result = candidate["result"]
+    assert isinstance(result, dict)
+    payload = {
+        "source_case_id": candidate["source_case_id"],
+        "actual_behavior": candidate["actual_behavior"],
+        "answer": result.get("answer", ""),
+        "triggers": result.get("triggers", []),
+        "retrieved_evidence": result.get("retrieved_evidence", []),
+        "citations": result.get("citations", []),
+        "cited_doc_ids": result.get("cited_doc_ids", []),
+        "supporting_chunks": result.get("supporting_chunks", []),
+        "grounding_supported": result.get("grounding_supported"),
+        "grounding_confidence": result.get("grounding_confidence"),
+        "grounding_error": result.get("grounding_error"),
+        "unsupported_claims": result.get("unsupported_claims", []),
+    }
+    return sha256(
+        json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
 
 
 def _build_items(

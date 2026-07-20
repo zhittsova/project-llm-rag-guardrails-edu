@@ -104,6 +104,21 @@ labeling before canonical annotations are written.
 The LLM-judge study uses two blinded, family-disjoint 200-output sets. Qwen and
 MiniMax predictions can be captured without labels, but agreement metrics are
 reported only after two independent reviews and disagreement adjudication.
+The package includes a reviewer-isolated local UI with SQLite autosave,
+question-grouped sections, dataset-issue flags, and atomic JSONL export. Start
+one process per reviewer so neither reviewer can see the other's labels:
+
+```bash
+uv --directory guardrails-llm-deployment run guardrails-llm \
+  review-judge-study \
+  --study-dir path/to/human_judge_study \
+  --reviewer reviewer_a \
+  --open
+```
+
+The UI refuses to open a study that fails duplicate, language-template,
+model-backed-output, or evidence-coverage checks. Technique mappings and model
+predictions are never served to the browser.
 
 ## Development
 
