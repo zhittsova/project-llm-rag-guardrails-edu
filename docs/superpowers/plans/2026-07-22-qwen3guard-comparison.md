@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Use the Fraunhofer endpoint model ID `Qwen3guard-gen-4b` by default.
+- Use the Fraunhofer endpoint model ID `qwen3guard-gen-4b` by default.
 - Preserve native Qwen3Guard `Safe`, `Controversial`, and `Unsafe` output.
 - Compare on the existing 600 cases: 100 cases for each project classifier label.
 - Treat `academic_integrity` and `unsupported` as outside native taxonomy for exact project-label coverage.
@@ -79,7 +79,7 @@ Expected: collection/import failure because `guardrails_llm.qwen3guard` does not
 - [ ] **Step 3: Implement the native result and strict parser**
 
 ```python
-QWEN3GUARD_MODEL = "Qwen3guard-gen-4b"
+QWEN3GUARD_MODEL = "qwen3guard-gen-4b"
 QWEN3GUARD_PARSER_VERSION = "qwen3guard-native-v1"
 SEVERITIES = frozenset({"safe", "controversial", "unsafe"})
 
@@ -425,7 +425,7 @@ The capture command must accept:
 --calibration-cases
 --output
 --manifest
---classifier-model (default Qwen3guard-gen-4b)
+--classifier-model (default qwen3guard-gen-4b)
 --limit-cases
 --max-concurrency
 --retry-failures

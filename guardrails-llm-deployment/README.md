@@ -126,7 +126,7 @@ credentials and raw prompt text are not stored in embedding caches.
 ### Qwen3Guard Classifier Comparison
 
 The project includes an isolated comparison between the existing prompted Qwen
-classifier and the native `Qwen3guard-gen-4b` safety moderator. The runtime RAG
+classifier and the native `qwen3guard-gen-4b` safety moderator. The runtime RAG
 pipeline is unchanged: Qwen3Guard is evaluated as a classifier component only.
 It is not used as an answer model, entailment verifier, or LLM-as-a-judge.
 

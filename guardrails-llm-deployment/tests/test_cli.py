@@ -766,7 +766,7 @@ def test_qwen3guard_capture_wires_explicit_options(
             "capture-qwen3guard-classifier",
             "--allow-remote-models",
             "--classifier-model",
-            "Qwen3guard-gen-4b",
+            "qwen3guard-gen-4b",
             "--limit-cases",
             "4",
             "--max-concurrency",
@@ -782,12 +782,47 @@ def test_qwen3guard_capture_wires_explicit_options(
     main()
 
     config = captured["config"]
-    assert config.classifier_model == "Qwen3guard-gen-4b"
+    assert config.classifier_model == "qwen3guard-gen-4b"
     assert config.allow_remote_models is True
     assert captured["limit_cases"] == 4
     assert captured["max_concurrency"] == 2
     assert captured["retry_failures"] is True
     assert json.loads(capsys.readouterr().out)["completed_cases"] == 4
+
+
+def test_qwen3guard_capture_uses_provider_catalog_model_by_default(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_capture(**kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        return {"status": "complete", "completed_cases": 1}
+
+    monkeypatch.setattr(
+        "guardrails_llm.cli.run_qwen3guard_capture",
+        fake_capture,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "capture-qwen3guard-classifier",
+            "--allow-remote-models",
+            "--limit-cases",
+            "1",
+            "--output",
+            str(tmp_path / "predictions.jsonl"),
+            "--manifest",
+            str(tmp_path / "manifest.json"),
+        ],
+    )
+
+    main()
+
+    assert captured["config"].classifier_model == "qwen3guard-gen-4b"
 
 
 def test_qwen3guard_comparison_writes_offline_json(

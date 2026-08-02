@@ -2,7 +2,7 @@
 
 ## Objective
 
-Add `Qwen3guard-gen-4b` as a specialized guardrail-classifier candidate and
+Add `qwen3guard-gen-4b` as a specialized guardrail-classifier candidate and
 compare it with the existing prompted `Qwen/Qwen3.6-35B-A3B` classifier on the
 same versioned 600-case component benchmark.
 
@@ -47,7 +47,7 @@ Add a focused parser for Qwen3Guard prompt-moderation responses. It will:
 ### Model adapter
 
 Add an OpenAI-compatible Qwen3Guard classifier adapter that sends the user
-request as a user message to `Qwen3guard-gen-4b`. The adapter will use the
+request as a user message to `qwen3guard-gen-4b`. The adapter will use the
 existing endpoint configuration, remote-call gate, retry behavior, and capture
 manifest conventions.
 
