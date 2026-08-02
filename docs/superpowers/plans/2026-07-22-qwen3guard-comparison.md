@@ -509,7 +509,7 @@ taxonomy coverage, and README updates for future model-comparison PRs.
 rg -n -P '[\p{Cyrillic}]' README.md CONTRIBUTING.md \
   guardrails-llm-deployment/README.md \
   guardrails-llm-deployment/src guardrails-llm-deployment/tests
-rg -n 'sk-[A-Za-z0-9]{10,}|YVm4jESfCKSl3DUTLns67g' . \
+rg -n 'sk-[A-Za-z0-9]{10,}' . \
   --glob '!guardrails-llm-deployment/.env'
 git diff --check
 ```

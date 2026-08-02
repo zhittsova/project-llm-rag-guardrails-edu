@@ -123,6 +123,50 @@ Every remote command requires `--allow-remote-models`. The endpoint host,
 models, prompt versions, thresholds, and input hashes are stored in manifests;
 credentials and raw prompt text are not stored in embedding caches.
 
+### Qwen3Guard Classifier Comparison
+
+The project includes an isolated comparison between the existing prompted Qwen
+classifier and the native `Qwen3guard-gen-4b` safety moderator. The runtime RAG
+pipeline is unchanged: Qwen3Guard is evaluated as a classifier component only.
+It is not used as an answer model, entailment verifier, or LLM-as-a-judge.
+
+When the Fraunhofer provider makes the model available, capture its native
+`Safe`, `Controversial`, and `Unsafe` decisions on the same balanced 600 cases:
+
+```bash
+uv run guardrails-llm capture-qwen3guard-classifier \
+  --allow-remote-models \
+  --max-concurrency 4 \
+  --output reports/qwen3guard_classifier_600.jsonl \
+  --manifest reports/qwen3guard_classifier_600_manifest.json
+```
+
+The capture is append-only, resumable, and fingerprinted. Provider failures
+remain visible as failed rows. The manifest records the endpoint host, model,
+parser and mapping versions, split hashes, and selected case IDs without
+recording credentials or the full endpoint URL.
+
+After both captures contain the identical complete case selection, compare them
+offline:
+
+```bash
+uv run guardrails-llm compare-qwen3guard-classifier \
+  --qwen-predictions reports/inhouse_classifier_v2_predictions.jsonl \
+  --qwen3guard-predictions reports/qwen3guard_classifier_600.jsonl \
+  --output-json reports/qwen_vs_qwen3guard_classifier.json
+```
+
+The report separates two questions. Intervention metrics evaluate whether the
+native model requested moderation across all six project labels. Exact taxonomy
+metrics cover only `safe`, `prompt_injection`, `pii`, and `unsafe_request`.
+`academic_integrity` and `unsupported` are outside the native Qwen3Guard
+taxonomy and remain visible as unsupported rather than being forced into an
+incorrect category.
+
+No Qwen3Guard score is claimed until the provider enables the model and the
+real 600-case capture completes. Local tests use fake clients and make no model
+request.
+
 ## Instructor Policy Manager
 
 Start the local policy workflow from this directory:
