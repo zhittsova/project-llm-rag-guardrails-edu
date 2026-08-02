@@ -70,6 +70,14 @@ normal test runs must not call a remote API.
   about whether they are development, calibration, or holdout evidence.
 - Keep large resumable prediction and per-case result captures local. Commit
   their configuration manifests and compact derived reports instead.
+- Compare classifier models only on identical complete case IDs and preserve
+  the capture manifest for each model. Reject partial or misaligned comparisons.
+- Report native taxonomy coverage separately from intervention behavior. Do not
+  force project labels into unsupported provider categories.
+- Never publish simulated model scores. Provider unavailability, malformed
+  responses, missing rows, and failed quality gates must remain visible.
+- Update the package README whenever a model comparison adds a command, model,
+  mapping rule, evidence artifact, or interpretation limitation.
 
 ## Documentation Gate for Every PR
 
