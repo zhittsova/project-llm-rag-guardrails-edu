@@ -13,7 +13,7 @@ from .model_config import (
 )
 
 
-QWEN3GUARD_MODEL = "Qwen3guard-gen-4b"
+QWEN3GUARD_MODEL = "qwen3guard-gen-4b"
 QWEN3GUARD_PARSER_VERSION = "qwen3guard-native-v1"
 QWEN3GUARD_MAPPING_VERSION = "qwen3guard-project-mapping-v1"
 SEVERITIES = frozenset({"safe", "controversial", "unsafe"})
