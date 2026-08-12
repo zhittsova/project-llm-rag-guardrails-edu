@@ -490,6 +490,38 @@ def test_comparison_loads_native_capture_field_names(tmp_path: Path) -> None:
     assert report["qwen3guard"]["strict"]["accuracy"] == 1.0
 
 
+@pytest.mark.parametrize(
+    ("categories", "expected"),
+    [
+        ("Jailbreak, PII", ("jailbreak", "pii")),
+        ("None", ()),
+        (None, ()),
+    ],
+)
+def test_historical_capture_normalizes_string_categories(
+    tmp_path: Path,
+    categories: object,
+    expected: tuple[str, ...],
+) -> None:
+    path = tmp_path / "history.jsonl"
+    path.write_text(
+        json.dumps(
+            {
+                "case_id": "case-1",
+                "safety": "Safe",
+                "categories": categories,
+                "raw_output": "Safety: Safe",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    predictions = qwen3guard_experiment._load_qwen3guard_history(path)[0]
+
+    assert predictions["case-1"].categories == expected
+
+
 def test_comparison_rejects_incomplete_case_alignment(tmp_path: Path) -> None:
     cases = build_balanced_classifier_benchmark(DEVELOPMENT, CALIBRATION)
     qwen = [

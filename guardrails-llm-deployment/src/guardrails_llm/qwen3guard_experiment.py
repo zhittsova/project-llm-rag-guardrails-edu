@@ -944,9 +944,8 @@ def _load_qwen3guard_history(
                 payload["severity"] = str(payload.pop("safety")).casefold()
             if "raw_text" not in payload and "raw_output" in payload:
                 payload["raw_text"] = payload.pop("raw_output")
-            payload["categories"] = tuple(
-                str(category).casefold()
-                for category in payload.get("categories", ())
+            payload["categories"] = _normalize_capture_categories(
+                payload.get("categories", ())
             )
             prediction = Qwen3GuardPrediction(**payload)
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
@@ -958,6 +957,23 @@ def _load_qwen3guard_history(
         if prediction.error is not None:
             ever_failed.add(prediction.case_id)
     return latest, attempts, ever_failed
+
+
+def _normalize_capture_categories(value: object) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        candidates: Iterable[object] = value.split(",")
+    elif isinstance(value, (list, tuple)):
+        candidates = value
+    else:
+        raise ValueError("categories must be a string, list, or tuple")
+    normalized = tuple(
+        str(category).strip().casefold()
+        for category in candidates
+        if str(category).strip().casefold() not in {"", "none", "null", "n/a"}
+    )
+    return normalized
 
 
 def _load_qwen_predictions(path: Path) -> dict[str, ClassifierPrediction]:
