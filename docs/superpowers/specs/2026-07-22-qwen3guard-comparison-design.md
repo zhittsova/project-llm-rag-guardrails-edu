@@ -2,159 +2,86 @@
 
 ## Objective
 
-Add `qwen3guard-gen-4b` as a specialized guardrail-classifier candidate and
-compare it with the existing prompted `Qwen/Qwen3.6-35B-A3B` classifier on the
-same versioned 600-case component benchmark.
+This work evaluates `qwen3guard-gen-4b` as a specialized safety classifier
+alongside the existing prompted `Qwen/Qwen3.6-35B-A3B` classifier. It does not
+replace the answer generator, retrieval checks, entailment verifier, or judge.
 
-The integration must preserve Qwen3Guard's native moderation contract instead
-of prompting it to imitate the project's six-label classifier. No remote model
-call may run without `--allow-remote-models`.
+The comparison preserves Qwen3Guard's native moderation output instead of
+prompting it to imitate the project's six-label classifier. Remote capture is
+available only behind the existing `--allow-remote-models` gate.
 
-## Why a dedicated adapter is required
+## Native adapter
 
-The existing Qwen classifier returns one project label:
+The adapter sends the request as a user message and parses the native fields:
 
 ```text
-safe
-prompt_injection
-pii
-academic_integrity
-unsafe_request
-unsupported
+Safety: Safe | Controversial | Unsafe
+Categories: <zero or more native categories>
 ```
 
-Qwen3Guard-Gen natively returns a severity (`Safe`, `Controversial`, or
-`Unsafe`) and one or more safety categories. Its taxonomy does not directly
-represent RAG evidence insufficiency, and it may not distinguish educational
-integrity from broader unsafe or unethical intent.
+Severity and categories are normalized for evaluation, while the raw model
+text remains in the capture for audit. Missing or unknown severity values are
+recorded as failed predictions. A provider response showing that the model is
+unavailable stops the run and preserves completed rows and the partial
+manifest.
 
-Forcing Qwen3Guard into the six-label prompt would test generic instruction
-following rather than its intended moderation behavior. The comparison will
-therefore retain the native output and report taxonomy limitations explicitly.
+## Evaluation scope
 
-## Architecture
+The balanced component benchmark contains 600 development and calibration
+cases, with 100 cases for each project label. It does not use the frozen
+holdout.
 
-### Native output parser
+The primary binary comparison contains the 400 cases whose labels have a
+shared safety interpretation:
 
-Add a focused parser for Qwen3Guard prompt-moderation responses. It will:
+- `safe` maps to safe;
+- `prompt_injection`, `pii`, and `unsafe_request` map to unsafe.
 
-- accept case-insensitive `Safety:` and `Categories:` fields;
-- normalize the severity to `safe`, `controversial`, or `unsafe`;
-- normalize categories while preserving the original model text for audit;
-- reject missing or unknown severity values as malformed responses;
-- never infer a successful decision from malformed output.
+Two Qwen3Guard release policies are reported separately. The strict policy
+maps both `Controversial` and `Unsafe` to unsafe. The permissive policy maps
+`Controversial` to safe. The Qwen baseline maps its predicted `safe` label to
+safe and every predicted risk label to unsafe.
 
-### Model adapter
+The remaining 200 `academic_integrity` and `unsupported` cases are not included
+in the primary score. They form a descriptive taxonomy-gap analysis because
+Qwen3Guard does not natively represent course evidence sufficiency, and its
+safety categories do not provide an equivalent academic-integrity policy.
 
-Add an OpenAI-compatible Qwen3Guard classifier adapter that sends the user
-request as a user message to `qwen3guard-gen-4b`. The adapter will use the
-existing endpoint configuration, remote-call gate, retry behavior, and capture
-manifest conventions.
+## Evidence and provenance
 
-The adapter will expose both:
+Capture manifests identify the model, dataset version, dataset-manifest hash,
+split hashes, selected-case hash, case count, completion status, and request
+policy. The offline comparison rejects either capture when the manifests are
+incomplete, contain failed rows, or do not match the supplied dataset and case
+selection.
 
-- the native moderation result;
-- a conservative project comparison result derived through an explicit,
-  versioned category mapping.
+The versioned report includes:
 
-### Comparison levels
+- binary accuracy, macro F1, unsafe recall, and safe false-positive rate;
+- confusion matrices and per-class metrics;
+- strict and permissive Qwen3Guard results;
+- native severity and category distributions;
+- the descriptive taxonomy-gap counts;
+- latency summaries and hashes for every comparison input.
 
-The same 600 benchmark cases will be evaluated at two levels.
+Raw captures are retained outside version control because they contain the
+complete model-output trace. The repository stores the Qwen3Guard manifest and
+the derived comparison JSON needed to audit the published claims.
 
-#### Level 1: intervention detection
+## Interpretation limits
 
-The primary cross-model comparison asks whether a request should continue
-without a guardrail intervention.
+The saved capture uses the dataset revision at commit `2db138b`. The current
+split files have different hashes, so the evaluator deliberately rejects them
+for that capture. Reproduction must use the recorded revision and original
+captures, or a new matched capture must be made on the current revision.
 
-- expected `safe` -> allow;
-- all other project labels -> intervene.
+The results measure one classifier component, not the end-to-end RAG system.
+The latency values come from sequential provider captures made at different
+times, so they are descriptive rather than a controlled performance benchmark.
 
-Qwen3Guard `Safe` maps to allow. `Controversial` and `Unsafe` map to intervene.
-This measures broad guardrail detection without pretending the specialized
-model can choose the correct RAG action.
+## Tests
 
-#### Level 2: project-label coverage
-
-Where a native category maps unambiguously, report the corresponding project
-label. Ambiguous or unsupported mappings remain `unmapped`; they are not
-silently counted as correct.
-
-The report will show:
-
-- exact project-label accuracy on mapped cases;
-- mapping coverage over all 600 cases;
-- per-project-label mapped, correct, incorrect, and unmapped counts;
-- a note that `unsupported` is an evidence-policy category outside native
-  safety moderation;
-- any ambiguity involving academic-integrity cases.
-
-## Capture and report artifacts
-
-The capture command will be resumable and will write JSONL predictions plus a
-manifest containing:
-
-- model and endpoint host;
-- parser and mapping versions;
-- prompt/input hashes;
-- case count and completion status;
-- malformed responses and provider errors;
-- no API key and no stored credential.
-
-The comparison report will place the existing Qwen six-label result beside the
-Qwen3Guard native result. It will report intervention accuracy, precision,
-recall, F1, safe false-positive rate, unsafe false-negative rate, structured
-response validity, project-label mapping coverage, and per-label limitations.
-
-## CLI behavior
-
-Add explicit commands or options for:
-
-1. capturing Qwen3Guard predictions for the 600-case benchmark;
-2. evaluating the capture;
-3. producing a comparison with an existing Qwen classifier evaluation.
-
-All commands that can contact the endpoint require
-`--allow-remote-models`. Offline evaluation of existing captures does not.
-
-If the provider reports that the model is unavailable, the capture must stop
-with a clear actionable error and preserve already completed rows. The report
-must never substitute simulated results for a real model run.
-
-## Testing
-
-Implementation follows test-driven development.
-
-Tests will cover:
-
-- valid `Safe`, `Controversial`, and `Unsafe` output parsing;
-- multiple and absent categories;
-- malformed and unknown severity output;
-- remote-call refusal without explicit allowance;
-- conservative intervention mapping;
-- explicit unmapped project categories;
-- 600-case report accounting invariants;
-- resume behavior and manifest contents;
-- credential exclusion;
-- CLI argument wiring with fake model clients.
-
-No test will call the Fraunhofer API.
-
-## Documentation
-
-Update the package README and contributor documentation with:
-
-- the purpose of the Qwen3Guard comparison;
-- the difference between native safety moderation and six-label RAG policy
-  classification;
-- commands for capture and offline evaluation;
-- the current provider-availability limitation;
-- the rule that results may only be claimed after a completed real capture.
-
-## Out of scope
-
-- using Qwen3Guard as an LLM-as-a-judge;
-- replacing the Qwen answer generator or entailment verifier;
-- using Qwen3Guard-Stream;
-- official OpenAI Platform execution;
-- changing the frozen holdout;
-- presenting placeholder or simulated scores.
+Deterministic tests cover parsing, native-category mapping, remote-call gating,
+resume behavior, provider unavailability, failed-row manifests, matched case
+IDs, strict and permissive policies, historical field aliases, and provenance
+rejection. Tests use fake clients and never call the Fraunhofer endpoint.
