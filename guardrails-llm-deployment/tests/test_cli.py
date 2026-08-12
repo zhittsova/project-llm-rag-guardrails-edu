@@ -636,6 +636,86 @@ def test_capture_model_calibration_wires_safe_cli_options(
     )
 
 
+def test_capture_judge_study_wires_split_and_limit(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    captured_kwargs = {}
+
+    def fake_capture(**kwargs):
+        captured_kwargs.update(kwargs)
+        return {"complete": True}
+
+    monkeypatch.setattr(
+        "guardrails_llm.cli.run_judge_study_capture",
+        fake_capture,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "capture-judge-study",
+            "--study-dir",
+            str(tmp_path / "study"),
+            "--source-results",
+            str(tmp_path / "results.json"),
+            "--judge-model",
+            "judge-model",
+            "--judge-split",
+            "judge_calibration",
+            "--limit-cases",
+            "5",
+            "--output",
+            str(tmp_path / "predictions.jsonl"),
+            "--manifest",
+            str(tmp_path / "manifest.json"),
+            "--allow-remote-models",
+        ],
+    )
+
+    main()
+
+    assert captured_kwargs["judge_split"] == "judge_calibration"
+    assert captured_kwargs["limit_cases"] == 5
+    assert json.loads(capsys.readouterr().out)["complete"] is True
+
+
+def test_evaluate_judge_study_wires_split(tmp_path: Path, monkeypatch, capsys) -> None:
+    captured_kwargs = {}
+
+    def fake_evaluate(**kwargs):
+        captured_kwargs.update(kwargs)
+        return {"models": {}}
+
+    monkeypatch.setattr(
+        "guardrails_llm.cli.evaluate_judge_study_models",
+        fake_evaluate,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "evaluate-judge-study",
+            "--study-dir",
+            str(tmp_path / "study"),
+            "--predictions",
+            str(tmp_path / "predictions.jsonl"),
+            "--judge-split",
+            "judge_calibration",
+            "--output-json",
+            str(tmp_path / "evaluation.json"),
+        ],
+    )
+
+    main()
+
+    assert captured_kwargs["judge_split"] == "judge_calibration"
+    assert json.loads(capsys.readouterr().out) == {"models": {}}
+
+
 def test_capture_v2_classifier_uses_inhouse_profile(
     tmp_path: Path,
     monkeypatch,

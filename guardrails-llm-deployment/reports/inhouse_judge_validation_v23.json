@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "evidence_scope": "human_calibrated_llm_judge",
+  "provider": "fraunhofer_openai_compatible",
+  "model": "MiniMaxAI/MiniMax-M2.5",
+  "prompt_version": "guardrail-judge-v2.3",
+  "human_labels_are_ground_truth": true,
+  "holdout_used": false,
+  "human_review": {
+    "items": 400,
+    "judge_calibration_items": 200,
+    "judge_validation_items": 200,
+    "exact_five_dimension_reviewer_agreement": 0.993,
+    "adjudicated_items": 3,
+    "recommendation_assisted": true,
+    "reviewer_a_assistance_events": 67,
+    "reviewer_b_assistance_events": 40,
+    "limitation": "The two reviews were recommendation-assisted and are not fully independent double annotation."
+  },
+  "judge_calibration": {
+    "structured_response_validity": 1.0,
+    "exact_five_dimension_agreement": 0.79,
+    "dimension_accuracy": {
+      "grounded": 0.92,
+      "privacy_safe": 0.99,
+      "injection_safe": 0.995,
+      "integrity_safe": 0.88,
+      "refusal_appropriate": 0.985
+    },
+    "score_mae": 0.046,
+    "all_quality_gates_passed": true
+  },
+  "judge_validation": {
+    "structured_response_validity": 1.0,
+    "exact_five_dimension_agreement": 0.795,
+    "dimension_accuracy": {
+      "grounded": 0.915,
+      "privacy_safe": 0.995,
+      "injection_safe": 0.995,
+      "integrity_safe": 0.9,
+      "refusal_appropriate": 0.97
+    },
+    "score_mae": 0.045,
+    "quality_gates": {
+      "structured_response_validity_1_00": true,
+      "all_dimensions_at_least_0_80": true,
+      "exact_five_dimension_agreement_at_least_0_75": true,
+      "groundedness_agreement_at_least_0_85": true,
+      "all_passed": true
+    }
+  },
+  "provenance": {
+    "calibration_human_ground_truth_sha256": "339ecfc1020ee28baa6912a4a8ef11a240797ac56fc3b07dd9b48fbaa59ea3eb",
+    "validation_human_ground_truth_sha256": "134419ab96b8e758091faf97fbbb6a580bf52b6d13fa3e5cbc575ded141d50b5",
+    "calibration_predictions_sha256": "2368db152cbc084c3ec1cd5ce366de336d0349c07fb18cebf401fbf90c113fb8",
+    "validation_predictions_sha256": "3565cbc5904c7aa7aedda6a2901fa62abec341130296db351e74eb756358a02d",
+    "calibration_capture_manifest_sha256": "2e7c957fd8b6f436b437f34379fb2a38cdc77a7241aca1004c00552d22a749a5",
+    "validation_capture_manifest_sha256": "9a03bd5104ab5acf337f8a68245e9449447012b1da942a940c2b794b97bceae5"
+  },
+  "limitations": [
+    "The LLM judge is a secondary evaluator; adjudicated human labels remain ground truth.",
+    "This is judge calibration and validation evidence, not frozen-holdout system performance.",
+    "The rubric was tuned only on judge_calibration and locked before judge_validation was evaluated."
+  ]
+}

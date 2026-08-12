@@ -32,15 +32,29 @@ def run_judge_study_capture(
     manifest_path: Path,
     max_concurrency: int = 1,
     retry_failures: bool = False,
+    judge_split: str | None = None,
+    limit_cases: int | None = None,
 ) -> dict[str, object]:
     if max_concurrency < 1:
         raise ValueError("max_concurrency must be greater than zero")
+    if judge_split not in {None, "judge_calibration", "judge_validation"}:
+        raise ValueError("judge_split must be judge_calibration or judge_validation")
+    if limit_cases is not None and limit_cases < 1:
+        raise ValueError("limit_cases must be greater than zero")
     ensure_remote_models_allowed(config)
     ensure_openai_api_key(config)
     endpoint_host = ensure_inhouse_endpoint(config.env_file)
     cases = {case.case_id: case for case in load_eval_cases(source_cases_path)}
     results = _load_source_results(source_results_path)
     mappings = _load_study_mappings(study_dir / "judge_study_mapping.jsonl")
+    if judge_split is not None:
+        mappings = [
+            mapping
+            for mapping in mappings
+            if mapping["judge_split"] == judge_split
+        ]
+    if limit_cases is not None:
+        mappings = mappings[:limit_cases]
     study_manifest_path = study_dir / "judge_study_manifest.json"
     configuration = {
         "schema_version": 1,
@@ -54,6 +68,8 @@ def run_judge_study_capture(
         "source_cases_sha256": _file_sha256(source_cases_path),
         "source_results_sha256": _file_sha256(source_results_path),
         "selected_items": len(mappings),
+        "judge_split": judge_split or "all",
+        "case_limit": limit_cases,
         "max_concurrency": max_concurrency,
         "human_labels_used": False,
         "holdout_used": False,
