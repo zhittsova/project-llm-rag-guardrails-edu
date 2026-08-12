@@ -13,8 +13,8 @@ the derived matched-comparison evidence.
 - `qwen3guard_experiment.py` selects the balanced 600-case benchmark, captures
   native responses, writes resumable manifests, and produces the offline
   comparison.
-- The CLI exposes `capture-qwen3guard-classifier`,
-  `evaluate-qwen3guard-classifier`, and `compare-qwen3guard-classifier`.
+- The CLI exposes `capture-qwen3guard-classifier` and
+  `compare-qwen3guard-classifier`.
 - The README and contributor guide document remote-call safety, evidence
   provenance, interpretation, and reproduction.
 
