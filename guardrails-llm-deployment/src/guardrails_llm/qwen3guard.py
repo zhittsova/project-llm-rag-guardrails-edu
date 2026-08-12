@@ -46,6 +46,10 @@ class Qwen3GuardResult:
         return self.severity != "safe"
 
 
+class Qwen3GuardModelUnavailableError(RuntimeError):
+    """Raised when the configured provider cannot serve Qwen3Guard."""
+
+
 def parse_qwen3guard_output(text: str) -> Qwen3GuardResult:
     match = re.search(r"^\s*Safety\s*:\s*([^\r\n]+)", text, re.I | re.M)
     if match is None:
@@ -95,6 +99,7 @@ class Qwen3GuardClassifier:
             model=self.model_name,
             messages=[{"role": "user", "content": text}],
             temperature=0,
+            max_tokens=128,
         )
         return parse_qwen3guard_output(
             response.choices[0].message.content or ""
