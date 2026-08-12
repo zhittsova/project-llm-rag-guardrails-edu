@@ -937,6 +937,12 @@ def test_qwen3guard_comparison_writes_offline_json(
             str(tmp_path / "qwen.jsonl"),
             "--qwen3guard-predictions",
             str(tmp_path / "qwen3guard.jsonl"),
+            "--qwen-manifest",
+            str(tmp_path / "qwen-manifest.json"),
+            "--qwen3guard-manifest",
+            str(tmp_path / "qwen3guard-manifest.json"),
+            "--dataset-manifest",
+            str(tmp_path / "dataset-manifest.json"),
             "--output-json",
             str(output),
         ],
@@ -948,6 +954,11 @@ def test_qwen3guard_comparison_writes_offline_json(
         "case_alignment"
     ]["total"] == 600
     assert "config" not in captured
+    assert captured["qwen_manifest_path"].name == "qwen-manifest.json"
+    assert captured["qwen3guard_manifest_path"].name == (
+        "qwen3guard-manifest.json"
+    )
+    assert captured["dataset_manifest_path"].name == "dataset-manifest.json"
     assert json.loads(capsys.readouterr().out)["case_alignment"][
         "identical_case_ids"
     ] is True

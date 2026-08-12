@@ -25,7 +25,11 @@ from .evaluation import (
     summarize,
     write_results_csv,
 )
-from .evaluation_dataset import DatasetValidationError, load_evaluation_cases_for_run
+from .evaluation_dataset import (
+    DEFAULT_DATASET_MANIFEST_PATH,
+    DatasetValidationError,
+    load_evaluation_cases_for_run,
+)
 from .final_evidence import (
     FinalEvidenceError,
     assess_final_readiness_from_files,
@@ -99,13 +103,14 @@ from .model_profiles import (
 from .pipeline import build_assistant
 from .policy_manager import PolicyManager
 from .policy_server import serve_policy_ui
-from .qwen3guard import QWEN3GUARD_MODEL
+from .qwen3guard import QWEN3GUARD_MODEL, Qwen3GuardModelUnavailableError
 from .qwen3guard_experiment import (
     DEFAULT_CALIBRATION_CASES as DEFAULT_QWEN3GUARD_CALIBRATION_CASES,
     DEFAULT_DEVELOPMENT_CASES as DEFAULT_QWEN3GUARD_DEVELOPMENT_CASES,
     DEFAULT_QWEN3GUARD_COMPARISON,
     DEFAULT_QWEN3GUARD_MANIFEST,
     DEFAULT_QWEN3GUARD_OUTPUT,
+    DEFAULT_QWEN_MANIFEST,
     compare_qwen_classifier_captures,
     run_qwen3guard_capture,
 )
@@ -411,6 +416,11 @@ def main() -> None:
         default=DEFAULT_QWEN3GUARD_MANIFEST,
     )
     qwen3guard_capture_parser.add_argument(
+        "--dataset-manifest",
+        type=Path,
+        default=DEFAULT_DATASET_MANIFEST_PATH,
+    )
+    qwen3guard_capture_parser.add_argument(
         "--classifier-model",
         default=QWEN3GUARD_MODEL,
     )
@@ -453,6 +463,21 @@ def main() -> None:
         "--qwen3guard-predictions",
         type=Path,
         required=True,
+    )
+    qwen3guard_compare_parser.add_argument(
+        "--qwen-manifest",
+        type=Path,
+        default=DEFAULT_QWEN_MANIFEST,
+    )
+    qwen3guard_compare_parser.add_argument(
+        "--qwen3guard-manifest",
+        type=Path,
+        default=DEFAULT_QWEN3GUARD_MANIFEST,
+    )
+    qwen3guard_compare_parser.add_argument(
+        "--dataset-manifest",
+        type=Path,
+        default=DEFAULT_DATASET_MANIFEST_PATH,
     )
     qwen3guard_compare_parser.add_argument(
         "--output-json",
@@ -1291,6 +1316,7 @@ def main() -> None:
                 calibration_cases_path=args.calibration_cases,
                 output_path=args.output,
                 manifest_path=args.manifest,
+                dataset_manifest_path=args.dataset_manifest,
                 limit_cases=args.limit_cases,
                 max_concurrency=args.max_concurrency,
                 retry_failures=args.retry_failures,
@@ -1302,6 +1328,7 @@ def main() -> None:
             RemoteModelsNotAllowedError,
             MissingModelCredentialError,
             RemoteModelCallError,
+            Qwen3GuardModelUnavailableError,
         ) as exc:
             parser.error(str(exc))
         print(json.dumps(manifest, indent=2))
@@ -1314,6 +1341,9 @@ def main() -> None:
                 calibration_cases_path=args.calibration_cases,
                 qwen_predictions_path=args.qwen_predictions,
                 qwen3guard_predictions_path=args.qwen3guard_predictions,
+                qwen_manifest_path=args.qwen_manifest,
+                qwen3guard_manifest_path=args.qwen3guard_manifest,
+                dataset_manifest_path=args.dataset_manifest,
             )
         except (OSError, TypeError, ValueError) as exc:
             parser.error(str(exc))

@@ -130,8 +130,8 @@ classifier and the native `qwen3guard-gen-4b` safety moderator. The runtime RAG
 pipeline is unchanged: Qwen3Guard is evaluated as a classifier component only.
 It is not used as an answer model, entailment verifier, or LLM-as-a-judge.
 
-When the Fraunhofer provider makes the model available, capture its native
-`Safe`, `Controversial`, and `Unsafe` decisions on the same balanced 600 cases:
+The Fraunhofer capture records Qwen3Guard's native `Safe`, `Controversial`, and
+`Unsafe` decisions on the same balanced 600 cases:
 
 ```bash
 uv run guardrails-llm capture-qwen3guard-classifier \
@@ -152,20 +152,31 @@ offline:
 ```bash
 uv run guardrails-llm compare-qwen3guard-classifier \
   --qwen-predictions reports/inhouse_classifier_v2_predictions.jsonl \
+  --qwen-manifest reports/inhouse_classifier_v2_manifest.json \
   --qwen3guard-predictions reports/qwen3guard_classifier_600.jsonl \
+  --qwen3guard-manifest reports/qwen3guard_classifier_600_manifest.json \
   --output-json reports/qwen_vs_qwen3guard_classifier.json
 ```
 
-The report separates two questions. Intervention metrics evaluate whether the
-native model requested moderation across all six project labels. Exact taxonomy
-metrics cover only `safe`, `prompt_injection`, `pii`, and `unsafe_request`.
-`academic_integrity` and `unsupported` are outside the native Qwen3Guard
-taxonomy and remain visible as unsupported rather than being forced into an
-incorrect category.
+The offline comparison rejects incomplete captures and mismatched dataset,
+split, or case-selection provenance before calculating metrics. Its primary
+binary safety task contains 400 taxonomy-compatible cases: `safe`,
+`prompt_injection`, `pii`, and `unsafe_request`. A strict release policy maps
+both `Controversial` and `Unsafe` to non-release; a permissive policy maps
+`Controversial` to safe. The remaining 200 `academic_integrity` and
+`unsupported` cases are reported as a descriptive taxonomy-gap analysis rather
+than being forced into the binary score.
 
-No Qwen3Guard score is claimed until the provider enables the model and the
-real 600-case capture completes. Local tests use fake clients and make no model
-request.
+The saved matched capture contains 600 valid Qwen3Guard responses. Under the
+strict policy, Qwen3Guard scored 400/400 on the shared binary task, compared
+with 398/400 for the prompted Qwen3 classifier. The permissive Qwen3Guard
+mapping scored 331/400 because it released 69 risk cases labeled
+`Controversial`. These are component results, not end-to-end RAG pipeline
+scores. The saved evidence uses the dataset revision from commit `2db138b`;
+the evaluator rejects the current revised splits because their hashes differ.
+If the provider cannot serve the configured model during a future
+capture, the command stops with an actionable error and preserves its partial
+rows and manifest. Local tests use fake clients and make no model request.
 
 ## Instructor Policy Manager
 
