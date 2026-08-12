@@ -334,8 +334,21 @@ def run_qwen3guard_capture(
                 )
                 _write_manifest(manifest_path, manifest)
         except Qwen3GuardModelUnavailableError:
-            for pending_future in futures:
-                pending_future.cancel()
+            executor.shutdown(wait=True, cancel_futures=True)
+            for completed_future in futures:
+                if completed_future.cancelled():
+                    continue
+                try:
+                    prediction = completed_future.result()
+                except Qwen3GuardModelUnavailableError:
+                    continue
+                if prediction.case_id in predictions:
+                    continue
+                _append_jsonl(output_path, asdict(prediction))
+                predictions[prediction.case_id] = prediction
+                attempts[prediction.case_id] += 1
+                if prediction.error is not None:
+                    ever_failed.add(prediction.case_id)
             manifest = _manifest_payload(
                 configuration,
                 fingerprint=fingerprint,

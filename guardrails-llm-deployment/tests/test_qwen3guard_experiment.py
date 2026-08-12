@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import wait
 from dataclasses import asdict
 from hashlib import sha256
 from pathlib import Path
 
 import pytest
 
+import guardrails_llm.qwen3guard_experiment as qwen3guard_experiment
 from guardrails_llm.inhouse_experiment import (
     build_balanced_classifier_benchmark,
     derive_classifier_label,
@@ -274,6 +276,50 @@ def test_capture_stops_when_provider_model_is_unavailable(
     assert manifest["status"] == "partial"
     assert manifest["completed_cases"] == 1
     assert len(output.read_text(encoding="utf-8").splitlines()) == 1
+
+
+def test_capture_preserves_parallel_success_when_model_becomes_unavailable(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _configure_inhouse(monkeypatch)
+    output = tmp_path / "predictions.jsonl"
+    manifest_path = tmp_path / "manifest.json"
+
+    def failed_futures_first(futures):
+        completed = list(futures)
+        wait(completed)
+        return iter(
+            sorted(completed, key=lambda future: future.exception() is None)
+        )
+
+    monkeypatch.setattr(
+        qwen3guard_experiment,
+        "as_completed",
+        failed_futures_first,
+    )
+
+    with pytest.raises(Qwen3GuardModelUnavailableError, match="cannot serve"):
+        run_qwen3guard_capture(
+            config=_allowed_config(),
+            development_cases_path=DEVELOPMENT,
+            calibration_cases_path=CALIBRATION,
+            output_path=output,
+            manifest_path=manifest_path,
+            classifier=UnavailableAfterOneClassifier(),
+            limit_cases=3,
+            max_concurrency=3,
+        )
+
+    rows = [
+        json.loads(line)
+        for line in output.read_text(encoding="utf-8").splitlines()
+    ]
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert len(rows) == 1
+    assert rows[0]["error"] is None
+    assert manifest["completed_cases"] == 1
+    assert manifest["status"] == "partial"
 
 
 def test_capture_with_failed_rows_is_not_marked_complete(
