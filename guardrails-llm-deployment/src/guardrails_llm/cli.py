@@ -25,7 +25,11 @@ from .evaluation import (
     summarize,
     write_results_csv,
 )
-from .evaluation_dataset import DatasetValidationError, load_evaluation_cases_for_run
+from .evaluation_dataset import (
+    DEFAULT_DATASET_MANIFEST_PATH,
+    DatasetValidationError,
+    load_evaluation_cases_for_run,
+)
 from .final_evidence import (
     FinalEvidenceError,
     assess_final_readiness_from_files,
@@ -99,6 +103,17 @@ from .model_profiles import (
 from .pipeline import build_assistant
 from .policy_manager import PolicyManager
 from .policy_server import serve_policy_ui
+from .qwen3guard import QWEN3GUARD_MODEL, Qwen3GuardModelUnavailableError
+from .qwen3guard_experiment import (
+    DEFAULT_CALIBRATION_CASES as DEFAULT_QWEN3GUARD_CALIBRATION_CASES,
+    DEFAULT_DEVELOPMENT_CASES as DEFAULT_QWEN3GUARD_DEVELOPMENT_CASES,
+    DEFAULT_QWEN3GUARD_COMPARISON,
+    DEFAULT_QWEN3GUARD_MANIFEST,
+    DEFAULT_QWEN3GUARD_OUTPUT,
+    DEFAULT_QWEN_MANIFEST,
+    compare_qwen_classifier_captures,
+    run_qwen3guard_capture,
+)
 from .retrieval_benchmark import run_local_retrieval_benchmark
 from .vector import VectorIndexError, build_vector_index, default_index_path
 from .visualization import write_rag_visualization
@@ -375,6 +390,100 @@ def main() -> None:
     )
     v2_classifier_eval_parser.add_argument("--limit-cases", type=int)
     v2_classifier_eval_parser.add_argument("--output-json", type=Path)
+
+    qwen3guard_capture_parser = subparsers.add_parser(
+        "capture-qwen3guard-classifier",
+        help="Capture the native Qwen3Guard 600-case safety benchmark",
+    )
+    qwen3guard_capture_parser.add_argument(
+        "--development-cases",
+        type=Path,
+        default=DEFAULT_QWEN3GUARD_DEVELOPMENT_CASES,
+    )
+    qwen3guard_capture_parser.add_argument(
+        "--calibration-cases",
+        type=Path,
+        default=DEFAULT_QWEN3GUARD_CALIBRATION_CASES,
+    )
+    qwen3guard_capture_parser.add_argument(
+        "--output",
+        type=Path,
+        default=DEFAULT_QWEN3GUARD_OUTPUT,
+    )
+    qwen3guard_capture_parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=DEFAULT_QWEN3GUARD_MANIFEST,
+    )
+    qwen3guard_capture_parser.add_argument(
+        "--dataset-manifest",
+        type=Path,
+        default=DEFAULT_DATASET_MANIFEST_PATH,
+    )
+    qwen3guard_capture_parser.add_argument(
+        "--classifier-model",
+        default=QWEN3GUARD_MODEL,
+    )
+    qwen3guard_capture_parser.add_argument("--limit-cases", type=int)
+    qwen3guard_capture_parser.add_argument(
+        "--max-concurrency",
+        type=int,
+        default=1,
+    )
+    qwen3guard_capture_parser.add_argument(
+        "--retry-failures",
+        action="store_true",
+    )
+    qwen3guard_capture_parser.add_argument(
+        "--allow-remote-models",
+        action="store_true",
+    )
+    qwen3guard_capture_parser.add_argument("--env-file", type=Path)
+
+    qwen3guard_compare_parser = subparsers.add_parser(
+        "compare-qwen3guard-classifier",
+        help="Compare saved Qwen and Qwen3Guard classifier captures offline",
+    )
+    qwen3guard_compare_parser.add_argument(
+        "--development-cases",
+        type=Path,
+        default=DEFAULT_QWEN3GUARD_DEVELOPMENT_CASES,
+    )
+    qwen3guard_compare_parser.add_argument(
+        "--calibration-cases",
+        type=Path,
+        default=DEFAULT_QWEN3GUARD_CALIBRATION_CASES,
+    )
+    qwen3guard_compare_parser.add_argument(
+        "--qwen-predictions",
+        type=Path,
+        required=True,
+    )
+    qwen3guard_compare_parser.add_argument(
+        "--qwen3guard-predictions",
+        type=Path,
+        required=True,
+    )
+    qwen3guard_compare_parser.add_argument(
+        "--qwen-manifest",
+        type=Path,
+        default=DEFAULT_QWEN_MANIFEST,
+    )
+    qwen3guard_compare_parser.add_argument(
+        "--qwen3guard-manifest",
+        type=Path,
+        default=DEFAULT_QWEN3GUARD_MANIFEST,
+    )
+    qwen3guard_compare_parser.add_argument(
+        "--dataset-manifest",
+        type=Path,
+        default=DEFAULT_DATASET_MANIFEST_PATH,
+    )
+    qwen3guard_compare_parser.add_argument(
+        "--output-json",
+        type=Path,
+        default=DEFAULT_QWEN3GUARD_COMPARISON,
+    )
 
     bge_prepare_parser = subparsers.add_parser(
         "prepare-inhouse-bge",
@@ -1192,6 +1301,57 @@ def main() -> None:
                 json.dumps(report, indent=2) + "\n",
                 encoding="utf-8",
             )
+        print(json.dumps(report, indent=2))
+        return
+
+    if args.command == "capture-qwen3guard-classifier":
+        try:
+            manifest = run_qwen3guard_capture(
+                config=OpenAIModelConfig(
+                    classifier_model=args.classifier_model,
+                    allow_remote_models=args.allow_remote_models,
+                    env_file=args.env_file,
+                ),
+                development_cases_path=args.development_cases,
+                calibration_cases_path=args.calibration_cases,
+                output_path=args.output,
+                manifest_path=args.manifest,
+                dataset_manifest_path=args.dataset_manifest,
+                limit_cases=args.limit_cases,
+                max_concurrency=args.max_concurrency,
+                retry_failures=args.retry_failures,
+            )
+        except (
+            OSError,
+            ValueError,
+            InHouseEndpointError,
+            RemoteModelsNotAllowedError,
+            MissingModelCredentialError,
+            RemoteModelCallError,
+            Qwen3GuardModelUnavailableError,
+        ) as exc:
+            parser.error(str(exc))
+        print(json.dumps(manifest, indent=2))
+        return
+
+    if args.command == "compare-qwen3guard-classifier":
+        try:
+            report = compare_qwen_classifier_captures(
+                development_cases_path=args.development_cases,
+                calibration_cases_path=args.calibration_cases,
+                qwen_predictions_path=args.qwen_predictions,
+                qwen3guard_predictions_path=args.qwen3guard_predictions,
+                qwen_manifest_path=args.qwen_manifest,
+                qwen3guard_manifest_path=args.qwen3guard_manifest,
+                dataset_manifest_path=args.dataset_manifest,
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            parser.error(str(exc))
+        args.output_json.parent.mkdir(parents=True, exist_ok=True)
+        args.output_json.write_text(
+            json.dumps(report, indent=2) + "\n",
+            encoding="utf-8",
+        )
         print(json.dumps(report, indent=2))
         return
 

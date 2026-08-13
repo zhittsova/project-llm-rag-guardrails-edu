@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "experiment": "qwen3guard_native_safety_benchmark",
+  "profile": "inhouse",
+  "provider": "openai_compatible",
+  "endpoint_host": "learning-services4.fokus.fraunhofer.de",
+  "model": "qwen3guard-gen-4b",
+  "request_policy": {
+    "timeout_seconds": 90.0,
+    "max_transport_retries": 1
+  },
+  "output_format_version": "qwen3guard-native-v1",
+  "max_output_tokens": 128,
+  "custom_moderation_prompt": false,
+  "dataset_version": "milestone3-v2",
+  "dataset_manifest_sha256": "2580d793478a8656c481c79fd94819b716073687eef864b2e7cb24f529205542",
+  "runtime_config_sha256": "65f3dc73b7c85ad543ec23617e29d261506183a1913b736c4583df434f5299a8",
+  "split_sha256": {
+    "development": "68527d236f2491a6e59de92d21c8819794bf7b47c4d8a2760dbbde5ee6e17c0b",
+    "calibration": "ab68caa1fa650b8df4aa7317e58c0d93b8ebcfb3bb89aaf9036001570b9e58b0"
+  },
+  "selection_sha256": "5489396907839744f8fc1597f8bdfd7643076d881f84edfdc72c273888305817",
+  "selected_cases": 600,
+  "max_concurrency": 2,
+  "split_case_counts": {
+    "calibration": 150,
+    "development": 450
+  },
+  "expected_label_counts": {
+    "academic_integrity": 100,
+    "pii": 100,
+    "prompt_injection": 100,
+    "safe": 100,
+    "unsafe_request": 100,
+    "unsupported": 100
+  },
+  "configuration_fingerprint": "cdd317b98bfcb25dbc33923adaa57576e3e1c291d6179bea7c93fea1b3e5ad23",
+  "started_at": "2026-08-02T17:31:43.309946+00:00",
+  "updated_at": "2026-08-02T17:32:57.506538+00:00",
+  "status": "complete",
+  "completed_cases": 600,
+  "failed_cases": 0,
+  "prediction_attempts": 600,
+  "retried_cases": 0,
+  "recovered_cases": 0,
+  "completed_split_counts": {
+    "calibration": 150,
+    "development": 450
+  },
+  "resumed_cases": 0
+}

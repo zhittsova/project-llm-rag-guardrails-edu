@@ -795,6 +795,175 @@ def test_evaluate_v2_classifier_is_local(tmp_path: Path, monkeypatch, capsys) ->
     assert json.loads(capsys.readouterr().out)["quality_gates"]["all_passed"] is False
 
 
+def test_qwen3guard_capture_requires_explicit_remote_permission(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "capture-qwen3guard-classifier",
+            "--limit-cases",
+            "1",
+            "--output",
+            str(tmp_path / "predictions.jsonl"),
+            "--manifest",
+            str(tmp_path / "manifest.json"),
+        ],
+    )
+
+    with pytest.raises(SystemExit, match="2"):
+        main()
+
+    assert "remote model calls are disabled" in capsys.readouterr().err.lower()
+    assert not list(tmp_path.iterdir())
+
+
+def test_qwen3guard_capture_wires_explicit_options(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_capture(**kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        return {"status": "complete", "completed_cases": 4}
+
+    monkeypatch.setattr(
+        "guardrails_llm.cli.run_qwen3guard_capture",
+        fake_capture,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "capture-qwen3guard-classifier",
+            "--allow-remote-models",
+            "--classifier-model",
+            "qwen3guard-gen-4b",
+            "--limit-cases",
+            "4",
+            "--max-concurrency",
+            "2",
+            "--retry-failures",
+            "--output",
+            str(tmp_path / "predictions.jsonl"),
+            "--manifest",
+            str(tmp_path / "manifest.json"),
+        ],
+    )
+
+    main()
+
+    config = captured["config"]
+    assert config.classifier_model == "qwen3guard-gen-4b"
+    assert config.allow_remote_models is True
+    assert captured["limit_cases"] == 4
+    assert captured["max_concurrency"] == 2
+    assert captured["retry_failures"] is True
+    assert json.loads(capsys.readouterr().out)["completed_cases"] == 4
+
+
+def test_qwen3guard_capture_uses_provider_catalog_model_by_default(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_capture(**kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        return {"status": "complete", "completed_cases": 1}
+
+    monkeypatch.setattr(
+        "guardrails_llm.cli.run_qwen3guard_capture",
+        fake_capture,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "capture-qwen3guard-classifier",
+            "--allow-remote-models",
+            "--limit-cases",
+            "1",
+            "--output",
+            str(tmp_path / "predictions.jsonl"),
+            "--manifest",
+            str(tmp_path / "manifest.json"),
+        ],
+    )
+
+    main()
+
+    assert captured["config"].classifier_model == "qwen3guard-gen-4b"
+
+
+def test_qwen3guard_comparison_writes_offline_json(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    output = tmp_path / "comparison.json"
+    captured: dict[str, object] = {}
+
+    def fake_compare(**kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        return {
+            "case_alignment": {
+                "identical_case_ids": True,
+                "total": 600,
+            }
+        }
+
+    monkeypatch.setattr(
+        "guardrails_llm.cli.compare_qwen_classifier_captures",
+        fake_compare,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "guardrails-llm",
+            "compare-qwen3guard-classifier",
+            "--qwen-predictions",
+            str(tmp_path / "qwen.jsonl"),
+            "--qwen3guard-predictions",
+            str(tmp_path / "qwen3guard.jsonl"),
+            "--qwen-manifest",
+            str(tmp_path / "qwen-manifest.json"),
+            "--qwen3guard-manifest",
+            str(tmp_path / "qwen3guard-manifest.json"),
+            "--dataset-manifest",
+            str(tmp_path / "dataset-manifest.json"),
+            "--output-json",
+            str(output),
+        ],
+    )
+
+    main()
+
+    assert json.loads(output.read_text(encoding="utf-8"))[
+        "case_alignment"
+    ]["total"] == 600
+    assert "config" not in captured
+    assert captured["qwen_manifest_path"].name == "qwen-manifest.json"
+    assert captured["qwen3guard_manifest_path"].name == (
+        "qwen3guard-manifest.json"
+    )
+    assert captured["dataset_manifest_path"].name == "dataset-manifest.json"
+    assert json.loads(capsys.readouterr().out)["case_alignment"][
+        "identical_case_ids"
+    ] is True
+
+
 def test_prepare_inhouse_bge_wires_profile_without_calling_api(
     tmp_path: Path,
     monkeypatch,
