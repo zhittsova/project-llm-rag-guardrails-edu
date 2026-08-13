@@ -522,6 +522,28 @@ def test_historical_capture_normalizes_string_categories(
     assert predictions["case-1"].categories == expected
 
 
+def test_historical_failed_capture_preserves_null_severity(tmp_path: Path) -> None:
+    path = tmp_path / "history.jsonl"
+    path.write_text(
+        json.dumps(
+            {
+                "case_id": "case-1",
+                "safety": None,
+                "categories": None,
+                "raw_output": None,
+                "error": "ValueError: malformed response",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    predictions = qwen3guard_experiment._load_qwen3guard_history(path)[0]
+
+    assert predictions["case-1"].severity is None
+    assert predictions["case-1"].error == "ValueError: malformed response"
+
+
 def test_comparison_rejects_incomplete_case_alignment(tmp_path: Path) -> None:
     cases = build_balanced_classifier_benchmark(DEVELOPMENT, CALIBRATION)
     qwen = [

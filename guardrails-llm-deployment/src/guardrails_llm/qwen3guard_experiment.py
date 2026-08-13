@@ -941,7 +941,12 @@ def _load_qwen3guard_history(
         try:
             payload = json.loads(line)
             if "severity" not in payload and "safety" in payload:
-                payload["severity"] = str(payload.pop("safety")).casefold()
+                legacy_safety = payload.pop("safety")
+                payload["severity"] = (
+                    None
+                    if legacy_safety is None
+                    else str(legacy_safety).casefold()
+                )
             if "raw_text" not in payload and "raw_output" in payload:
                 payload["raw_text"] = payload.pop("raw_output")
             payload["categories"] = _normalize_capture_categories(
