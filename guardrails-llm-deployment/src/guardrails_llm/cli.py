@@ -1083,8 +1083,9 @@ def main() -> None:
     visualize_parser.add_argument("--output", type=Path, required=True)
 
     workshop3_demo_parser = subparsers.add_parser(
-        "workshop3-demo",
-        help="Write the Workshop 3 guardrail comparison demo",
+        "guardrails-demo",
+        aliases=["workshop3-demo"],
+        help="Write the RAG guardrail comparison and evaluation tour",
     )
     workshop3_demo_parser.add_argument(
         "--evidence",
@@ -1098,8 +1099,9 @@ def main() -> None:
         type=Path,
         default=Path(__file__).resolve().parents[2]
         / "reports"
-        / "workshop3_guardrail_demo.html",
+        / "guardrails_demo.html",
     )
+    workshop3_demo_parser.add_argument("--judge-evidence", type=Path)
     workshop3_demo_parser.add_argument("--live", action="store_true")
     workshop3_demo_parser.add_argument("--allow-remote-models", action="store_true")
     workshop3_demo_parser.add_argument("--env-file", type=Path)
@@ -1112,10 +1114,11 @@ def main() -> None:
         parser.error(str(exc))
     corpus_path = getattr(args, "command_corpus", None) or args.corpus
 
-    if args.command == "workshop3-demo":
+    if args.command in {"guardrails-demo", "workshop3-demo"}:
         try:
             result = write_workshop3_demo(
                 evidence_path=args.evidence,
+                judge_evidence_path=args.judge_evidence,
                 output_path=args.output,
                 live=args.live,
                 allow_remote_models=args.allow_remote_models,

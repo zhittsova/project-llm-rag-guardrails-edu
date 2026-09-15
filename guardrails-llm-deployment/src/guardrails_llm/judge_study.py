@@ -351,7 +351,7 @@ def finalize_human_ground_truth(
                 dimension: getattr(by_a[item_id], dimension)
                 for dimension in JUDGE_DIMENSIONS
             }
-            rationale = "Independent reviewers agreed on all five dimensions."
+            rationale = "The two submitted reviews agreed on all five dimensions."
         score = round(
             sum(int(bool(labels[dimension])) for dimension in JUDGE_DIMENSIONS)
             / len(JUDGE_DIMENSIONS),

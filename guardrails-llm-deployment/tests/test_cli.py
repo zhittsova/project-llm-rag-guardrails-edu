@@ -287,7 +287,8 @@ def test_review_judge_reconciliation_command(tmp_path: Path, monkeypatch) -> Non
     }
 
 
-def test_workshop3_demo_command_passes_live_options(tmp_path: Path, monkeypatch) -> None:
+@pytest.mark.parametrize("command", ["guardrails-demo", "workshop3-demo"])
+def test_workshop3_demo_command_passes_live_options(tmp_path: Path, monkeypatch, command) -> None:
     captured: dict[str, object] = {}
 
     def fake_write_workshop3_demo(**kwargs: object) -> dict[str, object]:
@@ -300,7 +301,7 @@ def test_workshop3_demo_command_passes_live_options(tmp_path: Path, monkeypatch)
     )
     monkeypatch.setattr(sys, "argv", [
         "guardrails-llm",
-        "workshop3-demo",
+        command,
         "--evidence",
         str(tmp_path / "evidence.json"),
         "--output",
@@ -315,6 +316,7 @@ def test_workshop3_demo_command_passes_live_options(tmp_path: Path, monkeypatch)
 
     assert captured == {
         "evidence_path": tmp_path / "evidence.json",
+        "judge_evidence_path": None,
         "output_path": tmp_path / "demo.html",
         "live": True,
         "allow_remote_models": True,

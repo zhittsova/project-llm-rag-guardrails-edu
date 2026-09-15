@@ -1,12 +1,13 @@
 # OpenAI-compatible model workflow
 
-This project keeps local deterministic behavior as the default. OpenAI-backed
-features are optional and gated so tests, demos, and evaluation sweeps do not
-spend API credits by accident.
+This project uses deterministic local behavior by default. Remote model
+features are optional and gated so tests, demos, and evaluation sweeps cannot
+make provider calls by accident.
 
 The same code path can use either the public OpenAI API or an OpenAI-compatible
-provider, for example a LiteLLM endpoint. The provider is selected only by local
-environment variables; no key or endpoint is committed to the repository.
+provider, for example a LiteLLM endpoint. The generic provider is selected by local environment variables. Credentials are
+never committed. The fixed experiment profile retains its endpoint configuration
+for reproducibility. See [the generic profile guide](openai_compatible.md).
 
 ## Local setup
 
@@ -36,7 +37,7 @@ For an OpenAI-compatible endpoint, also add one of these variables locally:
 OPENAI_BASE_URL=https://provider.example/v1
 ```
 
-or, for the supervisor-provided naming:
+or use the supported alias:
 
 ```bash
 OPENAI_API_URL=https://provider.example/v1
@@ -89,15 +90,21 @@ When `OPENAI_BASE_URL` or `OPENAI_API_URL` is set, answer generation,
 classifier, and judge calls use Chat Completions for better compatibility with
 LiteLLM-style endpoints. Embeddings still use the embeddings endpoint.
 
-Recommended first in-house models:
+Models used in the in-house runtime:
 
 - embeddings: `BAAI/bge-m3`
 - embedding fallback: `sentence-transformers/paraphrase-multilingual-mpnet-base-v2`
 - answer generation: `Qwen/Qwen3.6-35B-A3B`
 - guard classifier: `Qwen/Qwen3.6-35B-A3B`
-- LLM judge: `Qwen/Qwen3.6-35B-A3B`
+- runtime judge default: `Qwen/Qwen3.6-35B-A3B`
 
-`Qwen3guard-gen-4b` is not used while it is unavailable on the provider side.
+The separately calibrated LLM judge uses
+`MiniMaxAI/MiniMax-M2.5`. Qwen3Guard is available through the dedicated
+`capture-qwen3guard-classifier` and `compare-qwen3guard-classifier` commands.
+It is evaluated as a generic safety component, not as the domain classifier,
+answer model, entailment verifier, or judge. See the
+[`Qwen3Guard classifier comparison`](../README.md#qwen3guard-classifier-comparison)
+for the full workflow and evidence boundary.
 
 Small approved smoke tests:
 
@@ -198,5 +205,5 @@ uv run guardrails-llm compare-guardrails \
   --limit-cases 5
 ```
 
-This is the intended Milestone 3 direction: compare guardrail techniques by
-accuracy, latency, robustness, and implementation effort.
+Use the comparison to evaluate guardrail techniques by accuracy, latency,
+robustness, and implementation effort.

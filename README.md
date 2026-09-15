@@ -1,197 +1,152 @@
-# Guardrails in LLM Deployment
+# LLM RAG Knowledge Guardrails
 
-[![CI](https://github.com/zhittsova/project-llm-rag-guardrails-edu/actions/workflows/ci.yml/badge.svg)](https://github.com/zhittsova/project-llm-rag-guardrails-edu/actions/workflows/ci.yml)
+[![CI](https://github.com/zhittsova/llm-rag-knowledge-guardrails/actions/workflows/ci.yml/badge.svg)](https://github.com/zhittsova/llm-rag-knowledge-guardrails/actions/workflows/ci.yml)
 
-Prototype for comparing guardrail techniques in a retrieval-augmented learning
-assistant. The project includes an offline deterministic profile for local
-development and an explicitly gated in-house profile for model-backed Milestone
-3 experiments.
+A knowledge assistant needs to know when to answer and when to stop. This Python
+project makes those decisions inspectable: **answer, block, redirect, or abstain**,
+with configurable policy, permitted document scope, evidence checks, and evaluation.
 
-The current comparison covers baseline RAG, regex, fuzzy matching, BGE-M3
-similarity, metadata filtering, Qwen classification, grounded answer
-generation, entailment verification, citation filtering, and abstention.
+I built it around a learning-assistant corpus. The architecture offers a starting
+point for internal knowledge and support workflows; those business adaptations
+have not been evaluated or deployed here.
 
-## Runtime Flow
+By [Katerina Zhittsova](https://zhittsova.com). Read more about my work in
+[AI Engineering](https://zhittsova.com/blog/).
 
-```text
-user request
-  -> deterministic input checks
-  -> BGE-M3 similarity checks
-  -> Qwen classifier for unresolved requests
-  -> Chroma retrieval with course/visibility filters
-  -> BGE evidence and policy-context gates
-  -> Qwen answer generation
-  -> Qwen entailment verification
-  -> verifier-approved citations or abstention
-  -> output PII/injection checks
-```
-
-The local profile uses hashing embeddings and extractive answers so tests and
-the Workshop 2 demo do not require credentials. Hashing is an offline fallback,
-not the Milestone 3 semantic-retrieval result.
-
-## Repository Layout
-
-```text
-guardrails-llm-deployment/
-  src/guardrails_llm/   pipeline, retrieval, guardrails, models, and evaluation
-  data/                 normalized corpora, policies, and versioned eval cases
-  docs/                 technical workflows and corpus contract
-  reports/              checked-in compact evaluation evidence
-  tests/                pytest coverage
-  pyproject.toml        uv package configuration
-scripts/                repository-level demo entry points
-Workshop1..3/           local workshop planning and presentation material
-```
-
-## Local Quick Start
+## Try it locally
 
 ```bash
-uv --directory guardrails-llm-deployment sync --dev
-uv --directory guardrails-llm-deployment run pytest
-./scripts/run_workshop2_demo.sh
+uv --directory guardrails-llm-deployment sync --frozen --dev
+./scripts/run_guardrails_demo.sh --open
 ```
 
-Run the guardrail-focused Workshop 3 demo with one command:
-
-```bash
-./scripts/run_workshop3_demo.sh
-```
-
-This opens a static HTML comparison generated from the checked-in historical
-400-case calibration evidence. That capture predates the evaluation-language
-repair and is retained as a diagnostic, not a current result. The command makes
-no API calls and keeps the frozen holdout unopened. To prepare BGE-M3 and run
-the same five scenarios through the live
-Fraunhofer-backed baseline and complete hybrid, use
-`./scripts/run_workshop3_demo.sh --live`; that mode is the explicit approval for
-remote model calls.
-
-Ask an offline guardrailed question:
+The comparison tour reads the current calibration reports. It shows the guardrail
+funnel, four dispositions, LLM-judge validation, failure analysis, and the holdout
+protocol. It makes no model API calls and exposes no holdout cases.
 
 ```bash
 uv --directory guardrails-llm-deployment run guardrails-llm query \
-  --mode guardrailed \
-  --retriever langchain \
+  --profile local --retriever lexical --mode guardrailed \
   --question "What is retrieval augmented generation?"
 ```
 
-## In-House Profile
+For local policy editing, human review, and adjudication, follow the
+[interface walkthrough](guardrails-llm-deployment/docs/interface_walkthrough.md).
 
-The `inhouse` profile is locked to the configured Fraunhofer OpenAI-compatible
-endpoint. It uses `BAAI/bge-m3` for embeddings and
-`Qwen/Qwen3.6-35B-A3B` for classification, answers, and entailment. It refuses
-remote calls unless `--allow-remote-models` is present.
+## Choose a runtime
 
-From `guardrails-llm-deployment/`, first inspect credential-safe configuration:
+- `local`: lexical or hashing-based retrieval and extractive answers, without credentials.
+- `openai-compatible`: your endpoint and explicit model names, using the Python `openai`
+  package for embeddings, classification, answers, and verification. See the
+  [configuration guide](guardrails-llm-deployment/docs/openai_compatible.md).
+- `inhouse`: the fixed experiment profile used in the recorded results. Its model
+  versions, calibrated settings, and endpoint restriction remain reproducible.
+
+Remote commands require `--allow-remote-models`. A different backend needs its own
+calibration; API compatibility alone does not transfer the results below.
+
+## What the guardrails address
+
+| Failure mode | Relevant controls | Possible outcome |
+|---|---|---|
+| Direct or obfuscated prompt injection | Normalization, regex/fuzzy rules, semantic intent checks, classifier | Block |
+| Instructions hidden in retrieved text | Context sanitization and output inspection | Remove unsafe context, block, or abstain |
+| Private-data requests or out-of-scope documents | Input guards and configured course/visibility/source filters | Block or exclude the source |
+| Harmful requests and domain-policy violations | Input rules and domain classifier | Block or redirect |
+| Unsupported answers or misleading citations | Evidence sufficiency, entailment, and citation checks | Abstain or retain supported claims |
+| Sensitive content in generated output | Output PII and injection rules | Block |
+
+These controls address observed failure modes; they are not a guarantee against all
+attacks. Document filters require correct metadata. An authenticated multi-user
+permission system is outside the current prototype.
+
+## Runtime flow
+
+```text
+request -> input checks -> semantic intent -> model classification
+        -> filtered retrieval -> evidence gate -> candidate answer
+        -> entailment and citation checks -> output inspection -> release
+```
+
+Requests can stop early. Policy redirects use a separate tutoring response path.
+The offline judge evaluates saved outputs; it is separate from the live guardrails.
+
+## Repository layout
+
+```text
+guardrails-llm-deployment/
+  src/guardrails_llm/   runtime, retrieval, guardrails, models, and evaluation
+  data/                 corpora, policies, and versioned evaluation cases
+  docs/                 technical workflows and corpus contract
+  reports/              compact, versioned evaluation evidence
+  tests/                deterministic pytest coverage
+scripts/                repository-level demo entry points
+A_Configurable_Hybrid_Guardrail_Architecture_for_a_Retrieval_Augmented_AI_Learning_Assistant/
+                        IEEE report source and bibliography
+output/pdf/             compiled report
+Workshop1..3/           workshop planning and presentation material
+```
+
+## In-house profile
+
+The `inhouse` profile is restricted to the configured Fraunhofer endpoint. It
+uses `BAAI/bge-m3` for embeddings and `Qwen/Qwen3.6-35B-A3B` for
+classification, answer generation, and entailment verification.
+
+From `guardrails-llm-deployment/`, inspect the credential-safe configuration
+before allowing a remote call:
 
 ```bash
 uv run guardrails-llm model-config --profile inhouse
 uv run guardrails-llm validate-runtime-config
 ```
 
-`data/guardrail_runtime_inhouse.toml` is the versioned source for model names,
-retrieval depths, evidence, classifier, policy-context, and entailment
-thresholds, and runtime artifact paths. New captures include its SHA-256 hash.
+`data/guardrail_runtime_inhouse.toml` records the model names, thresholds,
+retrieval depths, and artifact paths. Capture manifests include its SHA-256
+hash. Credentials, generated indexes, and caches remain local and must not be
+committed.
 
-Run the local instructor policy manager:
+The local instructor policy manager edits and validates the TOML guardrail
+policy without making remote calls:
 
 ```bash
 uv --directory guardrails-llm-deployment run guardrails-llm manage-policy --open
 ```
 
-It edits the TOML guardrail policy through validated drafts, local simulation,
-required direct/variant/benign coverage cases, atomic publish, and rollback
-snapshots. It binds to localhost, makes no remote calls, and shows BGE-M3
-runtime controls as read-only provenance.
+## Results and evidence boundary
 
-The package README contains the preparation, query, capture, and evaluation
-commands. The `.env` file and generated indexes/caches are local artifacts and
-must not be committed.
+| Evaluation | Result | Scope |
+|---|---|---|
+| Complete in-house hybrid | 392/400 correct, macro-F1 0.980, no unsafe answers | Common calibration split |
+| Qwen domain classifier | 597/600 overall, 148/150 on calibration | Balanced component benchmark |
+| BGE-M3 retrieval | 0.925 expected-document recall@3 | 200 evidence-bearing calibration cases |
+| Qwen3Guard strict policy | 400/400, compared with 398/400 for Qwen | Shared binary safety component task |
+| MiniMax judge validation | 0.795 exact five-dimension agreement | Family-disjoint 200-output validation set |
 
-## Evidence Status
+These are calibration and component results, not frozen-holdout results. The
+Qwen3Guard score applies only to the strict binary safety mapping. One human
+annotator completed two recommendation-assisted passes for the judge study and
+reconciled the three discrepancies. These labels provide an assisted human
+reference, not inter-annotator evidence.
 
-The repaired-source in-house calibration capture completed all `800/800`
-Qwen-only and complete-hybrid runs without provider or parsing failures. On the
-same 400 calibration cases, the complete hybrid reached `392/400` correct
-behaviors (`0.980` accuracy and macro-F1), `0.92` answer recall, `0.04` safe
-false-refusal rate, and no unsafe answers. Supported-answer precision and
-verifier-conditioned citation-entailment precision were both `1.0`.
+Expected-document citation precision is `0.766`, below the additional `0.95`
+diagnostic gate. The runtime verifier accepted every emitted citation, but the
+expected-document labels may omit valid sources. Independent human review is
+needed before the difference can be attributed to a citation defect.
 
-The balanced classifier component benchmark also completed all 600 cases. It
-reached `597/600` overall and `148/150` on calibration, with calibration
-macro-F1 `0.987`, 100% structured-response validity, and every classifier
-promotion gate passed. BGE-M3 retrieval reached `0.925` expected-document
-recall within the top three chunks on the 200 evidence-bearing calibration
-cases, compared with `0.690` for local hashing embeddings.
+The frozen 400-case holdout remains unopened. A final holdout run requires two
+independent reviews, adjudication, judge validation, and a sealed runtime
+configuration. The repository provides fail-closed commands for each gate.
 
-The result is still calibration evidence, not a final generalization claim.
-Expected-document citation precision is `0.766`, below its additional `0.95`
-diagnostic gate, although verifier-conditioned citation-entailment precision is
-`1.0`. Generated expected-document labels can omit other valid evidence and
-therefore require independent human review before this difference is treated
-as a runtime citation defect. The `1.0` entailment figure is consistency with
-the runtime model verifier, not independent human entailment validation. The
-current provenance-checked seven-technique report is published in
-[`reports/final_calibration_evidence.md`](guardrails-llm-deployment/reports/final_calibration_evidence.md).
+Detailed evidence is available in:
 
-The frozen 400-case holdout has not been run. It requires two independent human
-reviews, adjudication, judge validation, and configuration freeze first. The
-package provides fail-closed commands to build calibration evidence, seal the
-approved runtime configuration, and check final-run readiness. Separate
-holdout reviewer files and explicit reconciliation preserve independent human
-labeling before canonical annotations are written.
-
-The LLM-judge study uses two blinded, family-disjoint 200-output sets. Both
-human reviews and all three disagreement adjudications are complete. MiniMax
-`MiniMaxAI/MiniMax-M2.5` with the locked `guardrail-judge-v2.3` rubric passed
-all judge-validation gates: 100% structured validity, `0.795` exact
-five-dimension agreement, `0.915` groundedness agreement, and at least `0.900`
-agreement on every dimension. The human review was recommendation-assisted
-(67 Reviewer A and 40 Reviewer B assistance events), so it is not presented as
-fully independent double annotation. Adjudicated human labels remain ground
-truth and the LLM judge remains secondary. See the compact
-[`judge validation report`](guardrails-llm-deployment/reports/inhouse_judge_validation_v23.md).
-
-The package includes a reviewer-isolated local UI with SQLite autosave,
-question-grouped sections, dataset-issue flags, and atomic JSONL export. Start
-one process per reviewer so neither reviewer can see the other's labels:
-
-```bash
-uv --directory guardrails-llm-deployment run guardrails-llm \
-  review-judge-study \
-  --study-dir path/to/human_judge_study \
-  --reviewer reviewer_a \
-  --open
-```
-
-Sidebar counters track fully labelled items immediately. An annotator ID is
-still required before a completed section is exported to the reviewer JSONL.
-
-The UI refuses to open a study that fails duplicate, language-template,
-model-backed-output, or evidence-coverage checks. Technique mappings and model
-predictions are never served to the browser.
-
-For a time-constrained assisted review, create separate rubric recommendations
-and expose reviewer switching explicitly:
-
-```bash
-uv --directory guardrails-llm-deployment run guardrails-llm \
-  prepare-judge-recommendations --study-dir path/to/human_judge_study
-uv --directory guardrails-llm-deployment run guardrails-llm \
-  review-judge-study --study-dir path/to/human_judge_study \
-  --reviewer reviewer_a --allow-reviewer-switch --open
-```
-
-Recommendations are hidden by default. Every reveal or copy is recorded as
-assisted provenance and is not independent human ground truth. After both
-human reviews are complete, `review-judge-reconciliation` shows Reviewer A,
-Reviewer B, and the recommendation side by side and saves adjudications only
-for human disagreements.
+- [`final_calibration_evidence.md`](guardrails-llm-deployment/reports/final_calibration_evidence.md)
+- [`inhouse_judge_validation_v23.md`](guardrails-llm-deployment/reports/inhouse_judge_validation_v23.md)
+- [`guardrails-llm-deployment/README.md`](guardrails-llm-deployment/README.md)
 
 ## Development
 
-The import package is `guardrails_llm`; the installed command is
-`guardrails-llm`. See
-[`guardrails-llm-deployment/README.md`](guardrails-llm-deployment/README.md) for
-technical commands and [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a PR.
+The Python package is `guardrails_llm`, and the installed command is
+`guardrails-llm`. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a
+pull request. The package README documents the complete preparation, capture,
+review, and evaluation workflows.

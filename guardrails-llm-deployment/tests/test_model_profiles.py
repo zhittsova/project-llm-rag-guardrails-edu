@@ -128,3 +128,51 @@ def test_profile_summary_never_contains_url_or_key(monkeypatch) -> None:
     serialized = str(summary)
     assert "not-for-output" not in serialized
     assert "https://" not in serialized
+
+
+def test_compatible_profile_preserves_models_scope_and_remote_opt_in(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://models.example.test/v1")
+    args = _runtime_args()
+    args.profile = "openai-compatible"
+    args.env_file = tmp_path / "missing.env"
+    args.allow_remote_models = False
+    args.embedding_model = "my-embeddings"
+    args.answer_model = "my-answer"
+    args.classifier_model = "my-classifier"
+    args.entailment_model = "my-verifier"
+    original_index = args.index_dir
+    apply_model_profile(args)
+    assert args.embedding_model == args.guard_embedding_model == "my-embeddings"
+    assert args.answer_model == "my-answer"
+    assert args.classifier_model == "my-classifier"
+    assert args.entailment_model == "my-verifier"
+    assert args.retriever == "vector"
+    assert args.guard_classifier == args.entailment_verifier == "openai"
+    assert args.command_corpus is None
+    assert args.index_dir == original_index
+    assert args.course_id == "guardrails-101"
+    assert args.allow_remote_models is False
+
+
+def test_compatible_profile_requires_model_selection(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://models.example.test/v1")
+    args = _runtime_args()
+    args.profile = "openai-compatible"
+    args.env_file = tmp_path / "missing.env"
+    with pytest.raises(ValueError, match="embedding-model"):
+        apply_model_profile(args)
+
+
+def test_compatible_summary_omits_secrets(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://models.example.test/v1?token=hidden")
+    monkeypatch.setenv("OPENAI_API_KEY", "never-print-this")
+    summary = model_profile_summary("openai-compatible", tmp_path / "missing.env")
+    assert summary["endpoint_host"] == "models.example.test"
+    assert "never-print-this" not in str(summary)
+    assert "hidden" not in str(summary)
+
+
+def test_compatible_profile_rejects_non_http_endpoint(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("OPENAI_BASE_URL", "file:///tmp/model")
+    with pytest.raises(ValueError, match="HTTP"):
+        model_profile_summary("openai-compatible", tmp_path / "missing.env")
