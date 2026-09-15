@@ -119,7 +119,7 @@
       ]
     },
     "bge_similarity_with_shared_controls": {
-      "correct": 248,
+      "correct": 249,
       "behavior_accuracy": 0.623,
       "macro_f1": 0.583,
       "answer_recall": 0.87,
@@ -148,7 +148,7 @@
       ]
     },
     "deterministic_hybrid": {
-      "correct": 249,
+      "correct": 250,
       "behavior_accuracy": 0.625,
       "macro_f1": 0.584,
       "answer_recall": 0.87,

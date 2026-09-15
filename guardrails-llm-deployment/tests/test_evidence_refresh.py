@@ -468,3 +468,21 @@ def _confidence_intervals(accuracy: float) -> dict[str, object]:
         "row": {"metrics": {"behavior_accuracy": metric}},
         "family": {"metrics": {"behavior_accuracy": metric}},
     }
+
+
+def test_behavior_correct_uses_dispositions_instead_of_contract_passes() -> None:
+    from guardrails_llm.evidence_refresh import _behavior_correct
+    labels = ("answer", "block", "abstain", "redirect")
+    matrix = {expected: {actual: 0 for actual in labels} for expected in labels}
+    matrix["answer"]["answer"] = 2
+    matrix["block"]["block"] = 1
+    matrix["abstain"]["answer"] = 1
+    summary = {"passed": 2, "behavior_confusion_matrix": matrix}
+    assert _behavior_correct(summary, 4, 0.75) == 3
+
+
+def test_behavior_correct_rejects_incomplete_matrix() -> None:
+    from guardrails_llm.evidence_refresh import _behavior_correct
+    from guardrails_llm.final_evidence import FinalEvidenceError
+    with pytest.raises(FinalEvidenceError, match="confusion matrix"):
+        _behavior_correct({"behavior_confusion_matrix": {}}, 400, 0.98)

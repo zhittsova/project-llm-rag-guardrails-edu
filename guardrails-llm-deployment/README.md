@@ -1,19 +1,24 @@
-# Guardrails in LLM Deployment
+# LLM RAG Knowledge Guardrails
+
+For the public project overview, see the [repository README](../README.md).
+Start with the [local interface walkthrough](docs/interface_walkthrough.md), or
+configure your endpoint with the [OpenAI-compatible profile](docs/openai_compatible.md).
+
 
 Python package for implementing and evaluating guardrails in a
 retrieval-augmented course assistant. Python 3.11 or newer and `uv` are
 required.
 
-## What Is Implemented
+## What is implemented
 
 - baseline RAG without guardrails;
 - normalized JSONL corpus validation and LangChain chunking;
 - lexical, hashing-vector, and BGE-M3/Chroma retrieval;
 - native course, visibility, and policy source-type filters;
 - configurable regex, fuzzy, and embedding-similarity checks;
-- optional Qwen input classification through an OpenAI-compatible API;
-- BGE evidence sufficiency and policy-context retrieval gates;
-- optional Qwen answer generation and entailment verification;
+- optional model-based input classification through an OpenAI-compatible API;
+- evidence sufficiency and policy-context retrieval gates;
+- optional model-based answer generation and entailment verification;
 - verifier-selected citations, abstention, PII, injection, and academic-
   integrity handling;
 - versioned evaluation splits, resumable model captures, confidence intervals,
@@ -29,7 +34,7 @@ src/guardrails_llm/
   guardrail_policy.py      TOML-backed rules and similarity policy
   guardrail_runtime.py     strict versioned in-house runtime controls
   openai_models.py         gated OpenAI-compatible model adapters
-  model_profiles.py        local and Fraunhofer in-house profiles
+  model_profiles.py        local, OpenAI-compatible and fixed experiment profiles
   evaluation.py            behavior and grounding metrics
   e2e_capture.py           resumable common-split model experiments
   final_evidence.py        calibration packaging and final-run release gates
@@ -43,7 +48,7 @@ reports/                   compact calibration evidence
 tests/                     deterministic tests with fake model clients
 ```
 
-## Install and Verify
+## Install and verify
 
 From this package directory:
 
@@ -53,7 +58,7 @@ uv run pytest
 uv build
 ```
 
-## Offline Workflow
+## Offline workflow
 
 No API key is needed for the default local profile:
 
@@ -73,7 +78,7 @@ This path uses deterministic hashing embeddings and extractive answers. It is
 useful for development and regression tests, but it is not the semantic
 Milestone 3 configuration.
 
-## Fraunhofer In-House Workflow
+## Fraunhofer in-house workflow
 
 Store the endpoint and key only in the ignored `.env` file:
 
@@ -123,7 +128,7 @@ Every remote command requires `--allow-remote-models`. The endpoint host,
 models, prompt versions, thresholds, and input hashes are stored in manifests;
 credentials and raw prompt text are not stored in embedding caches.
 
-### Qwen3Guard Classifier Comparison
+### Qwen3Guard classifier comparison
 
 The project includes an isolated comparison between the existing prompted Qwen
 classifier and the native `qwen3guard-gen-4b` safety moderator. The runtime RAG
@@ -178,7 +183,7 @@ If the provider cannot serve the configured model during a future
 capture, the command stops with an actionable error and preserves its partial
 rows and manifest. Local tests use fake clients and make no model request.
 
-## Instructor Policy Manager
+## Instructor policy manager
 
 Start the local policy workflow from this directory:
 
@@ -201,7 +206,7 @@ localhost requests and does not expose credentials or call model APIs.
 Use `guardrails-llm --help` and the evaluation commands below for the complete
 capture sequence.
 
-## Evaluation Status
+## Evaluation status
 
 The versioned v2 dataset has 2,000 generated cases:
 
@@ -232,7 +237,7 @@ calibration results; the frozen holdout remains unopened.
 The holdout remains unopened until double human review and adjudication are
 complete. Generated labels are not treated as final human ground truth.
 
-## Workshop 3 Demo
+## Workshop 3 demo
 
 Run the complete offline demo from the repository root:
 
@@ -240,12 +245,13 @@ Run the complete offline demo from the repository root:
 ./scripts/run_workshop3_demo.sh
 ```
 
-The command opens `reports/workshop3_guardrail_demo.html`. It uses the
-checked-in 400-case calibration evidence and makes no remote calls. The report
-shows the complete runtime cascade, the identical-split technique comparison,
-five baseline-versus-hybrid failure scenarios, and the nine remaining false
-abstentions. It labels the evidence as calibration-only and does not read the
-frozen holdout.
+The command opens `reports/workshop3_guardrail_demo.html`. It uses a historical
+400-case calibration capture and makes no remote calls. The report shows the
+complete runtime cascade, the identical-split technique comparison, five
+baseline-versus-hybrid failure scenarios, and the nine false abstentions in
+that capture. The repaired calibration evidence reports eight false
+abstentions. The demo keeps the earlier capture as a diagnostic, labels it as
+calibration-only, and does not read the frozen holdout.
 
 After explicitly approving Fraunhofer model use, run the same five requests
 through BGE-M3 retrieval and the Qwen-backed baseline and complete hybrid:
@@ -259,7 +265,7 @@ adds current baseline and hybrid dispositions, answers, triggers, and citations
 to the HTML. The script uses only the configured Fraunhofer endpoint; it cannot
 fall back to the official OpenAI Platform profile.
 
-### Human-Calibrated LLM Judge
+### Human-calibrated LLM judge
 
 Prepare two blinded, family-disjoint 200-output annotation sets from a common
 calibration result file:
@@ -270,7 +276,7 @@ uv run guardrails-llm prepare-judge-study \
   --output-dir path/to/human_judge_study
 ```
 
-Preparation now prioritizes unique source requests before selecting a second
+Preparation prioritizes unique source requests before selecting a second
 distinct system output for the same request. Exact duplicate review tasks are
 excluded. The study-quality audit also checks German template errors, unique
 question coverage, inclusion of complete in-house hybrid outputs, and usable
@@ -385,10 +391,11 @@ The selected in-house judge is MiniMax `MiniMaxAI/MiniMax-M2.5` with rubric
 five-dimension agreement was `0.790` on calibration and `0.795` on validation;
 groundedness agreement was `0.920` and `0.915`. See
 [`reports/inhouse_judge_validation_v23.md`](reports/inhouse_judge_validation_v23.md).
-The human review was recommendation-assisted, so the report does not describe
-it as fully independent double annotation.
+One human annotator completed two recommendation-assisted review passes and
+reconciled the three discrepancies between them. The report therefore treats
+the labels as an assisted human reference, not as inter-annotator evidence.
 
-### Independent Frozen-Holdout Review
+### Independent frozen-holdout review
 
 Do not start this workflow until the two human reviewers are assigned. Prepare
 separate blinded reviewer files without exposing generated expected labels:
@@ -428,7 +435,7 @@ recorded as reviewer consensus; only disagreements require a separate human
 adjudication. Dataset sealing still validates all 400 canonical annotations
 and updates the dataset manifest before evaluation is permitted.
 
-### Final Evidence and Holdout Release Gate
+### Final evidence and holdout release gate
 
 After a repaired model capture, rebuild the model evaluation, deterministic
 summary, model-backed summary, failure analysis, and consolidated
@@ -451,7 +458,7 @@ uv run guardrails-llm build-final-evidence
 ```
 
 This writes `reports/final_calibration_evidence.json` and
-`reports/final_calibration_evidence.md`. The checked-in report now reflects the
+`reports/final_calibration_evidence.md`. The checked-in report reflects the
 repaired 400-case calibration capture. Both commands reject holdout-derived or
 incomplete inputs and keep failed diagnostics visible.
 
@@ -493,7 +500,7 @@ uv run guardrails-llm check-final-readiness \
 The readiness command exits nonzero and lists every failed condition until all
 required evidence is present. It does not execute the holdout itself.
 
-## Contribution Rules
+## Contribution rules
 
 Use feature branches, small conventional commits, tests, and PRs. Remote model
 paths must stay explicitly gated, secrets must never be committed, and each PR

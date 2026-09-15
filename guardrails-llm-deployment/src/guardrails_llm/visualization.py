@@ -204,7 +204,9 @@ def _render_html(
   </section>
 
   <section>
-    <h2>Pipeline Stages</h2>
+    <h2>Configured pipeline</h2>
+    <p>This is a reference flow, not an execution trace. A request can exit early.
+    The disposition, retrieved chunks and grounding decision below describe this run.</p>
     <ol>
       {"".join(f"<li>{escape(stage)}</li>" for stage in stages)}
     </ol>
@@ -244,7 +246,7 @@ def _stages_for_mode(mode: str, triggers: list[str]) -> list[str]:
         return [
             "Load corpus/index",
             "Retrieve closest chunks without safety filters",
-            "Build an extractive answer from retrieved chunks",
+            "Generate an answer from retrieved chunks",
             "Attach citations",
         ]
     return [

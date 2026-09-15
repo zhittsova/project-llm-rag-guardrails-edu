@@ -10,12 +10,19 @@
     "items": 400,
     "judge_calibration_items": 200,
     "judge_validation_items": 200,
+    "human_annotators": 1,
+    "review_passes": 2,
+    "reviewer_slots_represent_passes": true,
     "exact_five_dimension_reviewer_agreement": 0.993,
+    "agreement_unit": "two passes by one annotator",
     "adjudicated_items": 3,
+    "adjudicator_was_annotator": true,
     "recommendation_assisted": true,
+    "recommendation_preparation": "GPT-5.6 Sol, high reasoning effort",
+    "recommendations_hidden_by_default": true,
     "reviewer_a_assistance_events": 67,
     "reviewer_b_assistance_events": 40,
-    "limitation": "The two reviews were recommendation-assisted and are not fully independent double annotation."
+    "limitation": "One human annotator completed two recommendation-assisted passes and reconciled their three discrepancies; this supports within-annotator consistency, not inter-annotator agreement."
   },
   "judge_calibration": {
     "structured_response_validity": 1.0,
@@ -58,7 +65,7 @@
     "validation_capture_manifest_sha256": "9a03bd5104ab5acf337f8a68245e9449447012b1da942a940c2b794b97bceae5"
   },
   "limitations": [
-    "The LLM judge is a secondary evaluator; adjudicated human labels remain ground truth.",
+    "The LLM judge is a secondary evaluator; reconciled human labels remain the reference.",
     "This is judge calibration and validation evidence, not frozen-holdout system performance.",
     "The rubric was tuned only on judge_calibration and locked before judge_validation was evaluated."
   ]

@@ -9,8 +9,8 @@ Calibration evidence only: the frozen holdout remains unopened.
 | Baseline RAG | 100/400 | 0.250 | 0.100 | 0.000 | 1.000 |
 | Normalized regex + metadata | 141/400 | 0.352 | 0.271 | 0.025 | 0.790 |
 | Fuzzy + shared controls | 153/400 | 0.383 | 0.333 | 0.025 | 0.855 |
-| BGE similarity + shared controls | 248/400 | 0.623 | 0.583 | 0.045 | 0.640 |
-| Deterministic hybrid policy | 249/400 | 0.625 | 0.584 | 0.045 | 0.635 |
+| BGE similarity + shared controls | 249/400 | 0.623 | 0.583 | 0.045 | 0.640 |
+| Deterministic hybrid policy | 250/400 | 0.625 | 0.584 | 0.045 | 0.635 |
 | Qwen classifier scenario | 389/400 | 0.973 | 0.972 | 0.055 | 0.000 |
 | Complete in-house hybrid | 392/400 | 0.980 | 0.980 | 0.040 | 0.000 |
 

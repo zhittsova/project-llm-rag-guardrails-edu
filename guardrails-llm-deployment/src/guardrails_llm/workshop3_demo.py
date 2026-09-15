@@ -55,11 +55,11 @@ DEMO_SCENARIOS = (
         ),
         "without_guardrails": "Retrieves context and attempts an answer.",
         "with_guardrails": (
-            "Regex, fuzzy, BGE similarity, and Qwen classification can block "
+            "Regex, fuzzy, semantic similarity, and model classification can block "
             "the request before retrieval."
         ),
         "expected_disposition": "block",
-        "stages": "normalize -> deterministic checks -> BGE -> Qwen -> block",
+        "stages": "normalize -> deterministic checks -> similarity -> classifier -> block",
     },
     {
         "scenario_id": "private_information",
@@ -103,7 +103,7 @@ DEMO_SCENARIOS = (
         ),
         "without_guardrails": "May answer merely because some chunks exist.",
         "with_guardrails": (
-            "Abstains when retrieved evidence is weak or Qwen cannot verify "
+            "Abstains when retrieved evidence is weak or the verifier cannot verify "
             "the generated claims."
         ),
         "expected_disposition": "abstain",
@@ -116,10 +116,10 @@ TECHNIQUE_LABELS = {
     "baseline": "Baseline RAG",
     "regex_only_with_shared_controls": "Regex only",
     "fuzzy_only_with_shared_controls": "Fuzzy only",
-    "bge_similarity_with_shared_controls": "BGE-M3 similarity",
+    "bge_similarity_with_shared_controls": "Semantic similarity",
     "deterministic_hybrid": "Deterministic hybrid",
-    "qwen_classifier_only": "Qwen classifier only",
-    "complete_inhouse_hybrid": "Complete in-house hybrid",
+    "qwen_classifier_only": "Model classifier scenario",
+    "complete_inhouse_hybrid": "Complete hybrid",
 }
 
 
@@ -127,6 +127,7 @@ def write_workshop3_demo(
     *,
     evidence_path: Path,
     output_path: Path,
+    judge_evidence_path: Path | None = None,
     live: bool = False,
     allow_remote_models: bool = False,
     env_file: Path | None = None,
@@ -145,7 +146,13 @@ def write_workshop3_demo(
         else []
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    rendered = _render_demo(evidence, live_results=live_results)
+    judge_html = ""
+    if judge_evidence_path is not None:
+        judge = json.loads(judge_evidence_path.read_text(encoding="utf-8"))
+        if judge.get("holdout_used") is not False or judge.get("evidence_scope") != "human_calibrated_llm_judge":
+            raise ValueError("judge evidence must be a separate calibration/validation study")
+        judge_html = _render_judge_evidence(judge)
+    rendered = _render_demo(evidence, live_results=live_results, judge_html=judge_html)
     output_path.write_text(
         "\n".join(line.rstrip() for line in rendered.splitlines()) + "\n",
         encoding="utf-8",
@@ -257,6 +264,7 @@ def _render_demo(
     evidence: dict[str, object],
     *,
     live_results: list[dict[str, object]],
+    judge_html: str = "",
 ) -> str:
     techniques = evidence["techniques"]
     assert isinstance(techniques, dict)
@@ -280,13 +288,22 @@ def _render_demo(
     baseline = techniques["baseline"]
     assert isinstance(complete, dict) and isinstance(baseline, dict)
     failed_cases = int(failure_analysis.get("failed_cases", 0))
-    mode_label = "Live Fraunhofer run" if live_results else "Recorded calibration evidence"
+    mode_label = "Live experiment-profile run" if live_results else "Recorded calibration evidence"
+    counts = failure_analysis.get("stage_counts", {})
+    failure_detail = ", ".join(
+        f"{int(counts[key])} {label}" for key, label in (
+            ("expected_policy_document_not_retrieved", "retrieval misses"),
+            ("answerability_rejected_with_expected_document_present", "answerability rejections"),
+            ("entailment_rejected_unsupported_extra_claims", "entailment rejections"),
+        ) if key in counts
+    ) or "See the source report for the stage breakdown."
+
     return f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Workshop 3 Guardrail Demo</title>
+  <title>RAG Knowledge Guardrails</title>
   <style>
     :root {{
       color-scheme: light;
@@ -322,7 +339,26 @@ def _render_demo(
     .metric {{ background: var(--surface); padding: 20px; min-width: 0; }}
     .metric strong {{ display: block; font-size: 34px; margin-bottom: 4px; }}
     .metric span {{ color: var(--muted); font-size: 14px; }}
-    .pipeline {{ display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; align-items: stretch; }}
+    .funnel {{ list-style: none; margin: 24px auto; padding: 0; display: grid; gap: 7px; }}
+    .funnel li {{ text-align: center; padding: 13px 24px; background: var(--blue-soft); border-left: 4px solid var(--blue); border-right: 4px solid var(--blue); margin-inline: auto; width: calc(100% - var(--inset, 0px)); }}
+    .funnel li:nth-child(2) {{ --inset: 55px; }}
+    .funnel li:nth-child(3) {{ --inset: 110px; }}
+    .funnel li:nth-child(4) {{ --inset: 165px; }}
+    .funnel li:nth-child(5) {{ --inset: 220px; }}
+    .funnel li:nth-child(6) {{ --inset: 275px; }}
+    .funnel li:nth-child(7) {{ --inset: 330px; }}
+    .funnel li:nth-child(8) {{ --inset: 385px; background: var(--green-soft); border-color: var(--green); }}
+    .funnel strong {{ display: block; font-size: 18px; }}
+    .funnel span {{ color: var(--muted); font-size: 15px; }}
+    .outcomes {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }}
+    .outcomes div {{ border-top: 4px solid var(--green); padding: 16px; background: var(--surface); }}
+    .outcomes strong {{ font-size: 24px; }}
+    .outcomes p {{ font-size: 16px; line-height: 1.5; }}
+    .judge-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }}
+    .judge-grid table {{ width: 100%; border-collapse: collapse; }}
+    .judge-grid th, .judge-grid td {{ padding: 12px 10px; border-bottom: 1px solid var(--line); text-align: left; }}
+    .judge-grid p, .study-scope {{ line-height: 1.6; }}
+
     .step {{ border-top: 4px solid var(--blue); background: var(--blue-soft); padding: 12px 10px; font-size: 13px; line-height: 1.35; min-width: 0; overflow-wrap: anywhere; }}
     .technique-table {{ border: 1px solid var(--line); background: var(--surface); }}
     .technique-row {{ display: grid; grid-template-columns: minmax(190px, 1.3fr) 2fr 90px 90px; gap: 16px; align-items: center; padding: 13px 16px; border-bottom: 1px solid var(--line); }}
@@ -362,7 +398,8 @@ def _render_demo(
     }}
     @media (max-width: 620px) {{
       .wrap {{ width: min(100% - 22px, 1120px); }}
-      .metrics, .comparison {{ grid-template-columns: 1fr; }}
+      .metrics, .comparison, .judge-grid, .outcomes {{ grid-template-columns: 1fr; }}
+      .funnel li {{ width: 100%; padding: 12px; }}
       .technique-row {{ grid-template-columns: 1fr 62px; gap: 8px; }}
       .technique-row .bar, .technique-row .macro {{ display: none; }}
       .metric strong {{ font-size: 29px; }}
@@ -373,8 +410,8 @@ def _render_demo(
 <body>
   <header>
     <div class="wrap">
-      <h1>Workshop 3 Guardrail Demo</h1>
-      <p class="lead">A baseline-versus-guardrailed view of the course assistant, focused on where each protection acts and what failure it prevents.</p>
+      <h1>RAG Knowledge Guardrails</h1>
+      <p class="lead">Inspect the policy decisions, evidence checks, and evaluation behind a knowledge assistant. The included learning-assistant corpus supplies the tested domain.</p>
       <div class="status">
         <span class="tag">{escape(mode_label)}</span>
         <span class="tag warn">Calibration evidence only</span>
@@ -397,18 +434,19 @@ def _render_demo(
 
   <section>
     <div class="wrap">
-      <h2>Guardrails behind the scenes</h2>
-      <div class="pipeline" aria-label="Complete guardrail pipeline">
-        <div class="step">1. Metadata filter</div>
-        <div class="step">2. Regex and fuzzy checks</div>
-        <div class="step">3. BGE-M3 similarity</div>
-        <div class="step">4. Qwen classifier</div>
-        <div class="step">5. BGE evidence gate</div>
-        <div class="step">6. Qwen answer</div>
-        <div class="step">7. Qwen entailment</div>
-        <div class="step">8. Output checks</div>
-      </div>
-      <p class="lead" style="margin-top:16px">BGE-M3 provides semantic vectors for retrieval and similarity guards. Qwen handles ambiguous intent, generation, and claim-level evidence verification. Deterministic checks stay first because they are cheap and auditable.</p>
+      <h2>The guardrail funnel</h2>
+      <p>Requests can stop as soon as a boundary fails. Width is schematic, not measured traffic.</p>
+      <ol class="funnel" aria-label="Configured guardrail stages in order">
+        <li><strong>1. Normalize and inspect</strong><span>Regex and fuzzy checks catch explicit violations.</span></li>
+        <li><strong>2. Compare semantic intent</strong><span>Embedding similarity finds related policy examples.</span></li>
+        <li><strong>3. Classify unresolved intent</strong><span>The model classifier can block, redirect, or abstain.</span></li>
+        <li><strong>4. Filter and retrieve</strong><span>Apply configured document scope before context selection.</span></li>
+        <li><strong>5. Check evidence</strong><span>Stop if the retrieved material cannot support an answer.</span></li>
+        <li><strong>6. Generate a candidate</strong><span>Use the question and retained evidence.</span></li>
+        <li><strong>7. Verify claims</strong><span>Check entailment and identify supporting chunks.</span></li>
+        <li><strong>8. Inspect output</strong><span>Release only after output and citation checks.</span></li>
+      </ol>
+      <p>Configured flow: local input checks precede remote model work. An early block does not execute every stage. Domain-policy redirects use their own policy-backed response path.</p>
     </div>
   </section>
 
@@ -424,7 +462,7 @@ def _render_demo(
   <section>
     <div class="wrap">
       <h2>What fails without guardrails</h2>
-      <p class="lead">Open each scenario to compare the unprotected path with the complete hybrid. Offline mode shows the designed flow; live mode adds current Fraunhofer model outputs.</p>
+      <p class="lead">Open each scenario to compare the unprotected path with the complete hybrid. These are designed scenario paths. Live mode adds outputs from the recorded experiment profile; the metrics above still come from the selected calibration report.</p>
       <div class="scenario-list" style="margin-top:18px">
         {scenario_rows}
       </div>
@@ -436,11 +474,32 @@ def _render_demo(
       <h2>Known boundary</h2>
       <div class="failure">
         <h3>{failed_cases} false abstentions on the 400-case calibration split</h3>
-        <p>The remaining errors are usefulness failures: two retrieval misses, three answerability rejections, and four entailment rejections caused by unsupported extra claims. This result is not a frozen-holdout claim.</p>
+        <p>The stage breakdown is {escape(failure_detail)}. These abstentions reduce useful answers. This result is not a frozen-holdout claim.</p>
       </div>
     </div>
   </section>
 
+  <section id="dispositions"><div class="wrap">
+    <h2>Four response dispositions</h2>
+    <p>A response outcome describes what the assistant should do next.</p>
+    <div class="outcomes">
+      <div><strong>Answer</strong><p>Permitted evidence supports a useful response.</p></div>
+      <div><strong>Block</strong><p>A safety or policy rule stops the request.</p></div>
+      <div><strong>Redirect</strong><p>Offer an allowed form of help, such as tutoring instead of completed assessed work.</p></div>
+      <div><strong>Abstain</strong><p>Evidence or verification is insufficient to answer.</p></div>
+    </div>
+  </div></section>
+  {judge_html}
+  <section id="holdout"><div class="wrap">
+    <h2>Keep the final test separate</h2>
+    <div class="metrics">
+      <div class="metric"><strong>1,200</strong><span>development cases for debugging and design</span></div>
+      <div class="metric"><strong>400</strong><span>calibration cases for comparing configurations</span></div>
+      <div class="metric"><strong>400</strong><span>frozen holdout cases, reserved for final evaluation</span></div>
+    </div>
+    <p class="study-scope"><strong>Status: holdout unopened in this evidence.</strong> Before a final system claim: independently review holdout labels, adjudicate disagreements, seal the dataset and runtime configuration, then run the frozen test. This view reads the calibration report and exposes no holdout cases.</p>
+    <p class="study-scope">These split sizes describe the bundled evaluation protocol. Judge calibration and validation are a separate study of 200 outputs each.</p>
+  </div></section>
   <footer>
     <div class="wrap">Embedding: {escape(str(models.get('embedding', 'unknown')))} · Classifier, answer, and entailment: {escape(str(models.get('answer', 'unknown')))}. The frozen holdout remains unopened.</div>
   </footer>
@@ -521,3 +580,26 @@ def _number(value: object) -> float:
     if isinstance(value, bool) or not isinstance(value, int | float):
         raise ValueError("metric must be numeric")
     return float(value)
+
+
+def _render_judge_evidence(judge: dict[str, object]) -> str:
+    validation = judge["judge_validation"]
+    human = judge["human_review"]
+    rows = "".join(
+        f"<tr><th scope='row'>{label}</th><td>{_percent(validation['dimension_accuracy'][key])}</td></tr>"
+        for key, label in (
+            ("grounded", "Groundedness"), ("privacy_safe", "Privacy"),
+            ("injection_safe", "Injection safety"), ("integrity_safe", "Domain integrity"),
+            ("refusal_appropriate", "Refusal appropriateness"),
+        )
+    )
+    return f"""<section id="judge"><div class="wrap">
+      <h2>LLM as a judge</h2>
+      <p class="lead">A secondary evaluator for saved outputs. It does not decide live responses.</p>
+      <div class="judge-grid"><div>
+        <div class="metric"><strong>{_percent(validation['exact_five_dimension_agreement'])}</strong><span>exact five-dimension agreement on {human['judge_validation_items']} judge-validation outputs</span></div>
+        <p>Rubric selected on {human['judge_calibration_items']} judge-calibration outputs, then locked before family-disjoint validation.</p>
+        <p><strong>Human reference:</strong> {escape(str(human.get('limitation', 'See the source report for the annotation method.')))}</p>
+      </div><table><caption>Agreement with reconciled human labels</caption><thead><tr><th>Dimension</th><th>Validation</th></tr></thead><tbody>{rows}</tbody></table></div>
+      <p class="study-scope">Structured JSON validity: {_percent(validation['structured_response_validity'])}. Recorded rubric: {escape(str(judge['prompt_version']))}. Backend changes require renewed validation.</p>
+    </div></section>"""

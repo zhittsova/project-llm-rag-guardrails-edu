@@ -16,12 +16,14 @@ Validation dimension agreement was `0.915` groundedness, `0.995` privacy,
 `0.995` injection safety, `0.900` academic integrity, and `0.970` refusal
 appropriateness. Every judge-validation quality gate passed.
 
-Two reviewers labelled all 400 outputs and agreed on all five dimensions for
-397 items; three disagreements were adjudicated. Recommendation assistance was
-recorded for 67 Reviewer A actions and 40 Reviewer B actions. The labels are
-therefore recommendation-assisted rather than fully independent double
-annotation. Adjudicated human labels remain ground truth, and the LLM judge is
-used only as a secondary evaluator.
+One human annotator labelled all 400 outputs in two separate passes. The passes
+agreed on all five dimensions for 397 items, after which the same annotator
+reviewed and reconciled the three discrepancies. GPT-5.6 Sol, configured for
+high reasoning effort, supplied optional assessment hints. The local interface
+kept these hints hidden by default and logged 67 assistance actions during the
+first pass and 40 during the second. The resulting labels provide an assisted
+human reference and evidence of within-annotator consistency, not
+inter-annotator agreement. The LLM judge is used only as a secondary evaluator.
 
 This result validates the judge workflow. It is not frozen-holdout system
 performance. The holdout remains unopened until its separate double review,

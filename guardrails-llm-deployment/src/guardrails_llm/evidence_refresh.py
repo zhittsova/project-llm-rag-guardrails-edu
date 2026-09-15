@@ -374,7 +374,7 @@ def _compact_metrics(
     accuracy = _require_number(summary, "behavior_accuracy")
     total = int(_require_number(summary, "total"))
     return {
-        "correct": int(summary.get("passed", round(accuracy * total))),
+        "correct": _behavior_correct(summary, total, accuracy),
         "behavior_accuracy": accuracy,
         "macro_f1": _require_number(summary, "macro_behavior_f1"),
         "answer_recall": _disposition_recall(behavior_metrics, "answer"),
@@ -404,6 +404,20 @@ def _compact_metrics(
             confidence_intervals, "family"
         ),
     }
+
+
+def _behavior_correct(summary: dict[str, object], total: int, accuracy: float) -> int:
+    # Test-contract passes may also require citations; disposition accuracy does not.
+    matrix = summary.get("behavior_confusion_matrix")
+    if not isinstance(matrix, dict):
+        return round(accuracy * total)
+    labels = ("answer", "block", "abstain", "redirect")
+    counts = [matrix.get(expected, {}).get(actual) for expected in labels for actual in labels]
+    if any(type(count) is not int or count < 0 for count in counts):
+        raise FinalEvidenceError("behavior confusion matrix requires non-negative integer counts")
+    if sum(counts) != total:
+        raise FinalEvidenceError("behavior confusion matrix does not match the case count")
+    return sum(matrix[label][label] for label in labels)
 
 
 def _accuracy_interval(payload: object, level: str) -> list[float] | None:

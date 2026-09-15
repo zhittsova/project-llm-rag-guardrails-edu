@@ -20,7 +20,8 @@ from .model_config import (
 
 LOCAL_PROFILE = "local"
 INHOUSE_PROFILE = "inhouse"
-MODEL_PROFILES = (LOCAL_PROFILE, INHOUSE_PROFILE)
+COMPATIBLE_PROFILE = "openai-compatible"
+MODEL_PROFILES = (LOCAL_PROFILE, COMPATIBLE_PROFILE, INHOUSE_PROFILE)
 INHOUSE_RUNTIME_CONFIG_PATH = default_inhouse_runtime_path()
 INHOUSE_RUNTIME_CONFIG = load_guardrail_runtime_config(
     INHOUSE_RUNTIME_CONFIG_PATH
@@ -55,6 +56,9 @@ class InHouseEndpointError(RuntimeError):
 def apply_model_profile(args: Namespace) -> None:
     profile = getattr(args, "profile", LOCAL_PROFILE)
     if profile == LOCAL_PROFILE:
+        return
+    if profile == COMPATIBLE_PROFILE:
+        _apply_compatible_profile(args)
         return
     if profile != INHOUSE_PROFILE:
         raise ValueError(f"unknown model profile: {profile}")
@@ -134,6 +138,16 @@ def model_profile_summary(
             "classifier": "none",
             "entailment_verifier": "none",
         }
+    if profile == COMPATIBLE_PROFILE:
+        config, host = _compatible_endpoint(env_file)
+        return {
+            "profile": COMPATIBLE_PROFILE,
+            "endpoint_host": host,
+            "embedding_provider": "openai_compatible",
+            "model_selection": "explicit per-role CLI arguments",
+            "api_key_present": _api_key_present(config),
+            "remote_calls_require_explicit_allowance": True,
+        }
     if profile != INHOUSE_PROFILE:
         raise ValueError(f"unknown model profile: {profile}")
 
@@ -196,3 +210,31 @@ def _api_key_present(config: OpenAIModelConfig) -> bool:
 def _set_if_present(args: Namespace, name: str, value: object) -> None:
     if hasattr(args, name):
         setattr(args, name, value)
+
+
+def _compatible_endpoint(env_file: Path | None) -> tuple[OpenAIModelConfig, str]:
+    config = OpenAIModelConfig(env_file=env_file)
+    url = resolve_openai_base_url(config)
+    parsed = urlparse(url or "")
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("openai-compatible requires an HTTP(S) OPENAI_BASE_URL or OPENAI_API_URL")
+    return config, parsed.hostname
+
+
+def _apply_compatible_profile(args: Namespace) -> None:
+    _compatible_endpoint(getattr(args, "env_file", None))
+    for provider, model in (
+        ("embedding_provider", "embedding_model"),
+        ("generator", "answer_model"),
+        ("guard_classifier", "classifier_model"),
+        ("entailment_verifier", "entailment_model"),
+    ):
+        if not hasattr(args, provider):
+            continue
+        if not getattr(args, model, None):
+            raise ValueError(f"openai-compatible requires --{model.replace('_', '-')}")
+        setattr(args, provider, "openai")
+    _set_if_present(args, "retriever", "vector")
+    _set_if_present(args, "guard_embedding_provider", "openai")
+    if hasattr(args, "guard_embedding_model") and not args.guard_embedding_model:
+        args.guard_embedding_model = args.embedding_model

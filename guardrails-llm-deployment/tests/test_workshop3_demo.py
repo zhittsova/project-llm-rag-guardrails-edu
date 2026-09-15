@@ -23,7 +23,7 @@ def test_offline_demo_renders_guardrail_pipeline_and_calibration_metrics(
     html = output.read_text(encoding="utf-8")
     assert result["mode"] == "offline"
     assert result["scenarios"] == 5
-    assert "Workshop 3 Guardrail Demo" in html
+    assert "RAG Knowledge Guardrails" in html
     assert "Calibration evidence only" in html
     assert "BAAI/bge-m3" in html
     assert "Qwen/Qwen3.6-35B-A3B" in html
@@ -104,7 +104,7 @@ def test_live_demo_renders_captured_baseline_and_hybrid_results(
     assert result["mode"] == "live"
     assert "Baseline answer" in html
     assert "Grounded hybrid answer" in html
-    assert "Live Fraunhofer run" in html
+    assert "Live experiment-profile run" in html
 
 
 def _evidence() -> dict[str, object]:
@@ -150,3 +150,17 @@ def _evidence() -> dict[str, object]:
             "This is calibration evidence; the frozen holdout remains unopened."
         ],
     }
+
+
+def test_demo_uses_supplied_failure_counts(tmp_path: Path) -> None:
+    payload = _evidence()
+    payload["failure_analysis"]["stage_counts"]["answerability_rejected_with_expected_document_present"] = 2
+    payload["failure_analysis"]["failed_cases"] = 8
+    evidence = tmp_path / "evidence.json"
+    evidence.write_text(json.dumps(payload))
+    output = tmp_path / "demo.html"
+    write_workshop3_demo(evidence_path=evidence, output_path=output)
+    html = output.read_text()
+    assert "2 answerability rejections" in html
+    assert "3 answerability rejections" not in html
+    assert "8 false abstentions" in html
